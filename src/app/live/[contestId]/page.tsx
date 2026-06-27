@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES } from '@/lib/players';
+import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
 import { POINT_MAP } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
@@ -494,14 +494,16 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
   const { playSFX } = useAudio();
   const fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0];
 
+  const matchEvents = getDynamicEvents(fixture, LIVE_EVENTS);
+
   const [initialState] = useState(() => {
     const isLive = fixture.status === 'live';
     const initialMin = isLive ? Math.floor(Math.random() * 80) + 1 : 0; // Random minute between 1 and 80
     
-    let initialIdx = LIVE_EVENTS.findIndex(e => e.minute >= initialMin);
-    if (initialIdx === -1) initialIdx = LIVE_EVENTS.length;
+    let initialIdx = matchEvents.findIndex(e => e.minute >= initialMin);
+    if (initialIdx === -1) initialIdx = matchEvents.length;
 
-    const initialEvents = LIVE_EVENTS.slice(0, initialIdx).reverse();
+    const initialEvents = matchEvents.slice(0, initialIdx).reverse();
     
     let homeScore = 0;
     let awayScore = 0;
@@ -519,12 +521,12 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
     return { initialMin, initialIdx, initialEvents, homeScore, awayScore, triggered };
   });
 
-  const [events, setEvents] = useState<typeof LIVE_EVENTS>(initialState.initialEvents);
+  const [events, setEvents] = useState<typeof matchEvents>(initialState.initialEvents);
   const [currentEventIdx, setCurrentEventIdx] = useState(initialState.initialIdx);
   const [score, setScore] = useState({ home: initialState.homeScore, away: initialState.awayScore });
   const [minute, setMinute] = useState(initialState.initialMin);
   const [leaderboard, setLeaderboard] = useState(DEMO_LEADERBOARD);
-  const [latestEvent, setLatestEvent] = useState<(typeof LIVE_EVENTS)[0] | null>(null);
+  const [latestEvent, setLatestEvent] = useState<(typeof matchEvents)[0] | null>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isFastForward, setIsFastForward] = useState(false);
@@ -550,7 +552,7 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
     const interval = setInterval(() => {
       setMinute((m) => Math.min(m + 1, 90));
       setCurrentEventIdx((idx) => {
-        if (idx >= LIVE_EVENTS.length) return idx;
+        if (idx >= matchEvents.length) return idx;
         return idx;
       });
     }, tickRate);
@@ -561,7 +563,7 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
     // Trigger events based on minute
     useEffect(() => {
       if (showPopup) return;
-      const event = LIVE_EVENTS[currentEventIdx];
+      const event = matchEvents[currentEventIdx];
       if (!event || minute < event.minute) return;
       if (triggeredEventsRef.current.has(event.id)) return;
       if (events.find((e) => e.id === event.id)) return;

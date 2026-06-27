@@ -212,3 +212,97 @@ export const DEMO_FIXTURES: DemoFixture[] = [
     awayScore: 3,
   },
 ];
+
+// Helper to dynamically map Argentina/France events to actual competing teams
+export function getDynamicEvents(fixture: DemoFixture, baseEvents: any[]): any[] {
+  const homeTeam = fixture.homeTeam;
+  const awayTeam = fixture.awayTeam;
+  const homeFlag = fixture.homeFlag;
+  const awayFlag = fixture.awayFlag;
+  
+  // If the base events already match the competing teams (e.g. custom replay), return as is
+  const hasCorrectTeams = baseEvents.some(e => e.team === homeTeam || e.team === awayTeam);
+  if (hasCorrectTeams && baseEvents.some(e => e.team !== 'Argentina' && e.team !== 'France' && e.team !== '')) {
+    return baseEvents;
+  }
+
+  const homePlayers = getPlayersByTeam(homeTeam);
+  const awayPlayers = getPlayersByTeam(awayTeam);
+  
+  if (homePlayers.length === 0 || awayPlayers.length === 0) {
+    return baseEvents; // fallback if no players found
+  }
+  
+  // Map standard player positions/names
+  const homeGK = homePlayers.find(p => p.position === 'GK')?.name || 'Goalkeeper';
+  const homeDef = homePlayers.find(p => p.position === 'DEF')?.name || 'Defender';
+  const homeMid = homePlayers.find(p => p.position === 'MID')?.name || 'Midfielder';
+  const homeAtts = homePlayers.filter(p => p.position === 'ATT');
+  const homeAtt1 = homeAtts[0]?.name || 'Forward 1';
+  const homeAtt2 = homeAtts[1]?.name || 'Forward 2';
+  
+  const awayGK = awayPlayers.find(p => p.position === 'GK')?.name || 'Goalkeeper';
+  const awayDef = awayPlayers.find(p => p.position === 'DEF')?.name || 'Defender';
+  const awayMid = awayPlayers.find(p => p.position === 'MID')?.name || 'Midfielder';
+  const awayAtts = awayPlayers.filter(p => p.position === 'ATT');
+  const awayAtt1 = awayAtts[0]?.name || 'Forward 1';
+  const awayAtt2 = awayAtts[1]?.name || 'Forward 2';
+  const awayAtt3 = awayAtts[2]?.name || 'Forward 3';
+  
+  // Let's map player names from Argentina/France defaults
+  const playerMap: Record<string, string> = {
+    // Argentina default players -> Home team
+    'E. Martínez': homeGK,
+    'Romero': homeDef,
+    'Messi': homeMid,
+    'L. Martínez': homeAtt1,
+    'Álvarez': homeAtt2,
+    
+    // France default players -> Away team
+    'Maignan': awayGK,
+    'Varane': awayDef,
+    'Griezmann': awayMid,
+    'Mbappé': awayAtt1,
+    'Dembélé': awayAtt2,
+    'Giroud': awayAtt3,
+    'Coman': awayAtts[3]?.name || awayAtt2,
+  };
+  
+  return baseEvents.map(event => {
+    let mappedTeam = event.team;
+    let mappedFlag = event.teamFlag;
+    let mappedPlayer = event.player;
+    
+    if (event.team === 'Argentina') {
+      mappedTeam = homeTeam;
+      mappedFlag = homeFlag;
+    } else if (event.team === 'France') {
+      mappedTeam = awayTeam;
+      mappedFlag = awayFlag;
+    }
+    
+    if (event.player && playerMap[event.player]) {
+      mappedPlayer = playerMap[event.player];
+    }
+    
+    // Replace names in description
+    let mappedDescription = event.description || '';
+    if (mappedDescription) {
+      mappedDescription = mappedDescription.replace(/Argentina/g, homeTeam);
+      mappedDescription = mappedDescription.replace(/France/g, awayTeam);
+      
+      Object.keys(playerMap).forEach(oldName => {
+        const regex = new RegExp(oldName, 'g');
+        mappedDescription = mappedDescription.replace(regex, playerMap[oldName]);
+      });
+    }
+    
+    return {
+      ...event,
+      team: mappedTeam,
+      teamFlag: mappedFlag,
+      player: mappedPlayer,
+      description: mappedDescription
+    };
+  });
+}

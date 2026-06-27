@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES } from '@/lib/players';
+import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
 import { REPLAY_EVENTS } from '@/lib/replay-events';
 import { POINT_MAP } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
@@ -495,7 +495,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const { playSFX } = useAudio();
   const fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0];
 
-  const matchEvents = REPLAY_EVENTS[contestId] || LIVE_EVENTS;
+  const matchEvents = getDynamicEvents(fixture, REPLAY_EVENTS[contestId] || LIVE_EVENTS);
 
   const [initialState] = useState(() => {
     const initialMin = 0; // Always start at 0 for replay
