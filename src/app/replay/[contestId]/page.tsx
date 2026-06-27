@@ -718,7 +718,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   left: (dialog as any).refereePosition === 'left' ? '2%' : 'auto',
                   height: '125vh',
                   objectFit: 'contain',
-                  zIndex: 1005,
+                  zIndex: 1020,
                   animation: (dialog as any).refereePosition === 'left' ? 'slide-in-left 400ms ease-out' : 'slide-in-right 400ms ease-out',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
                 }}
