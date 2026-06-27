@@ -304,7 +304,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
       return {
         speakerTitle: 'Martin',
         text: `"Great strike by ${player}! The goalkeeper had to be alert to keep that one out."`,
-        commentator1Image: '/NPC/Comentator 1.svg',
+        commentator1Image: '/NPC/Komentator 1 calm.svg',
       };
     case 'pass_accuracy':
       if (step === 1) {
@@ -366,7 +366,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"I couldn't agree more. It's moments of brilliance like that from the keeper that keep the team in the game."`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
     case 'penalty_save':
@@ -380,7 +380,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"What a massive psychological boost! You have to praise the keeper's composure under such intense pressure."`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
     case 'foul':
@@ -401,7 +401,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"He needs to be careful not to pick up a silly booking early on."`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
     case 'free_kick':
@@ -415,7 +415,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"They've clearly been practicing these set pieces on the training ground. Let's see what they can do."`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
     case 'corner_kick':
@@ -436,7 +436,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"Set pieces are crucial in tight games like this. Delivery will be everything."`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
     case 'offside':
@@ -457,7 +457,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"It was a very tight call, but the high defensive line did its job perfectly."`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
     case 'var_review':
