@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useAudio } from '@/context/AudioContext';
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const { isMuted, toggleMute } = useAudio();
 
   return (
     <nav className="navbar">
@@ -42,6 +44,14 @@ export default function Navbar() {
 
         {/* Wallet Button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <button 
+            onClick={toggleMute} 
+            className="btn btn--ghost btn--sm" 
+            style={{ fontSize: '1.1rem', padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            title={isMuted ? "Unmute Music" : "Mute Music"}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
           <WalletButton />
           {/* Mobile menu toggle */}
           <button

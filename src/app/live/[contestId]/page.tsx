@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { DEMO_FIXTURES } from '@/lib/players';
 import { POINT_MAP } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
+import { useAudio } from '@/context/AudioContext';
 
 // Demo live events that replay at interval to simulate a live match
 const LIVE_EVENTS = [
@@ -490,6 +491,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
 
 export default function LivePage({ params }: { params: Promise<{ contestId: string }> }) {
   const { contestId } = use(params);
+  const { playSFX } = useAudio();
   const fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0];
 
   const [initialState] = useState(() => {
@@ -565,6 +567,16 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
       if (events.find((e) => e.id === event.id)) return;
   
       triggeredEventsRef.current.add(event.id);
+      
+      // Play Sound Effect based on event type
+      if (event.type === 'goal' || event.type === 'own_goal') {
+        playSFX('goal');
+      } else if (event.type === 'full_time') {
+        playSFX('end_game');
+      } else if (['kick_off', 'foul', 'yellow_card', 'red_card', 'penalty_save', 'free_kick', 'corner_kick', 'offside', 'substitution'].includes(event.type)) {
+        playSFX('whistle');
+      }
+
       setEvents((prev) => [event, ...prev]);
       setCurrentEventIdx((idx) => idx + 1);
       setLatestEvent(event);
