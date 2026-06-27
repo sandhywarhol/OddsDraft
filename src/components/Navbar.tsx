@@ -14,31 +14,15 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="container navbar__inner">
         {/* Logo */}
-        <Link href="/" className="navbar__logo">
-          <div style={{
-            width: 32,
-            height: 32,
-            background: 'linear-gradient(135deg, var(--color-primary), #00B4E8)',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.1rem',
-            border: '2px solid #ffffff',
-            boxShadow: '0 0 0 1px #000000',
-          }}>
-            ⚽
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-            <span className="navbar__logo-text" style={{ fontSize: '1.5rem' }}>OddsDraft</span>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', letterSpacing: '0.15em', fontWeight: 'bold' }}>FANTASY SPORTS</span>
-          </div>
+        <Link href="/" className="navbar__logo" style={{ display: 'flex', alignItems: 'center' }}>
+          <img src="/Logo OddsDraft.svg" alt="OddsDraft Logo" style={{ height: '36px', width: 'auto' }} />
         </Link>
 
         {/* Desktop Nav */}
         <div className="navbar__nav">
           <Link href="/contests" className={`navbar__link ${pathname === '/contests' || pathname?.startsWith('/lineup') ? 'navbar__link--active' : ''}`}>Contests</Link>
           <Link href="/leaderboard" className={`navbar__link ${pathname === '/leaderboard' ? 'navbar__link--active' : ''}`}>Leaderboard</Link>
+          <Link href="/schedule" className={`navbar__link ${pathname === '/schedule' ? 'navbar__link--active' : ''}`}>Match Schedule</Link>
           <Link href="/how-it-works" className={`navbar__link ${pathname === '/how-it-works' ? 'navbar__link--active' : ''}`}>How It Works</Link>
         </div>
 

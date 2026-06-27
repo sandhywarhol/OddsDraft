@@ -374,12 +374,27 @@ export function getDynamicEvents(fixture: DemoFixture, baseEvents: any[]): any[]
     // Replace names in description
     let mappedDescription = event.description || '';
     if (mappedDescription) {
-      mappedDescription = mappedDescription.replace(/Argentina/g, homeTeam);
-      mappedDescription = mappedDescription.replace(/France/g, awayTeam);
+      mappedDescription = mappedDescription.replace(/Argentina/gi, homeTeam);
+      mappedDescription = mappedDescription.replace(/France/gi, awayTeam);
       
       Object.keys(playerMap).forEach(oldName => {
-        const regex = new RegExp(oldName, 'g');
+        const regex = new RegExp(oldName, 'gi');
         mappedDescription = mappedDescription.replace(regex, playerMap[oldName]);
+      });
+    }
+
+    let mappedDialog = event.dialog ? JSON.parse(JSON.stringify(event.dialog)) : undefined;
+    if (mappedDialog) {
+      mappedDialog.forEach((d: any) => {
+        if (d.text) {
+          d.text = d.text.replace(/Argentina/gi, homeTeam);
+          d.text = d.text.replace(/France/gi, awayTeam);
+          
+          Object.keys(playerMap).forEach(oldName => {
+            const regex = new RegExp(oldName, 'gi');
+            d.text = d.text.replace(regex, playerMap[oldName]);
+          });
+        }
       });
     }
     
@@ -388,7 +403,8 @@ export function getDynamicEvents(fixture: DemoFixture, baseEvents: any[]): any[]
       team: mappedTeam,
       teamFlag: mappedFlag,
       player: mappedPlayer,
-      description: mappedDescription
+      description: mappedDescription,
+      dialog: mappedDialog
     };
   });
 }
