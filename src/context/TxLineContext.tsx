@@ -97,13 +97,14 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     };
     
     fetchFixtures();
-    const interval = setInterval(fetchFixtures, 30000); // 30 sec polling
+    const pollRate = appMode === 'live' ? 10000 : 30000;
+    const interval = setInterval(fetchFixtures, pollRate);
     
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [apiToken]);
+  }, [apiToken, appMode]);
 
   const subscribeAndActivate = async () => {
     try {

@@ -105,3 +105,11 @@ export async function fetchAllFixtures(apiToken: string) {
   });
   return res.data;
 }
+
+export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string) {
+  // Get live scores/updates for a specific fixture
+  const res = await axios.get(`${TXLINE_API_BASE}/api/scores/updates/${fixtureId}`, {
+    headers: { Authorization: `Bearer ${apiToken}` }
+  });
+  return res.data;
+}
