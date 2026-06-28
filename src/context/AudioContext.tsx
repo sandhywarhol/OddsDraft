@@ -34,6 +34,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const savedMute = localStorage.getItem('oddsdraft_muted');
     if (savedMute !== null) {
       setIsMuted(savedMute === 'true');
+    } else {
+      setIsMuted(false); // Default to unmuted on first visit
+      
+      // Handle browser autoplay policies by playing on first interaction
+      const playOnInteract = () => {
+        const isLive = window.location.pathname.startsWith('/live/') || window.location.pathname.startsWith('/replay/');
+        if (isLive) {
+          watchLiveBgmRef.current?.play().catch(() => {});
+        } else {
+          platformBgmRef.current?.play().catch(() => {});
+        }
+        window.removeEventListener('click', playOnInteract);
+      };
+      window.addEventListener('click', playOnInteract);
     }
 
     return () => {

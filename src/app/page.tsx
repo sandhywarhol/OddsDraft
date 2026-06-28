@@ -118,6 +118,10 @@ export default function HomePage() {
                 setZoomedElementId(targetId);
               }, 400); 
             }, 750); 
+          } else {
+            setWrapperTransform('none');
+            setIsTransitioning(false);
+            setTutorialStep(nextStep);
           }
         }, 400); 
       } else {
