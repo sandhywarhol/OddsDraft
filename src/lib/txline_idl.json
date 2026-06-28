@@ -1,0 +1,26 @@
+{
+  "address": "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA",
+  "version": "0.1.0",
+  "name": "txline_oracle",
+  "instructions": [
+    {
+      "name": "subscribe",
+      "discriminator": [254, 28, 191, 138, 156, 179, 183, 53],
+      "accounts": [
+        {"name": "user", "writable": true, "signer": true},
+        {"name": "pricingMatrix", "isMut": false, "isSigner": false},
+        {"name": "tokenMint", "isMut": false, "isSigner": false},
+        {"name": "userTokenAccount", "writable": true, "isSigner": false},
+        {"name": "tokenTreasuryVault", "writable": true, "isSigner": false},
+        {"name": "tokenTreasuryPda", "isMut": false, "isSigner": false},
+        {"name": "tokenProgram", "isMut": false, "isSigner": false},
+        {"name": "systemProgram", "isMut": false, "isSigner": false},
+        {"name": "associatedTokenProgram", "isMut": false, "isSigner": false}
+      ],
+      "args": [
+        {"name": "serviceLevelId", "type": "u16"},
+        {"name": "weeks", "type": "u8"}
+      ]
+    }
+  ]
+}

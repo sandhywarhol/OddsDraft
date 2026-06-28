@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AudioProvider } from '@/context/AudioContext';
+import ClientWalletProvider from '@/components/ClientWalletProvider';
+import VideoBackground from '@/components/VideoBackground';
 
 export const metadata: Metadata = {
   title: 'OddsDraft — Predictive Fantasy Football | World Cup 2026',
@@ -22,9 +24,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AudioProvider>
-          {children}
-        </AudioProvider>
+        <ClientWalletProvider>
+          <AudioProvider>
+            <VideoBackground />
+            {children}
+          </AudioProvider>
+        </ClientWalletProvider>
       </body>
     </html>
   );

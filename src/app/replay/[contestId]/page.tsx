@@ -40,6 +40,21 @@ const DEMO_LEADERBOARD = [
   { rank: 3, username: 'MbappeObsessed', wallet: '7kP...2sQ', points: 87.0, prize: '2.0 SOL', isUser: false },
   { rank: 4, username: 'TacticalMaster', wallet: 'Rz3...9vT', points: 72.4, prize: '-', isUser: false },
   { rank: 5, username: 'SolanaBaller', wallet: 'Lw8...mX1', points: 65.1, prize: '-', isUser: false },
+  { rank: 6, username: 'BlockStriker', wallet: 'Bs4...9kP', points: 58.6, prize: '-', isUser: false },
+  { rank: 7, username: 'DegenDeGea', wallet: 'Dg2...1vL', points: 54.3, prize: '-', isUser: false },
+  { rank: 8, username: 'PhantomPlaymaker', wallet: 'Pp5...7wQ', points: 51.0, prize: '-', isUser: false },
+  { rank: 9, username: 'GigaChadFC', wallet: 'Gc7...3tN', points: 48.5, prize: '-', isUser: false },
+  { rank: 10, username: 'SolStriker', wallet: 'Ss8...5kM', points: 45.2, prize: '-', isUser: false },
+  { rank: 11, username: 'NodeNavigator', wallet: 'Nn9...2wP', points: 42.0, prize: '-', isUser: false },
+  { rank: 12, username: 'RugPullResist', wallet: 'Rr3...6vL', points: 39.8, prize: '-', isUser: false },
+  { rank: 13, username: 'LedgerLegend', wallet: 'Ll4...1tK', points: 36.5, prize: '-', isUser: false },
+  { rank: 14, username: 'ApeInUnited', wallet: 'Au6...8mN', points: 34.2, prize: '-', isUser: false },
+  { rank: 15, username: 'CryptoCruiser', wallet: 'Cc2...9sJ', points: 31.0, prize: '-', isUser: false },
+  { rank: 16, username: 'SatoshiSquad', wallet: 'Sq7...4vL', points: 28.5, prize: '-', isUser: false },
+  { rank: 17, username: 'GasLimitFC', wallet: 'Gl5...3kP', points: 25.0, prize: '-', isUser: false },
+  { rank: 18, username: 'HODLUnited', wallet: 'Hu9...1wQ', points: 22.3, prize: '-', isUser: false },
+  { rank: 19, username: 'YieldFarmer', wallet: 'Yf3...7sN', points: 18.5, prize: '-', isUser: false },
+  { rank: 20, username: 'MoonBoyz', wallet: 'Mb4...5vL', points: 12.0, prize: '-', isUser: false },
 ];
 
 const EVENT_COLORS: Record<string, string> = {
@@ -1218,73 +1233,74 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
             {/* RIGHT: Leaderboard */}
             <div>
-              <div className="card card--yellow" style={{ position: 'sticky', top: 80, padding: 16 }}>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  Leaderboard
+              <div className="ro-window" style={{ position: 'sticky', top: 80 }}>
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>🏆 Live Leaderboard</span>
                   <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>Live</span>
-                </h3>
-
-                <table className="leaderboard" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'center' }}>#</th>
-                      <th>Player</th>
-                      <th style={{ textAlign: 'right' }}>Pts</th>
-                      <th style={{ textAlign: 'right' }}>Prize</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaderboard.map((entry) => (
-                      <tr
-                        key={entry.wallet}
-                        style={{
-                          background: entry.isUser ? 'rgba(54, 34, 15, 0.08)' : 'transparent',
-                          transition: 'all 300ms',
-                        }}
-                      >
-                        <td className="leaderboard__rank" style={{ textAlign: 'center' }}>
-                          <span className={`leaderboard__rank--${entry.rank}`}>
-                            {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: entry.isUser ? 700 : 500, fontSize: '0.85rem', color: entry.isUser ? 'var(--color-primary)' : 'var(--text-primary)' }}>
-                            {entry.username}
-                            {entry.isUser && <span style={{ fontSize: '0.65rem', color: 'var(--color-primary)', marginLeft: 4 }}>YOU</span>}
-                          </div>
-                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                            {entry.wallet}
-                          </div>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <span className="leaderboard__points">{entry.points.toFixed(1)}</span>
-                        </td>
-                        <td style={{ textAlign: 'right', fontSize: '0.8rem', color: entry.prize !== '-' ? 'var(--color-accent)' : 'var(--text-muted)', fontWeight: 600 }}>
-                          {entry.prize}
-                        </td>
+                </div>
+                <div className="ro-window__body" style={{ padding: 16, maxHeight: '420px', overflowY: 'auto' }}>
+                  <table className="leaderboard" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'center' }}>#</th>
+                        <th>Player</th>
+                        <th style={{ textAlign: 'right' }}>Pts</th>
+                        <th style={{ textAlign: 'right' }}>Prize</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((entry) => (
+                        <tr
+                          key={entry.wallet}
+                          style={{
+                            background: entry.isUser ? 'rgba(0, 229, 255, 0.15)' : 'transparent',
+                            transition: 'all 300ms',
+                          }}
+                        >
+                          <td className="leaderboard__rank" style={{ textAlign: 'center' }}>
+                            <span className={`leaderboard__rank--${entry.rank}`}>
+                              {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: entry.isUser ? 700 : 500, fontSize: '0.85rem', color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>
+                              {entry.username}
+                              {entry.isUser && <span style={{ fontSize: '0.65rem', color: '#00e5ff', marginLeft: 4 }}>YOU</span>}
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                              {entry.wallet}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span className="leaderboard__points" style={{ color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>{entry.points.toFixed(1)}</span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontSize: '0.8rem', color: entry.prize !== '-' ? '#ffd700' : 'var(--text-muted)', fontWeight: 600 }}>
+                            {entry.prize}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
 
-                {/* Prize pool breakdown */}
-                <div style={{ marginTop: 20, padding: '14px 16px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                    Prize Pool: 10.0 SOL
-                  </div>
-                  {[
-                    { place: '1st', prize: '5.0 SOL', pct: '50%', color: '#FFD700' },
-                    { place: '2nd', prize: '3.0 SOL', pct: '30%', color: '#C0C0C0' },
-                    { place: '3rd', prize: '2.0 SOL', pct: '20%', color: '#CD7F32' },
-                  ].map((p) => (
-                    <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700 }}>{p.place}</span>
-                      <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
-                        <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
-                      </div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                  {/* Prize pool breakdown */}
+                  <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                      Prize Pool: 10.0 SOL
                     </div>
-                  ))}
+                    {[
+                      { place: '1st', prize: '5.0 SOL', pct: '50%', color: '#FFD700' },
+                      { place: '2nd', prize: '3.0 SOL', pct: '30%', color: '#C0C0C0' },
+                      { place: '3rd', prize: '2.0 SOL', pct: '20%', color: '#CD7F32' },
+                    ].map((p) => (
+                      <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700 }}>{p.place}</span>
+                        <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
+                          <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
+                        </div>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

@@ -6,10 +6,10 @@ export default function HowItWorksPage() {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
 
-      <main style={{ padding: '48px 0 80px' }}>
-        <div className="container-sm">
-          <div style={{ textAlign: 'center', marginBottom: 60 }}>
-            <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 16 }}>
+      <main style={{ padding: '48px 16px 80px' }}>
+        <div className="container" style={{ maxWidth: 800 }}>
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>
               How OddsDraft Works
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
@@ -18,73 +18,110 @@ export default function HowItWorksPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-            <section className="card card--yellow">
-              <h2 style={{ fontSize: '1.5rem', marginBottom: 16, color: 'var(--color-primary)' }}>1. Building Your Lineup</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-                For each contest (match), you must select <strong>5 players</strong> from the two competing teams. 
-                Your lineup must strictly follow this 5-a-side positional structure:
-              </p>
-              <ul style={{ color: 'var(--text-secondary)', paddingLeft: 24, marginBottom: 16, lineHeight: 2 }}>
-                <li><strong>GK:</strong> Goalkeeper</li>
-                <li><strong>CB:</strong> Center Back</li>
-                <li><strong>MF:</strong> Midfielder</li>
-                <li><strong>SW:</strong> Sweeper</li>
-                <li><strong>CF:</strong> Center Forward</li>
-              </ul>
-            </section>
-
-            <section className="card card--yellow">
-              <h2 style={{ fontSize: '1.5rem', marginBottom: 16, color: '#ffd700' }}>2. Captain & Confidence</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-                After selecting 5 players, you must assign your strategic multipliers:
-              </p>
-              <div style={{ background: 'var(--bg-elevated)', padding: 16, border: '1.5px solid #5c4028', boxShadow: '0 0 0 1px #000000', marginBottom: 16 }}>
-                <strong style={{ color: '#ffd700', display: 'block', marginBottom: 8 }}>The Captain (2x Multiplier)</strong>
-                Choose one player as your captain. Their total points (positive or negative) will be doubled.
+            
+            {/* Step 1 */}
+            <div className="ro-window" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)' }}>
+                <span>1 // Building Your Lineup</span>
+                <span>🧩</span>
               </div>
-              <div style={{ background: 'var(--bg-elevated)', padding: 16, border: '1.5px solid #5c4028', boxShadow: '0 0 0 1px #000000' }}>
-                <strong style={{ color: 'var(--color-primary)', display: 'block', marginBottom: 8 }}>Confidence Rating (⭐1-5)</strong>
-                Assign a confidence rating to each player. A higher rating increases their positive points but also heavily penalizes negative points. High risk, high reward!
+              <div className="ro-window__body" style={{ padding: 24 }}>
+                <p style={{ color: '#cbd5e1', marginBottom: 16, lineHeight: 1.6 }}>
+                  For each contest (match), you must select <strong>5 players</strong> from the two competing teams. 
+                  Your lineup must strictly follow this 5-a-side positional structure:
+                </p>
+                <ul style={{ color: '#94a3b8', paddingLeft: 0, marginBottom: 0, lineHeight: 2, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>GK:</strong> Goalkeeper</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>CB:</strong> Center Back</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>MF:</strong> Midfielder</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>SW:</strong> Sweeper</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>CF:</strong> Center Forward</li>
+                </ul>
               </div>
-            </section>
+            </div>
 
-            <section className="card card--yellow">
-              <h2 style={{ fontSize: '1.5rem', marginBottom: 16, color: 'var(--color-info)' }}>3. Scoring System</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Points are awarded based on real-time TxODDS data during the match:
-              </p>
-              <table className="leaderboard" style={{ width: '100%', marginBottom: 16 }}>
-                <tbody>
-                  <tr><td>Goal</td><td style={{ color: 'var(--color-primary)', textAlign: 'right', fontWeight: 700 }}>+10 pts</td></tr>
-                  <tr><td>Assist</td><td style={{ color: 'var(--color-primary)', textAlign: 'right', fontWeight: 700 }}>+6 pts</td></tr>
-                  <tr><td>Shot on Target</td><td style={{ color: 'var(--color-primary)', textAlign: 'right', fontWeight: 700 }}>+2 pts</td></tr>
-                  <tr><td>Clean Sheet (GK/DEF)</td><td style={{ color: 'var(--color-primary)', textAlign: 'right', fontWeight: 700 }}>+5 pts</td></tr>
-                  <tr><td>Penalty Save</td><td style={{ color: 'var(--color-primary)', textAlign: 'right', fontWeight: 700 }}>+8 pts</td></tr>
-                  <tr><td>Goalkeeper Save</td><td style={{ color: 'var(--color-primary)', textAlign: 'right', fontWeight: 700 }}>+1 pt</td></tr>
-                  <tr><td>Yellow Card</td><td style={{ color: '#ffd700', textAlign: 'right', fontWeight: 700 }}>-2 pts</td></tr>
-                  <tr><td>Red Card</td><td style={{ color: 'var(--color-danger)', textAlign: 'right', fontWeight: 700 }}>-5 pts</td></tr>
-                  <tr><td>Own Goal</td><td style={{ color: 'var(--color-danger)', textAlign: 'right', fontWeight: 700 }}>-6 pts</td></tr>
-                </tbody>
-              </table>
-            </section>
+            {/* Step 2 */}
+            <div className="ro-window" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)' }}>
+                <span>2 // Captain & Confidence</span>
+                <span>⭐</span>
+              </div>
+              <div className="ro-window__body" style={{ padding: 24 }}>
+                <p style={{ color: '#cbd5e1', marginBottom: 20, lineHeight: 1.6 }}>
+                  After selecting 5 players, you must assign your strategic multipliers:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: 20, borderRadius: 8, border: '1px solid rgba(255,215,0,0.2)' }}>
+                    <strong style={{ color: '#ffd700', display: 'block', marginBottom: 8, fontSize: '1.1rem' }}>The Captain (2x Multiplier)</strong>
+                    <span style={{ color: '#94a3b8' }}>Choose one player as your captain. Their total points (positive or negative) will be doubled.</span>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: 20, borderRadius: 8, border: '1px solid rgba(0,229,255,0.2)' }}>
+                    <strong style={{ color: '#00e5ff', display: 'block', marginBottom: 8, fontSize: '1.1rem' }}>Confidence Rating (⭐1-5)</strong>
+                    <span style={{ color: '#94a3b8' }}>Assign a confidence rating to each player. A higher rating increases their positive points but also heavily penalizes negative points. High risk, high reward!</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            <section className="card card--yellow">
-              <h2 style={{ fontSize: '1.5rem', marginBottom: 16, color: '#A855F7' }}>4. Prizes & Payouts</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Every contest requires an entry fee (e.g., 0.1 SOL on devnet). The total collected forms the Prize Pool. When the match finishes, the smart contract automatically distributes the prize pool to the top 3 managers:
-              </p>
-              <ul style={{ color: 'var(--text-secondary)', paddingLeft: 24, lineHeight: 2 }}>
-                <li><strong style={{ color: '#FFD700' }}>1st Place:</strong> 50% of Prize Pool</li>
-                <li><strong style={{ color: '#C0C0C0' }}>2nd Place:</strong> 30% of Prize Pool</li>
-                <li><strong style={{ color: '#CD7F32' }}>3rd Place:</strong> 20% of Prize Pool</li>
-              </ul>
-            </section>
-          </div>
+            {/* Step 3 */}
+            <div className="ro-window" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)' }}>
+                <span>3 // Scoring System</span>
+                <span>📊</span>
+              </div>
+              <div className="ro-window__body" style={{ padding: 24 }}>
+                <p style={{ color: '#cbd5e1', marginBottom: 16, lineHeight: 1.6 }}>
+                  Points are awarded based on real-time TxODDS data during the match:
+                </p>
+                <table className="leaderboard" style={{ width: '100%', marginBottom: 0, border: 'none' }}>
+                  <tbody style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Goal</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+10 pts</td></tr>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Assist</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+6 pts</td></tr>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Shot on Target</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+2 pts</td></tr>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Save (GK only)</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+1 pt</td></tr>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Yellow Card</td><td style={{ color: '#ff4d6d', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>-2 pts</td></tr>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Red Card</td><td style={{ color: '#ff4d6d', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>-5 pts</td></tr>
+                    <tr><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Own Goal</td><td style={{ color: '#ff4d6d', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>-4 pts</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-          <div style={{ textAlign: 'center', marginTop: 40 }}>
-            <Link href="/contests" className="btn btn--primary btn--lg">
-              🏆 Start Playing Now
-            </Link>
+            {/* Step 4 */}
+            <div className="ro-window" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)' }}>
+                <span>4 // Prize Distribution</span>
+                <span>🏆</span>
+              </div>
+              <div className="ro-window__body" style={{ padding: 24 }}>
+                <p style={{ color: '#cbd5e1', marginBottom: 20, lineHeight: 1.6 }}>
+                  Once the match ends, the smart contract automatically distributes the prize pool based on the contest type you selected:
+                </p>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 150, background: 'linear-gradient(135deg, rgba(255,215,0,0.1), transparent)', border: '1px solid rgba(255,215,0,0.3)', padding: 20, borderRadius: 8, textAlign: 'center', boxShadow: 'inset 0 1px 1px rgba(255,215,0,0.1)' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏆</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#ffd700' }}>Top 3 Classic</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>50% / 30% / 20%</div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 150, background: 'linear-gradient(135deg, rgba(16,185,129,0.1), transparent)', border: '1px solid rgba(16,185,129,0.3)', padding: 20, borderRadius: 8, textAlign: 'center', boxShadow: 'inset 0 1px 1px rgba(16,185,129,0.1)' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚖️</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#10b981' }}>Double Up 50/50</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>Top 50% Win</div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 150, background: 'linear-gradient(135deg, rgba(255,77,109,0.1), transparent)', border: '1px solid rgba(255,77,109,0.3)', padding: 20, borderRadius: 8, textAlign: 'center', boxShadow: 'inset 0 1px 1px rgba(255,77,109,0.1)' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>💀</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#ff4d6d' }}>Winner Takes All</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>1st gets 100%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: 24 }}>
+              <Link href="/contests" className="btn btn--primary btn--lg" style={{ background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)', color: '#1a1a1a', border: '1px solid rgba(255,255,255,0.4)', boxShadow: '0 4px 15px rgba(255, 215, 0, 0.2)', fontWeight: 800 }}>
+                View Match Schedule
+              </Link>
+            </div>
           </div>
         </div>
       </main>

@@ -34,11 +34,26 @@ const LIVE_EVENTS = [
 
 // Demo leaderboard
 const DEMO_LEADERBOARD = [
-  { rank: 1, username: 'CryptoGoalkeeper', wallet: 'Cx9...4mN', points: 124.5, prize: '5.0 SOL', isUser: false },
-  { rank: 2, username: 'You', wallet: 'YOUR WALLET', points: 98.2, prize: '3.0 SOL', isUser: true },
-  { rank: 3, username: 'MbappeObsessed', wallet: '7kP...2sQ', points: 87.0, prize: '2.0 SOL', isUser: false },
-  { rank: 4, username: 'TacticalMaster', wallet: 'Rz3...9vT', points: 72.4, prize: '-', isUser: false },
-  { rank: 5, username: 'SolanaBaller', wallet: 'Lw8...mX1', points: 65.1, prize: '-', isUser: false },
+  { rank: 1, username: 'CryptoGoalkeeper', wallet: 'Cx9...4mN', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=CryptoGoalkeeper', points: 124.5, prize: '5.0 SOL', isUser: false },
+  { rank: 2, username: 'You', wallet: 'YOUR WALLET', avatar: '', points: 98.2, prize: '3.0 SOL', isUser: true },
+  { rank: 3, username: 'MbappeObsessed', wallet: '7kP...2sQ', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MbappeObsessed', points: 87.0, prize: '2.0 SOL', isUser: false },
+  { rank: 4, username: 'TacticalMaster', wallet: 'Rz3...9vT', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TacticalMaster', points: 72.4, prize: '-', isUser: false },
+  { rank: 5, username: 'SolanaBaller', wallet: 'Lw8...mX1', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SolanaBaller', points: 65.1, prize: '-', isUser: false },
+  { rank: 6, username: 'BlockStriker', wallet: 'Bs4...9kP', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=BlockStriker', points: 58.6, prize: '-', isUser: false },
+  { rank: 7, username: 'DegenDeGea', wallet: 'Dg2...1vL', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DegenDeGea', points: 54.3, prize: '-', isUser: false },
+  { rank: 8, username: 'PhantomPlaymaker', wallet: 'Pp5...7wQ', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PhantomPlaymaker', points: 51.0, prize: '-', isUser: false },
+  { rank: 9, username: 'GigaChadFC', wallet: 'Gc7...3tN', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=GigaChadFC', points: 48.5, prize: '-', isUser: false },
+  { rank: 10, username: 'SolStriker', wallet: 'Ss8...5kM', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SolStriker', points: 45.2, prize: '-', isUser: false },
+  { rank: 11, username: 'NodeNavigator', wallet: 'Nn9...2wP', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NodeNavigator', points: 42.0, prize: '-', isUser: false },
+  { rank: 12, username: 'RugPullResist', wallet: 'Rr3...6vL', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=RugPullResist', points: 39.8, prize: '-', isUser: false },
+  { rank: 13, username: 'LedgerLegend', wallet: 'Ll4...1tK', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=LedgerLegend', points: 36.5, prize: '-', isUser: false },
+  { rank: 14, username: 'ApeInUnited', wallet: 'Au6...8mN', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ApeInUnited', points: 34.2, prize: '-', isUser: false },
+  { rank: 15, username: 'CryptoCruiser', wallet: 'Cc2...9sJ', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=CryptoCruiser', points: 31.0, prize: '-', isUser: false },
+  { rank: 16, username: 'SatoshiSquad', wallet: 'Sq7...4vL', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SatoshiSquad', points: 28.5, prize: '-', isUser: false },
+  { rank: 17, username: 'GasLimitFC', wallet: 'Gl5...3kP', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=GasLimitFC', points: 25.0, prize: '-', isUser: false },
+  { rank: 18, username: 'HODLUnited', wallet: 'Hu9...1wQ', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=HODLUnited', points: 22.3, prize: '-', isUser: false },
+  { rank: 19, username: 'YieldFarmer', wallet: 'Yf3...7sN', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=YieldFarmer', points: 18.5, prize: '-', isUser: false },
+  { rank: 20, username: 'MoonBoyz', wallet: 'Mb4...5vL', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MoonBoyz', points: 12.0, prize: '-', isUser: false },
 ];
 
 const EVENT_COLORS: Record<string, string> = {
@@ -489,8 +504,11 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
   }
 }
 
-export default function LivePage({ params }: { params: Promise<{ contestId: string }> }) {
+export default function LivePage({ params, searchParams }: { params: Promise<{ contestId: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const { contestId } = use(params);
+  const searchParamsObj = use(searchParams);
+  const contestType = (searchParamsObj.contestType as string) || 'top3';
+  const { publicKey } = useWallet();
   const { playSFX } = useAudio();
   const fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0];
 
@@ -525,7 +543,57 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
   const [currentEventIdx, setCurrentEventIdx] = useState(initialState.initialIdx);
   const [score, setScore] = useState({ home: initialState.homeScore, away: initialState.awayScore });
   const [minute, setMinute] = useState(initialState.initialMin);
-  const [leaderboard, setLeaderboard] = useState(DEMO_LEADERBOARD);
+  const [leaderboard, setLeaderboard] = useState(() => {
+    let initialBoard = [...DEMO_LEADERBOARD];
+    if (publicKey) {
+      const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
+      let customUser = 'You';
+      let customAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        customUser = parsed.username || customUser;
+        customAvatar = parsed.avatar || customAvatar;
+      }
+      initialBoard = initialBoard.map((entry, index) => {
+        let prize = '-';
+        if (contestType === '5050') {
+          prize = index < 10 ? '0.18 SOL' : '-';
+        } else if (contestType === 'wta') {
+          prize = index === 0 ? '10.0 SOL' : '-';
+        } else {
+          if (index === 0) prize = '5.0 SOL';
+          else if (index === 1) prize = '3.0 SOL';
+          else if (index === 2) prize = '2.0 SOL';
+        }
+
+        if (entry.isUser) {
+          return {
+            ...entry,
+            username: customUser,
+            wallet: `${publicKey.toString().substring(0, 4)}...${publicKey.toString().substring(publicKey.toString().length - 3)}`,
+            avatar: customAvatar,
+            prize
+          };
+        }
+        return { ...entry, prize };
+      });
+    } else {
+      initialBoard = initialBoard.map((entry, index) => {
+        let prize = '-';
+        if (contestType === '5050') {
+          prize = index < 10 ? '0.18 SOL' : '-';
+        } else if (contestType === 'wta') {
+          prize = index === 0 ? '10.0 SOL' : '-';
+        } else {
+          if (index === 0) prize = '5.0 SOL';
+          else if (index === 1) prize = '3.0 SOL';
+          else if (index === 2) prize = '2.0 SOL';
+        }
+        return { ...entry, prize };
+      });
+    }
+    return initialBoard;
+  });
   const [latestEvent, setLatestEvent] = useState<(typeof matchEvents)[0] | null>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -575,7 +643,7 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
         playSFX('goal');
       } else if (event.type === 'full_time') {
         playSFX('end_game');
-      } else if (['kick_off', 'foul', 'yellow_card', 'red_card', 'penalty_save', 'free_kick', 'corner_kick', 'offside', 'substitution'].includes(event.type)) {
+      } else if (['kick_off', 'half_time', 'foul', 'yellow_card', 'red_card', 'penalty_save', 'free_kick', 'corner_kick', 'offside', 'substitution'].includes(event.type)) {
         playSFX('whistle');
       }
 
@@ -598,7 +666,19 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
       setLeaderboard((prev) => {
         const next = [...prev];
         next[1] = { ...next[1], points: next[1].points + Math.abs(event.points) * 0.8 };
-        return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+        return next.sort((a, b) => b.points - a.points).map((e, i) => {
+          let prize = '-';
+          if (contestType === '5050') {
+            prize = i < 10 ? '0.18 SOL' : '-';
+          } else if (contestType === 'wta') {
+            prize = i === 0 ? '10.0 SOL' : '-';
+          } else {
+            if (i === 0) prize = '5.0 SOL';
+            else if (i === 1) prize = '3.0 SOL';
+            else if (i === 2) prize = '2.0 SOL';
+          }
+          return { ...e, rank: i + 1, prize };
+        });
       });
     }, [minute, currentEventIdx, events, fixture.homeTeam, showPopup]);
 
@@ -677,7 +757,57 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
           triggeredEventsRef.current.clear();
           setEvents([]);
           setScore({ home: 0, away: 0 });
-          setLeaderboard(DEMO_LEADERBOARD);
+          
+          let restartBoard = [...DEMO_LEADERBOARD];
+          if (publicKey) {
+            const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
+            let customUser = 'You';
+            let customAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`;
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              customUser = parsed.username || customUser;
+              customAvatar = parsed.avatar || customAvatar;
+            }
+            restartBoard = restartBoard.map((entry, index) => {
+              let prize = '-';
+              if (contestType === '5050') {
+                prize = index < 10 ? '0.18 SOL' : '-';
+              } else if (contestType === 'wta') {
+                prize = index === 0 ? '10.0 SOL' : '-';
+              } else {
+                if (index === 0) prize = '5.0 SOL';
+                else if (index === 1) prize = '3.0 SOL';
+                else if (index === 2) prize = '2.0 SOL';
+              }
+      
+              if (entry.isUser) {
+                return {
+                  ...entry,
+                  prize,
+                  username: customUser,
+                  wallet: `${publicKey.toString().substring(0, 4)}...${publicKey.toString().substring(publicKey.toString().length - 3)}`,
+                  avatar: customAvatar
+                };
+              }
+              return { ...entry, prize };
+            });
+          } else {
+            restartBoard = restartBoard.map((entry, index) => {
+              let prize = '-';
+              if (contestType === '5050') {
+                prize = index < 10 ? '0.18 SOL' : '-';
+              } else if (contestType === 'wta') {
+                prize = index === 0 ? '10.0 SOL' : '-';
+              } else {
+                if (index === 0) prize = '5.0 SOL';
+                else if (index === 1) prize = '3.0 SOL';
+                else if (index === 2) prize = '2.0 SOL';
+              }
+              return { ...entry, prize };
+            });
+          }
+          setLeaderboard(restartBoard);
+          
           setLatestEvent(null);
         }, 120000); // 120,000ms = 2 minutes
         return () => clearTimeout(resetTimer);
@@ -1219,73 +1349,95 @@ export default function LivePage({ params }: { params: Promise<{ contestId: stri
 
             {/* RIGHT: Leaderboard */}
             <div>
-              <div className="card card--yellow" style={{ position: 'sticky', top: 80, padding: 16 }}>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  Leaderboard
+              <div className="ro-window" style={{ position: 'sticky', top: 80 }}>
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>🏆 Live Leaderboard</span>
                   <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>Live</span>
-                </h3>
-
-                <table className="leaderboard" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'center' }}>#</th>
-                      <th>Player</th>
-                      <th style={{ textAlign: 'right' }}>Pts</th>
-                      <th style={{ textAlign: 'right' }}>Prize</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaderboard.map((entry) => (
-                      <tr
-                        key={entry.wallet}
-                        style={{
-                          background: entry.isUser ? 'rgba(54, 34, 15, 0.08)' : 'transparent',
-                          transition: 'all 300ms',
-                        }}
-                      >
-                        <td className="leaderboard__rank" style={{ textAlign: 'center' }}>
-                          <span className={`leaderboard__rank--${entry.rank}`}>
-                            {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: entry.isUser ? 700 : 500, fontSize: '0.85rem', color: entry.isUser ? 'var(--color-primary)' : 'var(--text-primary)' }}>
-                            {entry.username}
-                            {entry.isUser && <span style={{ fontSize: '0.65rem', color: 'var(--color-primary)', marginLeft: 4 }}>YOU</span>}
-                          </div>
-                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                            {entry.wallet}
-                          </div>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <span className="leaderboard__points">{entry.points.toFixed(1)}</span>
-                        </td>
-                        <td style={{ textAlign: 'right', fontSize: '0.8rem', color: entry.prize !== '-' ? 'var(--color-accent)' : 'var(--text-muted)', fontWeight: 600 }}>
-                          {entry.prize}
-                        </td>
+                </div>
+                <div className="ro-window__body" style={{ padding: 16, maxHeight: '420px', overflowY: 'auto' }}>
+                  <table className="leaderboard" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'center' }}>#</th>
+                        <th>Player</th>
+                        <th style={{ textAlign: 'right' }}>Pts</th>
+                        <th style={{ textAlign: 'right' }}>Prize</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((entry) => (
+                        <tr
+                          key={entry.wallet}
+                          style={{
+                            background: entry.isUser ? 'rgba(0, 229, 255, 0.15)' : 'transparent',
+                            transition: 'all 300ms',
+                          }}
+                        >
+                          <td className="leaderboard__rank" style={{ textAlign: 'center' }}>
+                            <span className={`leaderboard__rank--${entry.rank}`}>
+                              {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
+                            </span>
+                          </td>
+                          <td style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <img 
+                              src={(entry as any).avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.wallet}`} 
+                              alt="avatar" 
+                              style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--bg-surface)' }} 
+                            />
+                            <div>
+                              <div style={{ fontWeight: entry.isUser ? 700 : 500, fontSize: '0.85rem', color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>
+                                {entry.username}
+                                {entry.isUser && <span style={{ fontSize: '0.65rem', color: '#00e5ff', marginLeft: 4 }}>YOU</span>}
+                              </div>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                {entry.wallet}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span className="leaderboard__points" style={{ color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>{entry.points.toFixed(1)}</span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontSize: '0.8rem', color: entry.prize !== '-' ? '#ffd700' : 'var(--text-muted)', fontWeight: 600 }}>
+                            {entry.prize}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
 
-                {/* Prize pool breakdown */}
-                <div style={{ marginTop: 20, padding: '14px 16px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                    Prize Pool: 10.0 SOL
-                  </div>
-                  {[
-                    { place: '1st', prize: '5.0 SOL', pct: '50%', color: '#FFD700' },
-                    { place: '2nd', prize: '3.0 SOL', pct: '30%', color: '#C0C0C0' },
-                    { place: '3rd', prize: '2.0 SOL', pct: '20%', color: '#CD7F32' },
-                  ].map((p) => (
-                    <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700 }}>{p.place}</span>
-                      <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
-                        <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
-                      </div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                  {/* Prize pool breakdown */}
+                  <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                      Prize Pool: 10.0 SOL
                     </div>
-                  ))}
+                    {(() => {
+                      let breakdown = [];
+                      if (contestType === '5050') {
+                        breakdown = [
+                          { place: 'Top 50%', prize: '0.18 SOL (each)', pct: '90%', color: '#10b981' }
+                        ];
+                      } else if (contestType === 'wta') {
+                        breakdown = [
+                          { place: '1st', prize: '10.0 SOL', pct: '100%', color: '#FFD700' }
+                        ];
+                      } else {
+                        breakdown = [
+                          { place: '1st', prize: '5.0 SOL', pct: '50%', color: '#FFD700' },
+                          { place: '2nd', prize: '3.0 SOL', pct: '30%', color: '#C0C0C0' },
+                          { place: '3rd', prize: '2.0 SOL', pct: '20%', color: '#CD7F32' },
+                        ];
+                      }
+                      return breakdown.map((p) => (
+                        <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700, width: 50 }}>{p.place}</span>
+                          <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
+                            <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>

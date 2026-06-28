@@ -145,13 +145,68 @@ export const WORLD_CUP_PLAYERS: Player[] = [
   { id: 'ger-gross', name: 'Pascal Groß', team: 'Germany', teamFlag: '🇩🇪', position: 'MID', jerseyNumber: 5, rating: 81 },
   { id: 'ger-havertz', name: 'Kai Havertz', team: 'Germany', teamFlag: '🇩🇪', position: 'ATT', jerseyNumber: 7, rating: 84 },
   { id: 'ger-wirtz', name: 'Florian Wirtz', team: 'Germany', teamFlag: '🇩🇪', position: 'ATT', jerseyNumber: 17, rating: 89 },
-  { id: 'ger-fullkrug', name: 'Niclas Füllkrug', team: 'Germany', teamFlag: '🇩🇪', position: 'ATT', jerseyNumber: 9, rating: 83 },
   { id: 'ger-sane', name: 'Leroy Sané', team: 'Germany', teamFlag: '🇩🇪', position: 'ATT', jerseyNumber: 19, rating: 84 },
   { id: 'ger-muller', name: 'Thomas Müller', team: 'Germany', teamFlag: '🇩🇪', position: 'ATT', jerseyNumber: 13, rating: 81 },
 
+  // ===== ITALY =====
+  { id: 'ita-donnarumma', name: 'Gianluigi Donnarumma', team: 'Italy', teamFlag: '🇮🇹', position: 'GK', jerseyNumber: 1, rating: 88 },
+  { id: 'ita-vicario', name: 'Guglielmo Vicario', team: 'Italy', teamFlag: '🇮🇹', position: 'GK', jerseyNumber: 12, rating: 83 },
+  { id: 'ita-bastoni', name: 'Alessandro Bastoni', team: 'Italy', teamFlag: '🇮🇹', position: 'DEF', jerseyNumber: 95, rating: 86 },
+  { id: 'ita-dimarco', name: 'Federico Dimarco', team: 'Italy', teamFlag: '🇮🇹', position: 'DEF', jerseyNumber: 3, rating: 85 },
+  { id: 'ita-buongiorno', name: 'Alessandro Buongiorno', team: 'Italy', teamFlag: '🇮🇹', position: 'DEF', jerseyNumber: 4, rating: 82 },
+  { id: 'ita-calafiori', name: 'Riccardo Calafiori', team: 'Italy', teamFlag: '🇮🇹', position: 'DEF', jerseyNumber: 5, rating: 81 },
+  { id: 'ita-barella', name: 'Nicolò Barella', team: 'Italy', teamFlag: '🇮🇹', position: 'MID', jerseyNumber: 18, rating: 87 },
+  { id: 'ita-tonali', name: 'Sandro Tonali', team: 'Italy', teamFlag: '🇮🇹', position: 'MID', jerseyNumber: 8, rating: 84 },
+  { id: 'ita-frattesi', name: 'Davide Frattesi', team: 'Italy', teamFlag: '🇮🇹', position: 'MID', jerseyNumber: 16, rating: 83 },
+  { id: 'ita-chiesa', name: 'Federico Chiesa', team: 'Italy', teamFlag: '🇮🇹', position: 'ATT', jerseyNumber: 14, rating: 84 },
+  { id: 'ita-scamacca', name: 'Gianluca Scamacca', team: 'Italy', teamFlag: '🇮🇹', position: 'ATT', jerseyNumber: 9, rating: 82 },
+  { id: 'ita-raspadori', name: 'Giacomo Raspadori', team: 'Italy', teamFlag: '🇮🇹', position: 'ATT', jerseyNumber: 11, rating: 80 },
+  
+  // ===== SOUTH KOREA =====
+  { id: 'kor-seunggyu', name: 'Kim Seung-gyu', team: 'South Korea', teamFlag: '🇰🇷', position: 'GK', jerseyNumber: 1, rating: 77 },
+  { id: 'kor-minjae', name: 'Kim Min-jae', team: 'South Korea', teamFlag: '🇰🇷', position: 'DEF', jerseyNumber: 4, rating: 86 },
+  { id: 'kor-younggwon', name: 'Kim Young-gwon', team: 'South Korea', teamFlag: '🇰🇷', position: 'DEF', jerseyNumber: 19, rating: 75 },
+  { id: 'kor-jinsu', name: 'Kim Jin-su', team: 'South Korea', teamFlag: '🇰🇷', position: 'DEF', jerseyNumber: 3, rating: 76 },
+  { id: 'kor-kangin', name: 'Lee Kang-in', team: 'South Korea', teamFlag: '🇰🇷', position: 'MID', jerseyNumber: 18, rating: 83 },
+  { id: 'kor-inbeom', name: 'Hwang In-beom', team: 'South Korea', teamFlag: '🇰🇷', position: 'MID', jerseyNumber: 6, rating: 78 },
+  { id: 'kor-jaesung', name: 'Lee Jae-sung', team: 'South Korea', teamFlag: '🇰🇷', position: 'MID', jerseyNumber: 10, rating: 77 },
+  { id: 'kor-heungmin', name: 'Son Heung-min', team: 'South Korea', teamFlag: '🇰🇷', position: 'ATT', jerseyNumber: 7, rating: 88 },
+  { id: 'kor-heechan', name: 'Hwang Hee-chan', team: 'South Korea', teamFlag: '🇰🇷', position: 'ATT', jerseyNumber: 11, rating: 81 },
+  { id: 'kor-guesung', name: 'Cho Gue-sung', team: 'South Korea', teamFlag: '🇰🇷', position: 'ATT', jerseyNumber: 9, rating: 76 },
+  { id: 'kor-hyunjun', name: 'Yang Hyun-jun', team: 'South Korea', teamFlag: '🇰🇷', position: 'ATT', jerseyNumber: 20, rating: 74 },
+  // ===== NETHERLANDS =====
+  { id: 'ned-flekken', name: 'Mark Flekken', team: 'Netherlands', teamFlag: '🇳🇱', position: 'GK', jerseyNumber: 1, rating: 80 },
+  { id: 'ned-vandijk', name: 'Virgil van Dijk', team: 'Netherlands', teamFlag: '🇳🇱', position: 'DEF', jerseyNumber: 4, rating: 89 },
+  { id: 'ned-ake', name: 'Nathan Aké', team: 'Netherlands', teamFlag: '🇳🇱', position: 'DEF', jerseyNumber: 5, rating: 84 },
+  { id: 'ned-dumfries', name: 'Denzel Dumfries', team: 'Netherlands', teamFlag: '🇳🇱', position: 'DEF', jerseyNumber: 22, rating: 82 },
+  { id: 'ned-dejong', name: 'Frenkie de Jong', team: 'Netherlands', teamFlag: '🇳🇱', position: 'MID', jerseyNumber: 21, rating: 86 },
+  { id: 'ned-simons', name: 'Xavi Simons', team: 'Netherlands', teamFlag: '🇳🇱', position: 'MID', jerseyNumber: 7, rating: 84 },
+  { id: 'ned-gakpo', name: 'Cody Gakpo', team: 'Netherlands', teamFlag: '🇳🇱', position: 'ATT', jerseyNumber: 11, rating: 84 },
+  { id: 'ned-depay', name: 'Memphis Depay', team: 'Netherlands', teamFlag: '🇳🇱', position: 'ATT', jerseyNumber: 10, rating: 83 },
+  { id: 'ned-malen', name: 'Donyell Malen', team: 'Netherlands', teamFlag: '🇳🇱', position: 'ATT', jerseyNumber: 18, rating: 81 },
+  { id: 'ned-koopmeiners', name: 'Teun Koopmeiners', team: 'Netherlands', teamFlag: '🇳🇱', position: 'MID', jerseyNumber: 20, rating: 82 },
+  { id: 'ned-deligt', name: 'Matthijs de Ligt', team: 'Netherlands', teamFlag: '🇳🇱', position: 'DEF', jerseyNumber: 3, rating: 84 },
+  { id: 'ned-blind', name: 'Daley Blind', team: 'Netherlands', teamFlag: '🇳🇱', position: 'DEF', jerseyNumber: 17, rating: 79 },
+  { id: 'ned-reijnders', name: 'Tijjani Reijnders', team: 'Netherlands', teamFlag: '🇳🇱', position: 'MID', jerseyNumber: 14, rating: 81 },
+  { id: 'ned-verbruggen', name: 'Bart Verbruggen', team: 'Netherlands', teamFlag: '🇳🇱', position: 'GK', jerseyNumber: 23, rating: 78 },
+  { id: 'ned-weghorst', name: 'Wout Weghorst', team: 'Netherlands', teamFlag: '🇳🇱', position: 'ATT', jerseyNumber: 9, rating: 79 },
+
+  // ===== USA =====
+  { id: 'usa-turner', name: 'Matt Turner', team: 'USA', teamFlag: '🇺🇸', position: 'GK', jerseyNumber: 1, rating: 78 },
+  { id: 'usa-robinson', name: 'Antonee Robinson', team: 'USA', teamFlag: '🇺🇸', position: 'DEF', jerseyNumber: 5, rating: 79 },
+  { id: 'usa-dest', name: 'Sergiño Dest', team: 'USA', teamFlag: '🇺🇸', position: 'DEF', jerseyNumber: 2, rating: 78 },
+  { id: 'usa-richards', name: 'Chris Richards', team: 'USA', teamFlag: '🇺🇸', position: 'DEF', jerseyNumber: 3, rating: 77 },
+  { id: 'usa-mckennie', name: 'Weston McKennie', team: 'USA', teamFlag: '🇺🇸', position: 'MID', jerseyNumber: 8, rating: 80 },
+  { id: 'usa-adams', name: 'Tyler Adams', team: 'USA', teamFlag: '🇺🇸', position: 'MID', jerseyNumber: 4, rating: 79 },
+  { id: 'usa-pulisic', name: 'Christian Pulisic', team: 'USA', teamFlag: '🇺🇸', position: 'ATT', jerseyNumber: 10, rating: 82 },
+  { id: 'usa-weah', name: 'Tim Weah', team: 'USA', teamFlag: '🇺🇸', position: 'ATT', jerseyNumber: 21, rating: 77 },
+  { id: 'usa-balogun', name: 'Folarin Balogun', team: 'USA', teamFlag: '🇺🇸', position: 'ATT', jerseyNumber: 20, rating: 79 },
+  { id: 'usa-musah', name: 'Yunus Musah', team: 'USA', teamFlag: '🇺🇸', position: 'MID', jerseyNumber: 6, rating: 78 },
+  { id: 'usa-reyna', name: 'Gio Reyna', team: 'USA', teamFlag: '🇺🇸', position: 'MID', jerseyNumber: 7, rating: 78 },
+  { id: 'usa-zimmerman', name: 'Walker Zimmerman', team: 'USA', teamFlag: '🇺🇸', position: 'DEF', jerseyNumber: 13, rating: 75 },
+  { id: 'usa-horvath', name: 'Ethan Horvath', team: 'USA', teamFlag: '🇺🇸', position: 'GK', jerseyNumber: 18, rating: 74 },
+
   // ===== JAPAN =====
-  { id: 'jpn-gonda', name: 'Keisuke Gonda', team: 'Japan', teamFlag: '🇯🇵', position: 'GK', jerseyNumber: 12, rating: 78 },
-  { id: 'jpn-suzuki', name: 'Zion Suzuki', team: 'Japan', teamFlag: '🇯🇵', position: 'GK', jerseyNumber: 1, rating: 79 },
   { id: 'jpn-yoshida', name: 'Maya Yoshida', team: 'Japan', teamFlag: '🇯🇵', position: 'DEF', jerseyNumber: 22, rating: 78 },
   { id: 'jpn-tomiyasu', name: 'Takehiro Tomiyasu', team: 'Japan', teamFlag: '🇯🇵', position: 'DEF', jerseyNumber: 16, rating: 84 },
   { id: 'jpn-itakura', name: 'Ko Itakura', team: 'Japan', teamFlag: '🇯🇵', position: 'DEF', jerseyNumber: 4, rating: 81 },
@@ -180,6 +235,106 @@ export const WORLD_CUP_PLAYERS: Player[] = [
   { id: 'cro-perisic', name: 'Ivan Perišić', team: 'Croatia', teamFlag: '🇭🇷', position: 'ATT', jerseyNumber: 4, rating: 82 },
   { id: 'cro-kramaric', name: 'Andrej Kramarić', team: 'Croatia', teamFlag: '🇭🇷', position: 'ATT', jerseyNumber: 9, rating: 81 },
   { id: 'cro-petkovic', name: 'Bruno Petković', team: 'Croatia', teamFlag: '🇭🇷', position: 'ATT', jerseyNumber: 17, rating: 79 },
+
+  // ===== SENEGAL =====
+  { id: 'sen-mendy', name: 'Édouard Mendy', team: 'Senegal', teamFlag: '🇸🇳', position: 'GK', jerseyNumber: 1, rating: 82 },
+  { id: 'sen-koulibaly', name: 'Kalidou Koulibaly', team: 'Senegal', teamFlag: '🇸🇳', position: 'DEF', jerseyNumber: 3, rating: 85 },
+  { id: 'sen-diallo', name: 'Abdou Diallo', team: 'Senegal', teamFlag: '🇸🇳', position: 'DEF', jerseyNumber: 22, rating: 79 },
+  { id: 'sen-sabaly', name: 'Youssouf Sabaly', team: 'Senegal', teamFlag: '🇸🇳', position: 'DEF', jerseyNumber: 21, rating: 77 },
+  { id: 'sen-gueye', name: 'Idrissa Gueye', team: 'Senegal', teamFlag: '🇸🇳', position: 'MID', jerseyNumber: 5, rating: 80 },
+  { id: 'sen-sarr', name: 'Pape Matar Sarr', team: 'Senegal', teamFlag: '🇸🇳', position: 'MID', jerseyNumber: 15, rating: 78 },
+  { id: 'sen-mane', name: 'Sadio Mané', team: 'Senegal', teamFlag: '🇸🇳', position: 'ATT', jerseyNumber: 10, rating: 86 },
+  { id: 'sen-dia', name: 'Boulaye Dia', team: 'Senegal', teamFlag: '🇸🇳', position: 'ATT', jerseyNumber: 9, rating: 79 },
+  { id: 'sen-sarr-i', name: 'Ismaïla Sarr', team: 'Senegal', teamFlag: '🇸🇳', position: 'ATT', jerseyNumber: 18, rating: 81 },
+  { id: 'sen-dieng', name: 'Bamba Dieng', team: 'Senegal', teamFlag: '🇸🇳', position: 'ATT', jerseyNumber: 20, rating: 76 },
+  { id: 'sen-ciss', name: 'Pathé Ciss', team: 'Senegal', teamFlag: '🇸🇳', position: 'MID', jerseyNumber: 11, rating: 75 },
+  { id: 'sen-gomis', name: 'Alfred Gomis', team: 'Senegal', teamFlag: '🇸🇳', position: 'GK', jerseyNumber: 23, rating: 74 },
+
+  // ===== MEXICO =====
+  { id: 'mex-ochoa', name: 'Guillermo Ochoa', team: 'Mexico', teamFlag: '🇲🇽', position: 'GK', jerseyNumber: 13, rating: 80 },
+  { id: 'mex-montes', name: 'César Montes', team: 'Mexico', teamFlag: '🇲🇽', position: 'DEF', jerseyNumber: 3, rating: 78 },
+  { id: 'mex-moreno', name: 'Héctor Moreno', team: 'Mexico', teamFlag: '🇲🇽', position: 'DEF', jerseyNumber: 15, rating: 76 },
+  { id: 'mex-gallardo', name: 'Jesús Gallardo', team: 'Mexico', teamFlag: '🇲🇽', position: 'DEF', jerseyNumber: 23, rating: 77 },
+  { id: 'mex-alvarez', name: 'Edson Álvarez', team: 'Mexico', teamFlag: '🇲🇽', position: 'MID', jerseyNumber: 4, rating: 82 },
+  { id: 'mex-chavez', name: 'Luis Chávez', team: 'Mexico', teamFlag: '🇲🇽', position: 'MID', jerseyNumber: 24, rating: 79 },
+  { id: 'mex-lozano', name: 'Hirving Lozano', team: 'Mexico', teamFlag: '🇲🇽', position: 'ATT', jerseyNumber: 22, rating: 81 },
+  { id: 'mex-jimenez', name: 'Raúl Jiménez', team: 'Mexico', teamFlag: '🇲🇽', position: 'ATT', jerseyNumber: 9, rating: 79 },
+  { id: 'mex-vega', name: 'Alexis Vega', team: 'Mexico', teamFlag: '🇲🇽', position: 'ATT', jerseyNumber: 10, rating: 78 },
+  { id: 'mex-herrera', name: 'Héctor Herrera', team: 'Mexico', teamFlag: '🇲🇽', position: 'MID', jerseyNumber: 16, rating: 75 },
+  { id: 'mex-sanchez', name: 'Jorge Sánchez', team: 'Mexico', teamFlag: '🇲🇽', position: 'DEF', jerseyNumber: 19, rating: 76 },
+  { id: 'mex-talavera', name: 'Alfredo Talavera', team: 'Mexico', teamFlag: '🇲🇽', position: 'GK', jerseyNumber: 1, rating: 75 },
+
+  // ===== URUGUAY =====
+  { id: 'uru-rochet', name: 'Sergio Rochet', team: 'Uruguay', teamFlag: '🇺🇾', position: 'GK', jerseyNumber: 23, rating: 79 },
+  { id: 'uru-gimenez', name: 'José Giménez', team: 'Uruguay', teamFlag: '🇺🇾', position: 'DEF', jerseyNumber: 2, rating: 83 },
+  { id: 'uru-araujo', name: 'Ronald Araújo', team: 'Uruguay', teamFlag: '🇺🇾', position: 'DEF', jerseyNumber: 4, rating: 85 },
+  { id: 'uru-olivera', name: 'Mathías Olivera', team: 'Uruguay', teamFlag: '🇺🇾', position: 'DEF', jerseyNumber: 16, rating: 80 },
+  { id: 'uru-valverde', name: 'Federico Valverde', team: 'Uruguay', teamFlag: '🇺🇾', position: 'MID', jerseyNumber: 15, rating: 88 },
+  { id: 'uru-bentancur', name: 'Rodrigo Bentancur', team: 'Uruguay', teamFlag: '🇺🇾', position: 'MID', jerseyNumber: 6, rating: 83 },
+  { id: 'uru-nunez', name: 'Darwin Núñez', team: 'Uruguay', teamFlag: '🇺🇾', position: 'ATT', jerseyNumber: 11, rating: 84 },
+  { id: 'uru-suarez', name: 'Luis Suárez', team: 'Uruguay', teamFlag: '🇺🇾', position: 'ATT', jerseyNumber: 9, rating: 81 },
+  { id: 'uru-pellistri', name: 'Facundo Pellistri', team: 'Uruguay', teamFlag: '🇺🇾', position: 'ATT', jerseyNumber: 8, rating: 78 },
+  { id: 'uru-ugarte', name: 'Manuel Ugarte', team: 'Uruguay', teamFlag: '🇺🇾', position: 'MID', jerseyNumber: 25, rating: 81 },
+  { id: 'uru-caceres', name: 'Martín Cáceres', team: 'Uruguay', teamFlag: '🇺🇾', position: 'DEF', jerseyNumber: 22, rating: 76 },
+  { id: 'uru-muslera', name: 'Fernando Muslera', team: 'Uruguay', teamFlag: '🇺🇾', position: 'GK', jerseyNumber: 1, rating: 77 },
+
+  // ===== MOROCCO =====
+  { id: 'mar-bono', name: 'Yassine Bounou', team: 'Morocco', teamFlag: '🇲🇦', position: 'GK', jerseyNumber: 1, rating: 84 },
+  { id: 'mar-hakimi', name: 'Achraf Hakimi', team: 'Morocco', teamFlag: '🇲🇦', position: 'DEF', jerseyNumber: 2, rating: 86 },
+  { id: 'mar-saiss', name: 'Romain Saïss', team: 'Morocco', teamFlag: '🇲🇦', position: 'DEF', jerseyNumber: 6, rating: 81 },
+  { id: 'mar-aguerd', name: 'Nayef Aguerd', team: 'Morocco', teamFlag: '🇲🇦', position: 'DEF', jerseyNumber: 5, rating: 82 },
+  { id: 'mar-amrabat', name: 'Sofyan Amrabat', team: 'Morocco', teamFlag: '🇲🇦', position: 'MID', jerseyNumber: 4, rating: 83 },
+  { id: 'mar-ounahi', name: 'Azzedine Ounahi', team: 'Morocco', teamFlag: '🇲🇦', position: 'MID', jerseyNumber: 8, rating: 80 },
+  { id: 'mar-ziyech', name: 'Hakim Ziyech', team: 'Morocco', teamFlag: '🇲🇦', position: 'ATT', jerseyNumber: 7, rating: 83 },
+  { id: 'mar-ennesyri', name: 'Youssef En-Nesyri', team: 'Morocco', teamFlag: '🇲🇦', position: 'ATT', jerseyNumber: 19, rating: 81 },
+  { id: 'mar-boufal', name: 'Sofiane Boufal', team: 'Morocco', teamFlag: '🇲🇦', position: 'ATT', jerseyNumber: 17, rating: 79 },
+  { id: 'mar-amallah', name: 'Selim Amallah', team: 'Morocco', teamFlag: '🇲🇦', position: 'MID', jerseyNumber: 15, rating: 77 },
+  { id: 'mar-mazraoui', name: 'Noussair Mazraoui', team: 'Morocco', teamFlag: '🇲🇦', position: 'DEF', jerseyNumber: 3, rating: 82 },
+  { id: 'mar-munir', name: 'Munir Mohamedi', team: 'Morocco', teamFlag: '🇲🇦', position: 'GK', jerseyNumber: 12, rating: 76 },
+
+  // ===== BELGIUM =====
+  { id: 'bel-courtois', name: 'Thibaut Courtois', team: 'Belgium', teamFlag: '🇧🇪', position: 'GK', jerseyNumber: 1, rating: 89 },
+  { id: 'bel-vertonghen', name: 'Jan Vertonghen', team: 'Belgium', teamFlag: '🇧🇪', position: 'DEF', jerseyNumber: 5, rating: 80 },
+  { id: 'bel-faes', name: 'Wout Faes', team: 'Belgium', teamFlag: '🇧🇪', position: 'DEF', jerseyNumber: 4, rating: 79 },
+  { id: 'bel-castagne', name: 'Timothy Castagne', team: 'Belgium', teamFlag: '🇧🇪', position: 'DEF', jerseyNumber: 21, rating: 78 },
+  { id: 'bel-debruyne', name: 'Kevin De Bruyne', team: 'Belgium', teamFlag: '🇧🇪', position: 'MID', jerseyNumber: 7, rating: 91 },
+  { id: 'bel-tielemans', name: 'Youri Tielemans', team: 'Belgium', teamFlag: '🇧🇪', position: 'MID', jerseyNumber: 8, rating: 82 },
+  { id: 'bel-lukaku', name: 'Romelu Lukaku', team: 'Belgium', teamFlag: '🇧🇪', position: 'ATT', jerseyNumber: 9, rating: 84 },
+  { id: 'bel-doku', name: 'Jérémy Doku', team: 'Belgium', teamFlag: '🇧🇪', position: 'ATT', jerseyNumber: 22, rating: 83 },
+  { id: 'bel-carrasco', name: 'Yannick Carrasco', team: 'Belgium', teamFlag: '🇧🇪', position: 'ATT', jerseyNumber: 11, rating: 81 },
+  { id: 'bel-onana', name: 'Amadou Onana', team: 'Belgium', teamFlag: '🇧🇪', position: 'MID', jerseyNumber: 18, rating: 80 },
+  { id: 'bel-meunier', name: 'Thomas Meunier', team: 'Belgium', teamFlag: '🇧🇪', position: 'DEF', jerseyNumber: 15, rating: 77 },
+  { id: 'bel-casteels', name: 'Koen Casteels', team: 'Belgium', teamFlag: '🇧🇪', position: 'GK', jerseyNumber: 13, rating: 81 },
+
+  // ===== COLOMBIA =====
+  { id: 'col-ospina', name: 'David Ospina', team: 'Colombia', teamFlag: '🇨🇴', position: 'GK', jerseyNumber: 1, rating: 78 },
+  { id: 'col-mina', name: 'Yerry Mina', team: 'Colombia', teamFlag: '🇨🇴', position: 'DEF', jerseyNumber: 13, rating: 79 },
+  { id: 'col-sanchez', name: 'Davinson Sánchez', team: 'Colombia', teamFlag: '🇨🇴', position: 'DEF', jerseyNumber: 23, rating: 78 },
+  { id: 'col-cuadrado', name: 'Juan Cuadrado', team: 'Colombia', teamFlag: '🇨🇴', position: 'DEF', jerseyNumber: 11, rating: 80 },
+  { id: 'col-barrios', name: 'Wílmar Barrios', team: 'Colombia', teamFlag: '🇨🇴', position: 'MID', jerseyNumber: 5, rating: 79 },
+  { id: 'col-uribe', name: 'Mateus Uribe', team: 'Colombia', teamFlag: '🇨🇴', position: 'MID', jerseyNumber: 15, rating: 77 },
+  { id: 'col-diaz', name: 'Luis Díaz', team: 'Colombia', teamFlag: '🇨🇴', position: 'ATT', jerseyNumber: 14, rating: 85 },
+  { id: 'col-james', name: 'James Rodríguez', team: 'Colombia', teamFlag: '🇨🇴', position: 'ATT', jerseyNumber: 10, rating: 81 },
+  { id: 'col-falcao', name: 'Radamel Falcao', team: 'Colombia', teamFlag: '🇨🇴', position: 'ATT', jerseyNumber: 9, rating: 77 },
+  { id: 'col-lerma', name: 'Jefferson Lerma', team: 'Colombia', teamFlag: '🇨🇴', position: 'MID', jerseyNumber: 16, rating: 78 },
+  { id: 'col-mojica', name: 'Johan Mojica', team: 'Colombia', teamFlag: '🇨🇴', position: 'DEF', jerseyNumber: 17, rating: 76 },
+  { id: 'col-vargas', name: 'Camilo Vargas', team: 'Colombia', teamFlag: '🇨🇴', position: 'GK', jerseyNumber: 12, rating: 77 },
+
+  // ===== IVORY COAST =====
+  { id: 'civ-fofana', name: 'Yahia Fofana', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'GK', jerseyNumber: 1, rating: 75 },
+  { id: 'civ-ndicka', name: 'Evan Ndicka', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'DEF', jerseyNumber: 21, rating: 81 },
+  { id: 'civ-diomande', name: 'Ousmane Diomande', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'DEF', jerseyNumber: 2, rating: 79 },
+  { id: 'civ-konan', name: 'Ghislain Konan', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'DEF', jerseyNumber: 3, rating: 76 },
+  { id: 'civ-kessie', name: 'Franck Kessié', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'MID', jerseyNumber: 8, rating: 82 },
+  { id: 'civ-seko', name: 'Seko Fofana', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'MID', jerseyNumber: 6, rating: 81 },
+  { id: 'civ-pepe', name: 'Nicolas Pépé', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'ATT', jerseyNumber: 19, rating: 78 },
+  { id: 'civ-haller', name: 'Sébastien Haller', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'ATT', jerseyNumber: 22, rating: 80 },
+  { id: 'civ-zaha', name: 'Wilfried Zaha', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'ATT', jerseyNumber: 9, rating: 79 },
+  { id: 'civ-seri', name: 'Jean Michaël Seri', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'MID', jerseyNumber: 4, rating: 77 },
+  { id: 'civ-aurier', name: 'Serge Aurier', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'DEF', jerseyNumber: 17, rating: 76 },
+  { id: 'civ-sangare', name: 'Badra Ali Sangaré', team: 'Ivory Coast', teamFlag: '🇨🇮', position: 'GK', jerseyNumber: 16, rating: 74 },
+
+
 ];
 
 // Get all unique teams
@@ -297,6 +452,55 @@ export const DEMO_FIXTURES: DemoFixture[] = [
     homeScore: 1,
     awayScore: 3,
   },
+  {
+    fixtureId: 'wc2026-ned-sen',
+    homeTeam: 'Netherlands',
+    awayTeam: 'Senegal',
+    homeFlag: '🇳🇱',
+    awayFlag: '🇸🇳',
+    kickoffAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+    status: 'upcoming',
+  },
+  {
+    fixtureId: 'wc2026-usa-mex',
+    homeTeam: 'USA',
+    awayTeam: 'Mexico',
+    homeFlag: '🇺🇸',
+    awayFlag: '🇲🇽',
+    kickoffAt: new Date(Date.now() + 84 * 60 * 60 * 1000).toISOString(),
+    status: 'upcoming',
+  },
+  {
+    fixtureId: 'wc2026-kor-uru',
+    homeTeam: 'South Korea',
+    awayTeam: 'Uruguay',
+    homeFlag: '🇰🇷',
+    awayFlag: '🇺🇾',
+    kickoffAt: new Date(Date.now() + 96 * 60 * 60 * 1000).toISOString(),
+    status: 'upcoming',
+  },
+  {
+    fixtureId: 'wc2026-mar-bel',
+    homeTeam: 'Morocco',
+    awayTeam: 'Belgium',
+    homeFlag: '🇲🇦',
+    awayFlag: '🇧🇪',
+    kickoffAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    status: 'finished',
+    homeScore: 2,
+    awayScore: 0,
+  },
+  {
+    fixtureId: 'wc2026-col-civ',
+    homeTeam: 'Colombia',
+    awayTeam: 'Ivory Coast',
+    homeFlag: '🇨🇴',
+    awayFlag: '🇨🇮',
+    kickoffAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    status: 'finished',
+    homeScore: 2,
+    awayScore: 1,
+  }
 ];
 
 // Helper to dynamically map Argentina/France events to actual competing teams
@@ -326,6 +530,7 @@ export function getDynamicEvents(fixture: DemoFixture, baseEvents: any[]): any[]
   const homeAtts = homePlayers.filter(p => p.position === 'ATT');
   const homeAtt1 = homeAtts[0]?.name || 'Forward 1';
   const homeAtt2 = homeAtts[1]?.name || 'Forward 2';
+  const homeAtt3 = homeAtts[2]?.name || homeAtt2;
   
   const awayGK = awayPlayers.find(p => p.position === 'GK')?.name || 'Goalkeeper';
   const awayDef = awayPlayers.find(p => p.position === 'DEF')?.name || 'Defender';
@@ -343,6 +548,7 @@ export function getDynamicEvents(fixture: DemoFixture, baseEvents: any[]): any[]
     'Messi': homeMid,
     'L. Martínez': homeAtt1,
     'Álvarez': homeAtt2,
+    'Di María': homeAtt3,
     
     // France default players -> Away team
     'Maignan': awayGK,

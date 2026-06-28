@@ -7,7 +7,7 @@ import { DEMO_FIXTURES, type Player, getPlayersByTeam } from '@/lib/players';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
 import { calculateFantasyPoints } from '@/lib/fantasy-engine';
 import { formatDistanceToNow } from 'date-fns';
-
+import { useTxLine } from '@/context/TxLineContext';
 // Demo score events for showing fantasy points in action
 const DEMO_EVENTS = [
   { playerId: 'fra-mbappe', playerName: 'Mbappé', eventType: 'goal', minute: 23, points: 10 },
@@ -20,21 +20,19 @@ const DEMO_EVENTS = [
 
 const SLOTS = [
   { label: 'GK', filter: 'GK' },
-  { label: 'CB', filter: 'DEF' },
-  { label: 'MF', filter: 'MID' },
-  { label: 'SW', filter: 'DEF' },
-  { label: 'CF', filter: 'ATT' },
+  { label: 'DEF (CB/LB/RB)', filter: 'DEF' },
+  { label: 'MID (CMF/AMF)', filter: 'MID' },
+  { label: 'FLEX DEF', filter: 'DEF' },
+  { label: 'FWD (CF/SS/RW)', filter: 'ATT' },
 ];
 
 const getPositionColor = (label: string) => {
-  switch (label) {
-    case 'GK': return '#1d4ed8'; // Blue
-    case 'CB': return '#15803d'; // Green
-    case 'MF': return '#b45309'; // Amber/Orange
-    case 'SW': return '#6d28d9'; // Purple
-    case 'CF': return '#b91c1c'; // Red
-    default: return '#36220f';
-  }
+  if (label.includes('GK')) return '#1d4ed8'; // Blue
+  if (label.includes('DEF (CB')) return '#15803d'; // Green
+  if (label.includes('MID')) return '#b45309'; // Amber/Orange
+  if (label.includes('FLEX')) return '#6d28d9'; // Purple
+  if (label.includes('FWD')) return '#b91c1c'; // Red
+  return '#36220f';
 };
 
 const TEAM_FLAG_CODES: Record<string, string> = {
@@ -58,9 +56,39 @@ const getPositionDescription = (label: string) => {
   }
 };
 
-export default function LineupBuilderPage({ params }: { params: Promise<{ contestId: string }> }) {
+export default function LineupBuilderPage({ params, searchParams }: { params: Promise<{ contestId: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const { contestId } = use(params);
-  const fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES[0];
+  const searchParamsObj = use(searchParams);
+  const contestType = (searchParamsObj.contestType as string) || 'top3';
+  const { appMode, liveFixtures, allFixtures } = useTxLine();
+  
+  const isDemo = appMode === 'demo';
+
+  // Find fixture
+  let fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId);
+  if (!isDemo && allFixtures) {
+    const rawFixture = allFixtures.find((f: any) => f.id === contestId || f.fixtureId === contestId || f._id === contestId);
+    if (rawFixture) {
+      fixture = {
+        fixtureId: rawFixture.id || rawFixture.fixtureId || rawFixture._id || contestId,
+        kickoffAt: rawFixture.kickoff_time || rawFixture.date || rawFixture.kickoffAt || new Date().toISOString(),
+        homeTeam: rawFixture.homeTeam?.name || rawFixture.home_team?.name || rawFixture.homeTeam || 'Home',
+        homeFlag: rawFixture.homeTeam?.code ? '🏳️' : '🏳️',
+        awayTeam: rawFixture.awayTeam?.name || rawFixture.away_team?.name || rawFixture.awayTeam || 'Away',
+        awayFlag: rawFixture.awayTeam?.code ? '🏳️' : '🏳️',
+        status: rawFixture.status || 'upcoming',
+      };
+    }
+  }
+  // Fallback
+  if (!fixture) fixture = DEMO_FIXTURES[0];
+
+  const isTxLineLive = !isDemo && liveFixtures?.some(f => 
+    f.homeTeam?.name === fixture.homeTeam || f.awayTeam?.name === fixture.awayTeam
+  );
+  const kickoffTime = new Date(fixture.kickoffAt);
+  const isPastKickoff = !isDemo && Date.now() > kickoffTime.getTime();
+  const isLocked = !isDemo && (isTxLineLive || isPastKickoff || fixture.status === 'finished');
 
   const [lineup, setLineup] = useState<(LineupPlayer | null)[]>([null, null, null, null, null]);
   const [activeSlot, setActiveSlot] = useState<number | null>(null);
@@ -313,7 +341,6 @@ export default function LineupBuilderPage({ params }: { params: Promise<{ contes
     setSubmitting(false);
   };
 
-  const kickoffTime = new Date(fixture.kickoffAt);
   const timeToKickoff = formatDistanceToNow(kickoffTime, { addSuffix: true });
 
   if (submitted) {
@@ -346,7 +373,7 @@ export default function LineupBuilderPage({ params }: { params: Promise<{ contes
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <Link href={`/live/${fixture.fixtureId}`} className="btn btn--primary btn--lg">
+            <Link href={`/live/${fixture.fixtureId}?contestType=${contestType}`} className="btn btn--primary btn--lg">
               🔴 Watch Live
             </Link>
             <Link href="/contests" className="btn btn--secondary btn--lg">
@@ -537,8 +564,18 @@ export default function LineupBuilderPage({ params }: { params: Promise<{ contes
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {isLocked && (
+                <div className="card" style={{ padding: '24px', textAlign: 'center', background: 'rgba(255, 68, 68, 0.1)', border: '1px solid rgba(255, 68, 68, 0.3)' }}>
+                  <h2 style={{ color: '#ff4444', marginBottom: '8px', fontSize: '1.4rem' }}>⚠️ Match is Live (Locked)</h2>
+                  <p style={{ color: 'var(--text-secondary)' }}>You cannot build a lineup for a match that has already started. You can only watch the live stats.</p>
+                  <Link href={`/live/${fixture.fixtureId}`} className="btn btn--primary" style={{ marginTop: '16px', display: 'inline-block' }}>
+                    🔴 Go to Live Tracker
+                  </Link>
+                </div>
+              )}
+
               {/* TOP: Fantasy Points Preview & Player Cards (Full Width) */}
-              <div>
+              <div style={{ opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}>
                 {/* Fantasy Points Preview (if lineup filled) */}
                 {fantasyPoints && (
                   <div className="card card--primary" style={{ marginBottom: 24, padding: 20 }}>
@@ -1028,7 +1065,7 @@ export default function LineupBuilderPage({ params }: { params: Promise<{ contes
                   </button>
                   {isLineupFull && captain && (
                     <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
-                      Entry fee: 0.1 SOL (devnet) • Top 3 win prizes
+                      Entry fee: 0.1 SOL (devnet) • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
                     </p>
                   )}
                 </div>

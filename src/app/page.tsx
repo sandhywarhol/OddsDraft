@@ -1,5 +1,7 @@
 'use client';
 
+import { useTxLine } from '@/context/TxLineContext';
+import { useWallet } from '@solana/wallet-adapter-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
@@ -489,7 +491,7 @@ function HeroSection() {
         </div>
 
         {/* Main Headline */}
-        <h1 style={{
+        <h1 className="text-shine-glow" style={{
           fontSize: 'clamp(2.2rem, 5.5vw, 4.5rem)',
           fontWeight: 900,
           lineHeight: 1.1,
@@ -497,9 +499,11 @@ function HeroSection() {
           letterSpacing: '-0.01em',
         }}>
           <span style={{ display: 'block', fontSize: '1rem', color: '#ffd700', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>ファンタジーフットボール</span>
-          Fantasy Football
+          <span className="white-text-shiny">Fantasy F</span>
+          <span className="bounce-ball" style={{ display: 'inline-block', fontSize: '0.62em', verticalAlign: 'middle', lineHeight: 1, position: 'relative', top: '-0.01em' }}>⚽</span>
+          <span className="white-text-shiny">otball</span>
           <br />
-          <span className="gradient-text">Meets On-Chain Prizes</span>
+          <span className="meets-onchain-prizes-shiny">Meets On-Chain Prizes</span>
         </h1>
 
         <p style={{
@@ -514,10 +518,10 @@ function HeroSection() {
 
         {/* CTA Buttons */}
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link href="/contests" className="btn btn--primary btn--lg" id="hero-play-btn">
+          <Link href="/contests" className="btn-hero-play" id="hero-play-btn">
             🏆 Play Now
           </Link>
-          <Link href="/how-it-works" className="btn btn--secondary btn--lg" id="hero-learn-btn">
+          <Link href="/how-it-works" className="btn-hero-learn" id="hero-learn-btn">
             How It Works
           </Link>
         </div>
@@ -531,10 +535,22 @@ function HeroSection() {
           flexWrap: 'wrap',
         }}>
           {[
-            { icon: '⚡', text: 'Live TxODDS Data' },
-            { icon: '🔗', text: 'On-Chain Prizes' },
-            { icon: '🏟️', text: 'World Cup 2026' },
-            { icon: '🛡️', text: 'Solana Verified' },
+            { icon: <span>⚡</span>, text: 'Live TxODDS Data' },
+            { icon: <span>🔗</span>, text: 'On-Chain Prizes' },
+            { icon: <span>🏆</span>, text: 'World Cup 2026' },
+            { icon: (
+                <svg viewBox="0 0 508.07 398.17" width="14" height="12" style={{ display: 'block' }}>
+                  <defs>
+                    <linearGradient id="solana-gradient-final" x1="463" y1="205.16" x2="182.39" y2="742.62" gradientTransform="translate(0 -198)" gradientUnits="userSpaceOnUse">
+                      <stop offset="0" stop-color="#00ffa3"/>
+                      <stop offset="1" stop-color="#dc1fff"/>
+                    </linearGradient>
+                  </defs>
+                  <path fill="url(#solana-gradient-final)" d="M84.53,358.89A16.63,16.63,0,0,1,96.28,354H501.73a8.3,8.3,0,0,1,5.87,14.18l-80.09,80.09a16.61,16.61,0,0,1-11.75,4.86H10.31A8.31,8.31,0,0,1,4.43,439Z" transform="translate(-1.98 -55)"/>
+                  <path fill="url(#solana-gradient-final)" d="M84.53,59.85A17.08,17.08,0,0,1,96.28,55H501.73a8.3,8.3,0,0,1,5.87,14.18l-80.09,80.09a16.61,16.61,0,0,1-11.75,4.86H10.31A8.31,8.31,0,0,1,4.43,140Z" transform="translate(-1.98 -55)"/>
+                  <path fill="url(#solana-gradient-final)" d="M427.51,208.42a16.61,16.61,0,0,0-11.75-4.86H10.31a8.31,8.30,0,0,0-5.88,14.18l80.1,80.09a16.6,16.6,0,0,0,11.75,4.86H501.73a8.3,8.3,0,0,0,5.87-14.18Z" transform="translate(-1.98 -55)"/>
+                </svg>
+              ), text: 'Solana Verified' },
           ].map((item) => (
             <div key={item.text} style={{
               display: 'flex',
@@ -544,7 +560,7 @@ function HeroSection() {
               fontSize: '0.85rem',
               fontWeight: 500,
             }}>
-              <span>{item.icon}</span>
+              {item.icon}
               {item.text}
             </div>
           ))}
@@ -555,8 +571,38 @@ function HeroSection() {
 }
 
 function LiveTicker() {
-  const liveMatch = DEMO_FIXTURES.find((f) => f.status === 'live');
-  if (!liveMatch) return null;
+  const { appMode, apiToken, isSubscribing, subscribeAndActivate, liveFixtures } = useTxLine();
+  const { connected } = useWallet();
+  const demoLiveMatch = DEMO_FIXTURES.find((f) => f.status === 'live');
+  
+  const hasLiveTxLineData = liveFixtures && liveFixtures.length > 0;
+  
+  // Conditionally choose which match to display
+  const isDemo = appMode === 'demo';
+  const displayDemo = isDemo;
+  
+  if (isDemo && !demoLiveMatch) return null;
+  if (!isDemo && !apiToken) {
+    return (
+      <div id="live-ticker-section" style={{ background: '#1a1008', borderTop: '1px solid rgba(255, 77, 109, 0.2)', borderBottom: '1px solid rgba(255, 77, 109, 0.2)', padding: '12px 0', color: '#f8fafc' }}>
+        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>LIVE MODE ACTIVE: Waiting for txLINE on-chain subscription...</span>
+          <button className="btn btn--primary btn--sm" onClick={subscribeAndActivate} disabled={!connected || isSubscribing}>
+            {isSubscribing ? 'Subscribing...' : (!connected ? 'Connect Wallet First' : 'Unlock txLINE Live Data')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (!isDemo && !hasLiveTxLineData) {
+    return (
+      <div id="live-ticker-section" style={{ background: '#1a1008', borderTop: '1px solid rgba(0, 229, 255, 0.2)', borderBottom: '1px solid rgba(0, 229, 255, 0.2)', padding: '12px 0', color: '#f8fafc' }}>
+        <div className="container">
+          <span style={{ color: '#00e5ff' }}>• LIVE txLINE: No matches currently in progress.</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="live-ticker-section" style={{
@@ -567,34 +613,49 @@ function LiveTicker() {
       color: '#f8fafc'
     }}>
       <div className="container">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <span className="badge badge--live">
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-            LIVE
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-            <span style={{ fontSize: '1.2rem' }}>{liveMatch.homeFlag}</span>
-            <span style={{ fontWeight: 700 }}>{liveMatch.homeTeam}</span>
-            <span style={{
-              fontFamily: 'Bebas Neue, cursive',
-              fontSize: '1.5rem',
-              color: '#ffffff',
-              letterSpacing: '0.1em',
-            }}>
-              {liveMatch.homeScore ?? 0} — {liveMatch.awayScore ?? 0}
-            </span>
-            <span style={{ fontWeight: 700 }}>{liveMatch.awayTeam}</span>
-            <span style={{ fontSize: '1.2rem' }}>{liveMatch.awayFlag}</span>
+        {isDemo ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <span className="badge badge--live">
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
+                DEMO LIVE
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                <span style={{ fontSize: '1.2rem' }}>{demoLiveMatch?.homeFlag}</span>
+                <span style={{ fontWeight: 700 }}>{demoLiveMatch?.homeTeam}</span>
+                <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em' }}>
+                  {demoLiveMatch?.homeScore ?? 0} — {demoLiveMatch?.awayScore ?? 0}
+                </span>
+                <span style={{ fontWeight: 700 }}>{demoLiveMatch?.awayTeam}</span>
+                <span style={{ fontSize: '1.2rem' }}>{demoLiveMatch?.awayFlag}</span>
+              </div>
+            </div>
           </div>
-          <Link href={`/contest/demo-live`} className="btn btn--danger btn--sm" id="live-join-btn">
-            Join Contest →
-          </Link>
-        </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#00e5ff', fontSize: '0.85rem' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 8px #00e5ff' }} />
+              txLINE REAL-TIME DATA ACTIVE
+            </div>
+            {liveFixtures.slice(0, 2).map((fixture: any, idx) => (
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <span className="badge badge--live" style={{ background: 'rgba(0, 229, 255, 0.2)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.5)' }}>LIVE</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                  <span style={{ fontWeight: 700 }}>{fixture.homeTeam?.name || 'Home'}</span>
+                  <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em', color: '#00e5ff' }}>
+                    {fixture.score?.home ?? 0} — {fixture.score?.away ?? 0}
+                  </span>
+                  <span style={{ fontWeight: 700 }}>{fixture.awayTeam?.name || 'Away'}</span>
+                  <span style={{ fontSize: '0.8rem', color: '#00e5ff' }}>{fixture.clock?.matchTime || "00:00"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
 function StatsSection() {
   const stats = [
     { value: '32', label: 'Teams', icon: '🌍' },
@@ -627,44 +688,50 @@ function HowItWorksSection() {
       title: 'Connect Wallet',
       desc: 'Connect your Phantom wallet to Solana devnet. Get free devnet SOL to play.',
       icon: '👛',
+      color: '#ffd700',
     },
     {
       step: '02',
       title: 'Build Your Lineup',
       desc: 'Pick 5 players (GK, CB, MF, SW, CF) from the two competing teams.',
       icon: '🧩',
+      color: '#00e87a',
     },
     {
       step: '03',
       title: 'Select Captain & Confidence',
       desc: 'Choose your captain (2x multiplier) and rate your confidence per player (⭐1-5).',
       icon: '⭐',
+      color: '#00e5ff',
     },
     {
       step: '04',
       title: 'Lock & Pay Entry',
       desc: 'Submit lineup before kickoff. Pay 0.1 SOL entry fee to the prize pool.',
       icon: '🔒',
+      color: '#e056fd',
     },
     {
       step: '05',
       title: 'Watch Live & Earn Points',
       desc: 'Goals +10, Assists +6, Saves +1, Cards -2. Watch your points update live!',
       icon: '📊',
+      color: '#ff4d6d',
     },
     {
       step: '06',
       title: 'Win SOL Prizes',
       desc: 'Top 3 win 50%, 30%, 20% of the prize pool — automatically distributed on-chain.',
       icon: '🏆',
+      color: '#ff8a00',
     },
   ];
 
   return (
-    <section id="how-it-works-section" style={{ padding: '80px 0' }}>
+    <section id="how-it-works-section" style={{ padding: '80px 0', background: 'transparent' }}>
       <div className="container">
         <div style={{ textAlign: 'center', marginBottom: 60 }}>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12 }}>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>
             How OddsDraft Works
           </h2>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 500, margin: '0 auto' }}>
@@ -674,24 +741,50 @@ function HowItWorksSection() {
 
         <div className="grid-three">
           {steps.map((step) => (
-            <div key={step.step} className="jrpg-scroll card--hoverable" id={`step-${step.step}`}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-                <div style={{
-                  fontFamily: 'Bebas Neue, cursive',
-                  fontSize: '2.5rem',
-                  color: '#b45309',
-                  opacity: 0.8,
-                  letterSpacing: '0.05em',
-                  lineHeight: 1,
-                }}>
-                  {step.step}
-                </div>
-                <div style={{ fontSize: '1.8rem' }}>{step.icon}</div>
+            <div 
+              key={step.step} 
+              className="ro-window"
+              style={{
+                background: 'rgba(251, 240, 185, 0.96)',
+                border: '2px solid #5c4028',
+                boxShadow: 'inset 0 0 12px rgba(92, 64, 40, 0.2), 0 0 0 2px #000000, 0 6px 16px rgba(0, 0, 0, 0.6)',
+                color: '#36220f',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                cursor: 'pointer'
+              }}
+            >
+              <div 
+                className="ro-window__header" 
+                style={{ 
+                  background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '2px solid #5c4028'
+                }}
+              >
+                <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>STEP {step.step}</span>
+                <span>{step.icon}</span>
               </div>
-              <h3 style={{ fontSize: '1.05rem', marginBottom: 8, color: '#36220f' }}>{step.title}</h3>
-              <p style={{ color: '#5c4028', fontSize: '0.875rem', lineHeight: 1.6 }}>
-                {step.desc}
-              </p>
+              
+              <div className="ro-window__body" style={{ padding: '20px 24px' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: 8, color: '#36220f' }}>
+                  {step.title}
+                </h3>
+                <p style={{ color: '#5c4028', fontSize: '0.85rem', lineHeight: 1.6, margin: 0 }}>
+                  {step.desc}
+                </p>
+              </div>
+
+              <style jsx>{`
+                .ro-window:hover {
+                  transform: translateY(-4px);
+                  border-color: #ffd700 !important;
+                  box-shadow: inset 0 0 12px rgba(255, 215, 0, 0.3), 0 0 0 2px #ffd700, 0 10px 24px rgba(0, 0, 0, 0.8) !important;
+                }
+              `}</style>
             </div>
           ))}
         </div>
@@ -706,45 +799,51 @@ function FeaturesSection() {
       title: 'Live TxODDS Data',
       desc: 'Real-time match data from TxODDS — goals, cards, and events as they happen.',
       icon: '⚡',
-      color: 'var(--color-primary)',
+      color: '#00e5ff',
+      tag: 'SYS_LIVE'
     },
     {
       title: 'Confidence Rating System',
       desc: 'Rate your confidence per player ⭐1-5. Higher confidence = bigger bonus or penalty.',
       icon: '🎯',
-      color: 'var(--color-accent)',
+      color: '#ffd700',
+      tag: 'SYS_CONF'
     },
     {
       title: 'On-Chain Prize Distribution',
       desc: 'Prizes auto-distributed via Solana. Transparent, trustless, immediate.',
       icon: '🔗',
-      color: 'var(--color-info)',
+      color: '#00e87a',
+      tag: 'SYS_SOL'
     },
     {
       title: 'Multi-Contest',
       desc: 'Join multiple contests simultaneously. Build different lineups for each match.',
       icon: '🏟️',
-      color: 'var(--color-primary)',
+      color: '#ff4d6d',
+      tag: 'SYS_CONTEST'
     },
     {
       title: 'Real-Time Leaderboard',
       desc: 'Watch rankings update live as match events happen. See your rank change in real-time.',
       icon: '📈',
-      color: '#A855F7',
+      color: '#a855f7',
+      tag: 'SYS_LEADER'
     },
     {
       title: 'AI Recommendations',
       desc: 'Rule-based AI picks: Captain Suggestion, Safe Pick, High Risk, and Undervalued players.',
       icon: '🤖',
-      color: 'var(--color-danger)',
+      color: '#e2e8f0',
+      tag: 'SYS_AI'
     },
   ];
 
   return (
-    <section id="features-section" style={{ padding: '80px 0', background: 'rgba(255,255,255,0.01)' }}>
+    <section id="features-section" style={{ padding: '80px 0', background: 'transparent' }}>
       <div className="container">
         <div style={{ textAlign: 'center', marginBottom: 60 }}>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12 }}>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>
             Why OddsDraft?
           </h2>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 500, margin: '0 auto' }}>
@@ -754,24 +853,64 @@ function FeaturesSection() {
 
         <div className="grid-three">
           {features.map((feature, idx) => (
-            <div key={feature.title} className="jrpg-scroll card--hoverable" id={`feature-${idx}`}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-                <div style={{
-                  fontFamily: 'Bebas Neue, cursive',
-                  fontSize: '2.5rem',
-                  color: '#b45309',
-                  opacity: 0.8,
-                  letterSpacing: '0.05em',
-                  lineHeight: 1,
-                }}>
-                  0{idx + 1}
-                </div>
-                <div style={{ fontSize: '1.8rem' }}>{feature.icon}</div>
+            <div 
+              key={feature.title} 
+              className="features-gaming-card"
+              style={{
+                background: 'rgba(15, 23, 42, 0.65)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                borderRadius: '8px',
+                padding: '24px',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                cursor: 'pointer'
+              }}
+            >
+              {/* Card Header Border Glow Accent */}
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '60px',
+                height: '3px',
+                background: feature.color,
+                boxShadow: `0 0 8px ${feature.color}`
+              }} />
+
+              {/* Tag/Index System Indicator */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#64748b', letterSpacing: '0.1em' }}>
+                  {feature.tag} // 0{idx + 1}
+                </span>
+                <span style={{ 
+                  fontSize: '1.25rem',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)'
+                }}>{feature.icon}</span>
               </div>
-              <h3 style={{ fontSize: '1.05rem', marginBottom: 8, color: '#36220f' }}>{feature.title}</h3>
-              <p style={{ color: '#5c4028', fontSize: '0.875rem', lineHeight: 1.6 }}>
+
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 10, color: '#f8fafc' }}>
+                {feature.title}
+              </h3>
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.6, margin: 0 }}>
                 {feature.desc}
               </p>
+
+              {/* Hover effect styles */}
+              <style jsx>{`
+                .features-gaming-card:hover {
+                  transform: translateY(-5px);
+                  border-color: ${feature.color}55 !important;
+                  box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 20px ${feature.color}15 !important;
+                  background: rgba(15, 23, 42, 0.85) !important;
+                }
+              `}</style>
             </div>
           ))}
         </div>
@@ -781,6 +920,8 @@ function FeaturesSection() {
 }
 
 function CTASection() {
+  const { appMode } = useTxLine();
+  
   return (
     <section id="cta-section" style={{ padding: '100px 0' }}>
       <div className="container" style={{ textAlign: 'center' }}>
@@ -808,15 +949,17 @@ function CTASection() {
               <Link href="/contests" className="btn btn--primary btn--lg" id="cta-join-btn">
                 🏆 Join a Contest
               </Link>
-              <a
-                href="https://faucet.solana.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn--secondary btn--lg"
-                id="cta-airdrop-btn"
-              >
-                💧 Get Devnet SOL
-              </a>
+              {appMode === 'demo' && (
+                <a
+                  href="https://faucet.solana.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn--secondary btn--lg"
+                  id="cta-airdrop-btn"
+                >
+                  💧 Get Devnet SOL
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -840,16 +983,8 @@ function Footer() {
           flexWrap: 'wrap',
           gap: 16,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>⚽</span>
-            <span style={{
-              fontFamily: 'Bebas Neue, cursive',
-              fontSize: '1.2rem',
-              letterSpacing: '0.05em',
-              color: 'var(--text-secondary)',
-            }}>
-              OddsDraft
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <img src="/Logo OddsDraft.svg" alt="OddsDraft Logo" style={{ height: '48px', width: 'auto', mixBlendMode: 'screen' }} />
           </div>
           <div style={{ fontSize: '0.8rem' }}>
             Powered by{' '}
