@@ -7,6 +7,7 @@ import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
 import { POINT_MAP } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 // Demo live events that replay at interval to simulate a live match
 const LIVE_EVENTS = [
