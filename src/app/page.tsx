@@ -106,7 +106,11 @@ export default function HomePage() {
                 element.style.position = 'relative';
                 element.style.zIndex = '99999';
                 element.style.transition = 'transform 0.5s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.5s ease';
-                element.style.background = targetId === 'live-ticker-section' ? '#1a1008' : '#fcf8eb';
+                let newBg = '#fcf8eb';
+                if (targetId === 'live-ticker-section') newBg = '#1a1008';
+                if (targetId.startsWith('feature-')) newBg = 'rgba(15, 23, 42, 1)';
+                
+                element.style.background = newBg;
                 element.style.borderRadius = '16px';
                 element.style.pointerEvents = 'none';
                 
@@ -349,7 +353,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 3:
       return {
         speakerTitle: 'Guide',
-        text: `"Playing is easy! Step 1: Connect your Phantom wallet on the Solana Devnet to get started."`,
+        text: `"Playing is easy! Step 1: Connect your Phantom wallet on the Solana network to get started."`,
         image: '/NPC/NPC Guide Female.svg',
         position: 'left',
         targetId: 'step-01',
@@ -357,7 +361,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 4:
       return {
         speakerTitle: 'Guide',
-        text: `"Step 2: Build your lineup by picking 5 players (GK, CB, MF, SW, CF) from the competing teams."`,
+        text: `"Step 2: Build your lineup by picking 5 players (GK, DEF, MID, DEF, ATT) from the competing teams."`,
         image: '/NPC/NPC Guide Male.svg',
         position: 'right',
         targetId: 'step-02',
@@ -389,7 +393,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 8:
       return {
         speakerTitle: 'Guide',
-        text: `"Step 6: If you finish in the Top 3, you'll win a share of the prize pool directly to your wallet!"`,
+        text: `"Step 6: Compete in 3 different lobbies (Free, Degens, Whales) to win a share of the prize pool directly to your wallet!"`,
         image: '/NPC/NPC Guide Male.svg',
         position: 'right',
         targetId: 'step-06',
@@ -445,7 +449,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 15:
       return {
         speakerTitle: 'Guide',
-        text: `"That's everything! Claim your Devnet SOL from the faucet, join a contest, and start drafting your dream team today!"`,
+        text: `"That's everything! Connect your wallet, join a contest lobby, and start drafting your dream team today!"`,
         image: '/NPC/NPC Guide Female.svg',
         position: 'left',
         shiftEdge: true,
@@ -528,6 +532,30 @@ function HeroSection() {
           <Link href="/how-it-works" className="btn-hero-learn" id="hero-learn-btn">
             How It Works
           </Link>
+          <button 
+            onClick={() => { localStorage.removeItem('hasSeenOddsDraftTutorial'); window.location.reload(); }}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#fff',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            }}
+          >
+            ▶ Replay Tutorial
+          </button>
         </div>
 
         {/* Trust indicators */}
@@ -690,14 +718,14 @@ function HowItWorksSection() {
     {
       step: '01',
       title: 'Connect Wallet',
-      desc: 'Connect your Phantom wallet to Solana devnet. Get free devnet SOL to play.',
+      desc: 'Connect your Phantom wallet to the Solana network to play.',
       icon: '👛',
       color: '#ffd700',
     },
     {
       step: '02',
       title: 'Build Your Lineup',
-      desc: 'Pick 5 players (GK, CB, MF, SW, CF) from the two competing teams.',
+      desc: 'Pick 5 players (GK, DEF, MID, DEF, ATT) from the two competing teams.',
       icon: '🧩',
       color: '#00e87a',
     },
@@ -725,7 +753,7 @@ function HowItWorksSection() {
     {
       step: '06',
       title: 'Win SOL Prizes',
-      desc: 'Top 3 win 50%, 30%, 20% of the prize pool — automatically distributed on-chain.',
+      desc: 'Compete in 3 lobbies (Free, Degens, Whales). Prizes distributed on-chain.',
       icon: '🏆',
       color: '#ff8a00',
     },
@@ -747,6 +775,7 @@ function HowItWorksSection() {
           {steps.map((step) => (
             <div 
               key={step.step} 
+              id={`step-${step.step}`}
               className="ro-window"
               style={{
                 background: 'rgba(251, 240, 185, 0.96)',
@@ -859,6 +888,7 @@ function FeaturesSection() {
           {features.map((feature, idx) => (
             <div 
               key={feature.title} 
+              id={`feature-${idx}`}
               className="features-gaming-card"
               style={{
                 background: 'rgba(15, 23, 42, 0.65)',
@@ -961,7 +991,7 @@ function CTASection() {
                   className="btn btn--secondary btn--lg"
                   id="cta-airdrop-btn"
                 >
-                  💧 Get Devnet SOL
+                  💧 Get Testnet SOL
                 </a>
               )}
             </div>
@@ -1001,7 +1031,7 @@ function Footer() {
               TxODDS
             </a>
             {' '}·{' '}
-            Built on Solana Devnet
+            Built on Solana
             {' '}·{' '}
             World Cup 2026 Hackathon
           </div>

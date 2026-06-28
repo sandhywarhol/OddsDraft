@@ -37,7 +37,18 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       setIsMuted(false); // Default to unmuted on first visit
       
-      // Handle browser autoplay policies by playing on first interaction
+      // Attempt to play immediately (might work if browser allows it)
+      const attemptPlay = () => {
+        const isLive = window.location.pathname.startsWith('/live/') || window.location.pathname.startsWith('/replay/');
+        const p = isLive ? watchLiveBgmRef.current?.play() : platformBgmRef.current?.play();
+        if (p !== undefined) {
+          p.catch(() => {
+            // If blocked, wait for first interaction
+            window.addEventListener('click', playOnInteract, { once: true });
+          });
+        }
+      };
+
       const playOnInteract = () => {
         const isLive = window.location.pathname.startsWith('/live/') || window.location.pathname.startsWith('/replay/');
         if (isLive) {
@@ -45,9 +56,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } else {
           platformBgmRef.current?.play().catch(() => {});
         }
-        window.removeEventListener('click', playOnInteract);
       };
-      window.addEventListener('click', playOnInteract);
+
+      attemptPlay();
     }
 
     return () => {

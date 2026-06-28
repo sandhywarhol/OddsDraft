@@ -1126,7 +1126,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                 </div>
 
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
-                  Cryptographically verifies that match events and scores match the TxLINE oracle stream recorded on Solana Devnet.
+                  Cryptographically verifies that match events and scores match the TxLINE oracle stream recorded on Solana.
                 </p>
 
                 <div style={{ 

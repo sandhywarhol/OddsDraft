@@ -87,9 +87,9 @@ export default function ContestsPage() {
           <div className="card card--glass" style={{ marginBottom: 32, padding: 'var(--space-4) var(--space-6)' }}>
             <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center' }}>
               {[
-                { label: 'Entry Fee', value: '0.1 SOL (Devnet)', icon: '💰' },
+                { label: 'Entry Fee', value: '0.1 SOL', icon: '💰' },
                 { label: 'Prize Modes', value: 'Top 3, 50/50, WTA', icon: '🏆' },
-                { label: 'Network', value: 'Solana Devnet', icon: '🔗' },
+                { label: 'Network', value: 'Solana', icon: '🔗' },
                 { label: 'Data', value: 'TxODDS Live', icon: '⚡' },
               ].map((item) => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

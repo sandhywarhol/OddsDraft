@@ -222,6 +222,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 setZoomedElementId(targetId);
               }, 400); // wait for zoom in
             }, 750); // wait for scroll
+          } else {
+            setWrapperTransform('none');
+            setIsTransitioning(false);
+            setTutorialStep(nextStep);
           }
         }, 400); // wait for zoom out
       } else {
@@ -486,8 +490,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 boxShadow: '10px 10px 0px #1a1008',
                 position: 'absolute',
                 bottom: '5vh',
-                left: tutorialData.position === 'left' ? '30%' : 'auto',
-                right: tutorialData.position === 'left' ? 'auto' : '30%',
+                left: '50%',
+                transform: 'translateX(-50%)',
                 zIndex: 1000010,
                 cursor: 'pointer',
                 display: 'flex',
@@ -559,7 +563,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 <span className="badge badge--upcoming">Kickoff {timeToKickoff}</span>
               </div>
               <p style={{ color: 'var(--text-secondary)', marginTop: 8 }}>
-                Pick your 5-a-side lineup (GK, CB, MF, SW, CF) • Select a captain (2× pts) • Set confidence
+                Pick your 5-a-side lineup (GK, DEF, MID, DEF, ATT) • Select a captain (2× pts) • Set confidence
               </p>
             </div>
 
@@ -1051,21 +1055,23 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 )}
 
                 {/* Submit Button */}
-                <div id="submit-button">
+                <div id="submit-button" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                   <button
-                    className="btn btn--primary btn--full btn--lg"
+                    className="btn btn--primary btn--lg"
                     onClick={handleSubmit}
                     disabled={!isLineupFull || !captain || submitting}
                     style={{
                       opacity: isLineupFull && captain ? 1 : 0.5,
                       cursor: isLineupFull && captain ? 'pointer' : 'not-allowed',
+                      width: '100%',
+                      maxWidth: '400px', // Prevent it from being too wide on desktop but keep it centered
                     }}
                   >
                     {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? '🔒 Lock Lineup & Pay 0.1 SOL' : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}
                   </button>
                   {isLineupFull && captain && (
-                    <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
-                      Entry fee: 0.1 SOL (devnet) • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
+                    <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Entry fee: 0.1 SOL • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
                     </p>
                   )}
                 </div>
@@ -1112,7 +1118,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 2:
       return {
         speakerTitle: 'Guide',
-        text: `"You need to fill these 5 specific positions: Goalkeeper, Center Back, Midfielder, Sweeper, and Center Forward."`,
+        text: `"You need to fill these 5 specific positions: Goalkeeper, 2 Defenders, 1 Midfielder, and 1 Attacker."`,
         image: '/NPC/NPC Guide Male.svg',
         position: 'right',
         targetId: 'lineup-grid',
