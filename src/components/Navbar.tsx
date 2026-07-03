@@ -24,6 +24,7 @@ export default function Navbar() {
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [manualInputError, setManualInputError] = useState('');
+  const [modalError, setModalError] = useState('');
   const prevConnectedRef = useRef(false);
   const pendingLiveRef = useRef(false);
   const pathname = usePathname();
@@ -85,7 +86,9 @@ export default function Navbar() {
       // useEffect above will call toggleAppMode once apiToken is set
     } catch (e: any) {
       pendingLiveRef.current = false;
-      // Show manual token modal as fallback instead of just an error badge
+      const msg: string = e?.message ?? '';
+      const isNoSol = msg.includes('prior credit') || msg.includes('insufficient') || msg.includes('debit');
+      setModalError(isNoSol ? 'insufficient_sol' : '');
       setShowTokenModal(true);
     }
   };
@@ -230,7 +233,7 @@ export default function Navbar() {
       {/* Manual API Token Modal */}
       {showTokenModal && (
         <div
-          onClick={() => setShowTokenModal(false)}
+          onClick={() => { setShowTokenModal(false); setModalError(''); }}
           style={{
             position: 'fixed', inset: 0, zIndex: 100000,
             background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
@@ -250,9 +253,32 @@ export default function Navbar() {
               <div style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', marginBottom: 6 }}>
                 Activate Live Mode
               </div>
-              <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
-                On-chain subscription failed. Paste your TxLINE API token below to activate Live Mode directly.
-              </div>
+              {modalError === 'insufficient_sol' ? (
+                <div style={{ fontSize: '0.78rem', lineHeight: 1.6 }}>
+                  <div style={{ color: '#ffaa00', fontWeight: 700, marginBottom: 6 }}>
+                    Your wallet needs devnet SOL to pay transaction fees.
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+                    Get free devnet SOL, then click Retry — or paste your TxLINE API token directly below.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: 700, textDecoration: 'underline' }}>
+                      Get devnet SOL →
+                    </a>
+                    <button
+                      onClick={() => { setShowTokenModal(false); setModalError(''); setTimeout(handleModeToggle, 100); }}
+                      style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                    >
+                      Retry subscription
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
+                  On-chain subscription failed. Paste your TxLINE API token below to activate Live Mode directly.
+                </div>
+              )}
             </div>
 
             <input
@@ -285,7 +311,7 @@ export default function Navbar() {
                 Activate
               </button>
               <button
-                onClick={() => { setShowTokenModal(false); setManualInput(''); setManualInputError(''); }}
+                onClick={() => { setShowTokenModal(false); setManualInput(''); setManualInputError(''); setModalError(''); }}
                 style={{
                   padding: '10px 18px', borderRadius: 8,
                   background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
