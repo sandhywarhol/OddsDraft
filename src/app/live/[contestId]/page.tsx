@@ -985,22 +985,37 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
     let isMounted = true;
 
-    // Accepts PascalCase (devnet) or camelCase (mainnet) — normalise to camelCase
+    // Accepts TxLINE (PascalCase/camelCase) AND TxODDS legacy (Incidents/Status/Team) formats
+    const txoddsStatusToGameState = (s: string): string | undefined => {
+      const v = s.toLowerCase();
+      if (v === 'inprogress' || v === 'in_progress' || v === 'live') return 'FirstHalf';
+      if (v === 'halftime' || v === 'half_time') return 'HalfTime';
+      if (v === 'finished' || v === 'completed' || v === 'fulltime') return 'FullTime';
+      if (v === 'secondhalf' || v === 'second_half') return 'SecondHalf';
+      if (v === 'extratime' || v === 'extra_time') return 'ExtraTime';
+      if (v === 'penalties') return 'Penalties';
+      return undefined;
+    };
     const normalizeUpdate = (u: any) => ({
       seq:       u.seq       ?? u.Seq,
       ts:        u.ts        ?? u.Ts,
       fixtureId: u.fixtureId ?? u.FixtureId,
-      gameState: u.gameState ?? u.GameState,
+      // TxLINE uses GameState; TxODDS legacy uses Status (e.g. 'InProgress', 'Halftime', 'Finished')
+      gameState: u.gameState ?? u.GameState
+        ?? (u.Status ? txoddsStatusToGameState(String(u.Status)) : undefined)
+        ?? (u.MatchStatus ? txoddsStatusToGameState(String(u.MatchStatus)) : undefined),
       score: u.score ?? (u.Score
         ? { home: u.Score.Home ?? u.Score.home ?? 0, away: u.Score.Away ?? u.Score.away ?? 0 }
         : u.ScoreSoccer
           ? { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 }
           : undefined),
-      events: (u.events ?? u.Events ?? []).map((e: any) => ({
-        type:              (e.type ?? e.Type ?? '').toLowerCase(),
+      // TxLINE uses Events[]; TxODDS legacy uses Incidents[] with IncidentType/Team fields
+      events: (u.events ?? u.Events ?? u.Incidents ?? u.incidents ?? []).map((e: any) => ({
+        type:              (e.type ?? e.Type ?? e.IncidentType ?? e.incidentType ?? '').toLowerCase(),
         minute:            e.minute ?? e.Minute ?? 0,
         period:            e.period ?? e.Period ?? '',
-        participant:       e.participant ?? e.Participant ?? 1,
+        // TxLINE uses Participant (1=home, 2=away); TxODDS uses Team with same 1/2 values
+        participant:       e.participant ?? e.Participant ?? e.Team ?? e.team ?? 1,
         playerId:          e.playerId ?? e.PlayerId,
         playerName:        e.playerName ?? e.PlayerName,
         assistPlayerId:    e.assistPlayerId ?? e.AssistPlayerId,
@@ -1060,6 +1075,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const snapRaw = Array.isArray(snap) ? snap : [snap];
         const snapUpdates = snapRaw.map(normalizeUpdate);
         console.log('[LivePage] Snapshot raw (first 800):', JSON.stringify(snapRaw)?.slice(0, 800));
+        console.log('[LivePage] Snapshot normalized — gameState:', snapUpdates[snapUpdates.length-1]?.gameState, '| events:', snapUpdates.flatMap(u => u.events ?? []).length, '| score:', JSON.stringify(snapUpdates[snapUpdates.length-1]?.score));
 
         // Apply score from snapshot
         const latestSnap = snapUpdates[snapUpdates.length - 1];
@@ -1232,6 +1248,39 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           }
         }
         // ── End game state synthesis ────────────────────────────────────────────
+
+        // Fallback: TxLINE is responding with score data but no GameState field detected.
+        // This happens with some TxODDS devnet responses that omit status entirely.
+        // Synthesize a kick_off once so the feed isn't empty.
+        if (!gs && lastGameStateRef.current === null && latest?.score !== undefined) {
+          lastGameStateRef.current = 'InPlay'; // sentinel — prevents re-running
+          if (isMounted) {
+            setEvents(prev => [{ id: `synth-ko-fb-${Date.now()}`, minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Match in progress!' }, ...prev]);
+          }
+          if (userLineupRef.current?.players?.length > 0) {
+            const { players, captain, confidence } = userLineupRef.current;
+            let totalBonus = 0;
+            for (const p of (players as any[])) {
+              if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+              let pts = 2;
+              const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+              pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+              if (captain === p.id) pts *= 2;
+              pts = Math.round(pts * 100) / 100;
+              totalBonus += pts;
+              appearedPlayersRef.current.add(p.id);
+              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }] }));
+            }
+            if (totalBonus > 0 && isMounted) {
+              setLeaderboard(prev => {
+                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+              });
+            }
+          }
+          console.log('[LivePage] Fallback: TxLINE live but no GameState detected — synthesized kick_off');
+        }
 
         const newEvents = convertTxLineUpdates(
           updates,

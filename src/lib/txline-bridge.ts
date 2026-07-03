@@ -232,11 +232,13 @@ export async function buildPlayerIdMap(
     const updates = Array.isArray(snapRes.data) ? snapRes.data : (snapRes.data ? [snapRes.data] : []);
     const map: Record<string, string> = {};
     for (const update of updates) {
-      const events = update.events ?? update.Events ?? [];
+      // Handle both TxLINE (Events) and TxODDS legacy (Incidents) formats
+      const events = update.events ?? update.Events ?? update.Incidents ?? update.incidents ?? [];
       for (const e of events) {
         const pid = String(e.playerId ?? e.PlayerId ?? '');
         const pName = e.playerName ?? e.PlayerName ?? '';
-        const participant = e.participant ?? e.Participant ?? 1;
+        // TxLINE uses Participant (1/2); TxODDS uses Team (1/2)
+        const participant = e.participant ?? e.Participant ?? e.Team ?? e.team ?? 1;
         if (!pid || !pName || map[pid]) continue;
         const teamName = participant === 1 ? homeTeam : awayTeam;
         const ourId = matchPlayerName(pName, teamName);
