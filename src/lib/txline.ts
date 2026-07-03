@@ -85,7 +85,7 @@ export async function activateApiAccess(wallet: WalletContextState, txSig: strin
   // 2. Sign Message
   const messageString = `${txSig}:${SELECTED_LEAGUES.join(",")}:${jwt}`;
   const messageBytes = new TextEncoder().encode(messageString);
-  
+
   const signatureBytes = await wallet.signMessage(messageBytes);
   const walletSignature = Buffer.from(signatureBytes).toString("base64");
 
@@ -115,29 +115,69 @@ function txlineHeaders(apiToken: string, guestJwt?: string | null) {
   return h;
 }
 
-export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | null) {
-  const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/fixtures/live`, {
-    headers: txlineHeaders(apiToken, guestJwt),
-  });
-  return res.data;
-}
-
+// GET /api/fixtures/snapshot — all fixtures (filter by status client-side for "live")
 export async function fetchAllFixtures(apiToken: string, guestJwt?: string | null) {
-  const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/fixtures`, {
+  const res = await axios.get(`${TXLINE_API_BASE}/api/fixtures/snapshot`, {
     headers: txlineHeaders(apiToken, guestJwt),
+    timeout: 15000,
   });
   return res.data;
 }
 
+// GET /api/fixtures/snapshot — kept as alias; filter by live status client-side
+export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | null) {
+  const res = await axios.get(`${TXLINE_API_BASE}/api/fixtures/snapshot`, {
+    headers: txlineHeaders(apiToken, guestJwt),
+    timeout: 15000,
+  });
+  // Filter to only live fixtures by game state or status
+  const all = Array.isArray(res.data) ? res.data : [];
+  const liveStates = ['FirstHalf', 'SecondHalf', 'HalfTime', 'ExtraTimeFirstHalf',
+    'ExtraTimeHalfTime', 'ExtraTimeSecondHalf', 'Penalties', 'InProgress', 'Live'];
+  return all.filter((f: any) => {
+    const state = f.GameState || f.gameState || f.Status || f.status || '';
+    return liveStates.some(s => state.toLowerCase().includes(s.toLowerCase()));
+  });
+}
+
+// GET /api/scores/updates/{fixtureId} — live score updates (poll every 10s during match)
+// Falls back to /api/scores/snapshot/{fixtureId} for initial/historical data
 export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string, guestJwt?: string | null) {
   try {
-    const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/scores`, {
+    const res = await axios.get(`${TXLINE_API_BASE}/api/scores/updates/${fixtureId}`, {
       headers: txlineHeaders(apiToken, guestJwt),
-      params: { FixtureId: fixtureId },
+      timeout: 10000,
     });
     return res.data;
   } catch (err: any) {
-    // 404 = fixture not live yet / historical data unavailable — expected on devnet
+    if (err?.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+// GET /api/scores/snapshot/{fixtureId} — full score snapshot (use for initial load)
+export async function fetchScoreSnapshot(apiToken: string, fixtureId: string, guestJwt?: string | null) {
+  try {
+    const res = await axios.get(`${TXLINE_API_BASE}/api/scores/snapshot/${fixtureId}`, {
+      headers: txlineHeaders(apiToken, guestJwt),
+      timeout: 10000,
+    });
+    return res.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+// GET /api/scores/historical/{fixtureId} — completed match data (2 weeks to 6 hours ago)
+export async function fetchHistoricalScores(apiToken: string, fixtureId: string, guestJwt?: string | null) {
+  try {
+    const res = await axios.get(`${TXLINE_API_BASE}/api/scores/historical/${fixtureId}`, {
+      headers: txlineHeaders(apiToken, guestJwt),
+      timeout: 10000,
+    });
+    return res.data;
+  } catch (err: any) {
     if (err?.response?.status === 404) return null;
     throw err;
   }
@@ -148,9 +188,10 @@ export async function fetchGuestToken(): Promise<string> {
   return res.data.token;
 }
 
+// Lineups may or may not be available depending on tier/timing
 export async function fetchFixtureLineups(apiToken: string, fixtureId: string, guestJwt?: string | null) {
   const res = await axios.get(
-    `${TXLINE_API_BASE}/api/soccer/v2/lineups/${fixtureId}`,
+    `${TXLINE_API_BASE}/api/fixtures/lineups/${fixtureId}`,
     { headers: txlineHeaders(apiToken, guestJwt), timeout: 10000 }
   );
   return res.data;

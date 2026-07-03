@@ -16,13 +16,16 @@ const TXLINE_API_BASE = typeof window !== 'undefined'
 // ── TxLINE API types ─────────────────────────────────────────────────────────
 
 export interface TxLineFixture {
-  FixtureId: string;
-  Participant1: string; // home team
-  Participant2: string; // away team
+  FixtureId: string | number;
+  Participant1: string;
+  Participant2: string;
+  // For neutral venues (e.g. WC2026), this indicates feed home designation, not actual venue
+  Participant1IsHome?: boolean;
   StartTime: string;
   CompetitionId?: number;
   CompetitionName?: string;
   Status?: string;
+  GameState?: string;
 }
 
 export interface TxLineLineupPlayer {
@@ -101,6 +104,8 @@ const BASE_POINTS: Record<string, number> = {
 
 // Fetches the TxLINE fixture list and finds the one matching homeTeam/awayTeam.
 // Returns the TxLINE FixtureId string, or null if not found / API error.
+// Endpoint: GET /api/fixtures/snapshot
+// Response: Array of { FixtureId, Participant1, Participant2, Participant1IsHome, StartTime }
 export async function resolveTxLineFixtureId(
   apiToken: string,
   homeTeam: string,
@@ -110,9 +115,9 @@ export async function resolveTxLineFixtureId(
   const headers: Record<string, string> = { 'X-Api-Token': apiToken };
   if (guestJwt) headers['Authorization'] = `Bearer ${guestJwt}`;
   try {
-    const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/fixtures`, {
+    const res = await axios.get(`${TXLINE_API_BASE}/api/fixtures/snapshot`, {
       headers,
-      timeout: 10000,
+      timeout: 15000,
     });
 
     const fixtures: TxLineFixture[] = Array.isArray(res.data) ? res.data : (res.data?.fixtures ?? []);
@@ -120,18 +125,21 @@ export async function resolveTxLineFixtureId(
     const normAway = norm(awayTeam);
 
     const match = fixtures.find(f => {
-      const p1 = norm(f.Participant1);
-      const p2 = norm(f.Participant2);
-      // Accept if either side contains or is contained by our name
-      const homeMatch = p1.includes(normHome) || normHome.includes(p1);
-      const awayMatch = p2.includes(normAway) || normAway.includes(p2);
+      // Participant1IsHome tells us which participant is designated home in the feed
+      const isP1Home = f.Participant1IsHome !== false; // default true if not specified
+      const feedHome = isP1Home ? f.Participant1 : f.Participant2;
+      const feedAway = isP1Home ? f.Participant2 : f.Participant1;
+      const p1 = norm(feedHome);
+      const p2 = norm(feedAway);
+      const homeMatch = p1.includes(normHome) || normHome.includes(p1) || p1.includes(normHome.split(' ')[0]);
+      const awayMatch = p2.includes(normAway) || normAway.includes(p2) || p2.includes(normAway.split(' ')[0]);
       return homeMatch && awayMatch;
     });
 
     if (!match) {
-      console.warn(`[TxLineBridge] No fixture found for ${homeTeam} vs ${awayTeam}`);
+      console.warn(`[TxLineBridge] No fixture found for ${homeTeam} vs ${awayTeam} in ${fixtures.length} fixtures`);
     }
-    return match?.FixtureId ?? null;
+    return match ? String(match.FixtureId) : null;
   } catch (err) {
     console.error('[TxLineBridge] resolveTxLineFixtureId error:', err);
     return null;
@@ -172,6 +180,7 @@ function matchPlayerName(txlineName: string, teamName: string): string | null {
 }
 
 // Fetch TxLINE lineups for a fixture and return txlinePlayerId → our internal ID.
+// Tries /api/fixtures/lineups/{id} first; falls back to score snapshot for player names.
 export async function buildPlayerIdMap(
   apiToken: string,
   txlineFixtureId: string,
@@ -181,35 +190,62 @@ export async function buildPlayerIdMap(
 ): Promise<Record<string, string>> {
   const headers: Record<string, string> = { 'X-Api-Token': apiToken };
   if (guestJwt) headers['Authorization'] = `Bearer ${guestJwt}`;
-  try {
-    const res = await axios.get(
-      `${TXLINE_API_BASE}/api/soccer/v2/lineups/${txlineFixtureId}`,
-      { headers, timeout: 10000 }
-    );
 
-    // TxLINE may return { lineups: [...] } or a flat array
-    const players: TxLineLineupPlayer[] = Array.isArray(res.data)
-      ? res.data
-      : (res.data?.lineups ?? res.data?.players ?? []);
+  // Try lineups endpoint (may or may not exist depending on tier/timing)
+  const lineupEndpoints = [
+    `${TXLINE_API_BASE}/api/fixtures/lineups/${txlineFixtureId}`,
+    `${TXLINE_API_BASE}/api/soccer/v2/lineups/${txlineFixtureId}`,
+  ];
 
-    const map: Record<string, string> = {};
+  for (const endpoint of lineupEndpoints) {
+    try {
+      const res = await axios.get(endpoint, { headers, timeout: 10000 });
+      // TxLINE may return { lineups: [...] } or a flat array
+      const players: TxLineLineupPlayer[] = Array.isArray(res.data)
+        ? res.data
+        : (res.data?.lineups ?? res.data?.players ?? []);
 
-    for (const p of players) {
-      if (!p.PlayerId || !p.PlayerName) continue;
-      const teamName = p.Participant === 1 ? homeTeam : awayTeam;
-      const ourId = matchPlayerName(p.PlayerName, teamName);
-      if (ourId) {
-        map[String(p.PlayerId)] = ourId;
+      if (players.length === 0) continue;
+
+      const map: Record<string, string> = {};
+      for (const p of players) {
+        if (!p.PlayerId || !p.PlayerName) continue;
+        const teamName = p.Participant === 1 ? homeTeam : awayTeam;
+        const ourId = matchPlayerName(p.PlayerName, teamName);
+        if (ourId) map[String(p.PlayerId)] = ourId;
+      }
+      if (Object.keys(map).length > 0) {
+        console.log(`[TxLineBridge] buildPlayerIdMap: ${Object.keys(map).length} players from ${endpoint}`);
+        return map;
+      }
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status !== 404 && status !== 403) {
+        console.warn('[TxLineBridge] buildPlayerIdMap error at', endpoint, ':', status ?? err?.message);
       }
     }
+  }
 
-    return map;
-  } catch (err: any) {
-    const status = err?.response?.status;
-    // 404 = fixture has no lineup data yet (normal for future/non-live matches)
-    if (status !== 404) {
-      console.error('[TxLineBridge] buildPlayerIdMap error:', err);
+  // Lineup endpoints unavailable — build map from score snapshot player names
+  try {
+    const snapRes = await axios.get(`${TXLINE_API_BASE}/api/scores/snapshot/${txlineFixtureId}`, { headers, timeout: 10000 });
+    const updates = Array.isArray(snapRes.data) ? snapRes.data : (snapRes.data ? [snapRes.data] : []);
+    const map: Record<string, string> = {};
+    for (const update of updates) {
+      const events = update.events ?? update.Events ?? [];
+      for (const e of events) {
+        const pid = String(e.playerId ?? e.PlayerId ?? '');
+        const pName = e.playerName ?? e.PlayerName ?? '';
+        const participant = e.participant ?? e.Participant ?? 1;
+        if (!pid || !pName || map[pid]) continue;
+        const teamName = participant === 1 ? homeTeam : awayTeam;
+        const ourId = matchPlayerName(pName, teamName);
+        if (ourId) map[pid] = ourId;
+      }
     }
+    console.log(`[TxLineBridge] buildPlayerIdMap: ${Object.keys(map).length} players from score snapshot`);
+    return map;
+  } catch {
     return {};
   }
 }

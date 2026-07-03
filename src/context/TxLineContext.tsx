@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { subscribeToFreeTier, activateApiAccess, fetchGuestToken, fetchLiveFixtures, fetchAllFixtures } from '@/lib/txline';
+import { subscribeToFreeTier, activateApiAccess, fetchGuestToken, fetchAllFixtures } from '@/lib/txline';
 
 interface TxLineContextProps {
   appMode: 'demo' | 'live';
@@ -103,53 +103,36 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     const fetchFixtures = async () => {
       try {
         setIsLoadingFixtures(true);
-        // TxLINE requires BOTH Authorization: Bearer <guestJwt> AND X-Api-Token
         const jwt = await ensureGuestJwt();
-        const toArray = (d: any): any[] => {
-          if (Array.isArray(d)) return d;
-          if (d?.fixtures && Array.isArray(d.fixtures)) return d.fixtures;
-          if (d?.data && Array.isArray(d.data)) return d.data;
-          return [];
-        };
 
-        const [liveData, allData] = await Promise.all([
-          fetchLiveFixtures(apiToken, jwt).catch(e => {
-            if (e.response?.status === 401) throw e;
-            console.log("[TxLINE] Error fetching live fixtures:", e.response?.status, e.message);
-            return [];
-          }),
-          fetchAllFixtures(apiToken, jwt).catch(e => {
-            if (e.response?.status === 401) throw e;
-            // 404 = endpoint not available on devnet free tier (live-only)
-            if (e.response?.status === 404) {
-              console.log("[TxLINE] /fixtures endpoint not available on devnet (404) — live matches only");
-              setFixturesAvailable(false);
-              return null; // null = devnet live-only mode
-            }
-            console.log("[TxLINE] Error fetching all fixtures:", e.response?.status, e.message);
-            return [];
-          })
-        ]);
-        if (isMounted) {
-          const live = toArray(liveData);
-          // null = devnet live-only (404 on /fixtures) — don't overwrite allFixtures
-          if (allData !== null) {
-            const all = toArray(allData);
-            console.log(`[TxLINE] Fixtures: ${all.length} total, ${live.length} live`);
-            setAllFixtures(all);
-          } else {
-            console.log(`[TxLINE] Devnet live-only mode — ${live.length} live, schedule unavailable`);
-          }
-          setLiveFixtures(live);
-        }
+        // Single call to /api/fixtures/snapshot — then derive live subset client-side
+        const raw = await fetchAllFixtures(apiToken, jwt);
+        const all: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
+
+        if (!isMounted) return;
+
+        // Live states per TxLINE documentation
+        const liveStates = ['firsthalf', 'secondhalf', 'halftime', 'extratimefirsthalf',
+          'extratimehalftime', 'extratimesecondhalf', 'penalties', 'inprogress', 'live'];
+        const live = all.filter((f: any) => {
+          const state = (f.GameState ?? f.gameState ?? f.Status ?? f.status ?? '').toLowerCase();
+          return liveStates.some(s => state.includes(s));
+        });
+
+        console.log(`[TxLINE] Fixtures: ${all.length} total, ${live.length} live`);
+        setAllFixtures(all);
+        setLiveFixtures(live);
+        setFixturesAvailable(true);
       } catch (error: any) {
         if (error.response?.status === 401) {
-          // Guest JWT expired — clear it so ensureGuestJwt fetches a fresh one next cycle
           console.log('[TxLINE] Auth expired, refreshing guest JWT...');
           setGuestJwt(null);
           localStorage.removeItem('txline_guest_jwt');
+        } else if (error.response?.status === 404) {
+          console.log('[TxLINE] /api/fixtures/snapshot returned 404');
+          setFixturesAvailable(false);
         } else {
-          console.log("Error fetching fixtures:", error.message);
+          console.log('[TxLINE] Error fetching fixtures:', error.message);
         }
       } finally {
         if (isMounted) setIsLoadingFixtures(false);
