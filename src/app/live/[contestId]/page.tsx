@@ -707,7 +707,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const contestType = (searchParamsObj.contestType as string) || 'top3';
   const { publicKey } = useWallet();
   const { playSFX } = useAudio();
-  const { appMode, apiToken, guestJwt } = useTxLine();
+  const { appMode, apiToken, guestJwt, liveFixtures } = useTxLine();
 
   // Always prefer WC2026 real fixtures (works in both demo and live modes)
   const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
@@ -953,6 +953,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       if (liveInitDoneRef.current) return;
       liveInitDoneRef.current = true;
 
+      // Log live fixtures from TxLINE context to help debug fixture ID matching
+      console.log('[LivePage] TxLINE liveFixtures:', JSON.stringify(liveFixtures?.slice(0,5)));
+
       // contestId IS the real TxLINE FixtureId for WC2026 matches — use directly
       txlineFixtureIdRef.current = contestId;
       console.log('[LivePage] TxLINE fixtureId:', contestId);
@@ -1109,6 +1112,33 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, apiToken]);
+
+  // ── LIVE MODE: ESPN score fallback when TxLINE has no data ───────────────────
+  // Uses ESPN public scoreboard API (no auth) to show live score while waiting for TxLINE events.
+  useEffect(() => {
+    if (appMode !== 'live' || txlineStatus === 'live') return;
+    if (!fixture.homeTeam) return;
+
+    let isMounted = true;
+    const pollEspn = async () => {
+      try {
+        // Use /api/scores/wc2026 which already matches team names → fixture IDs
+        const res = await fetch('/api/scores/wc2026');
+        if (!res.ok || !isMounted) return;
+        const data: Record<string, { home: number; away: number; espnId?: string }> = await res.json();
+        const entry = data[contestId];
+        if (entry && isMounted) {
+          setScore({ home: entry.home, away: entry.away });
+          scoreRef.current = { home: entry.home, away: entry.away };
+        }
+      } catch { /* silent */ }
+    };
+
+    pollEspn();
+    const interval = setInterval(pollEspn, 60000); // ESPN scoreboard caches 5 min, poll every 60s
+    return () => { isMounted = false; clearInterval(interval); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appMode, txlineStatus, contestId]);
 
   // ── DEMO MODE: Simulate live events via minute ticker ──────────────────────
   // Simulate live events
