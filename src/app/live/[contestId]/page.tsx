@@ -2140,12 +2140,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         return (
-                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flexShrink: 0, width: CARD_W }}>
+                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: CARD_W, paddingTop: isCap ? 20 : 0 }}>
                             {/* Player Card (2).svg — same design as lineup builder */}
                             <div style={{
                               width: CARD_W, height: CARD_H, flexShrink: 0, position: 'relative',
                               backgroundImage: "url('/Player%20Card%20(2).svg')",
-                              backgroundSize: '100% 100%',
+                              backgroundSize: '100% 100%', overflow: 'visible',
                               boxShadow: isCap
                                 ? '0 0 14px rgba(255,215,0,0.55)'
                                 : pts !== 0 ? `0 0 8px ${ptColor}44` : '2px 2px 6px rgba(0,0,0,0.4)',
@@ -2188,24 +2188,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               }}>
                                 {p.position}
                               </div>
-                              {/* Captain badge */}
+                              {/* Captain badge — sits above the card using negative top; paddingTop on wrapper gives clearance */}
                               {isCap && (
                                 <div style={{
-                                  position: 'absolute', top: '-8%', left: '50%', transform: 'translateX(-50%)',
+                                  position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)',
                                   background: 'linear-gradient(to bottom, #d32f2f, #8b1e1e)',
-                                  border: '2px solid #fff', padding: '1px 5px',
-                                  fontWeight: 700, fontFamily: 'Inter, sans-serif',
-                                  fontSize: '0.5rem', color: '#fff',
-                                  boxShadow: '0 0 0 1px #000, 1px 2px 4px rgba(0,0,0,0.3)', zIndex: 10,
-                                }}>CAPTAIN</div>
+                                  border: '2px solid #fff', padding: '2px 6px', whiteSpace: 'nowrap',
+                                  fontWeight: 800, fontFamily: 'Inter, sans-serif',
+                                  fontSize: '0.55rem', color: '#fff', letterSpacing: '0.04em',
+                                  boxShadow: '0 0 0 1px #000, 1px 2px 4px rgba(0,0,0,0.5)', zIndex: 10,
+                                }}>⭐ CAPTAIN</div>
                               )}
-                              {/* Confidence stars overlay */}
-                              <div style={{
-                                position: 'absolute', bottom: '2%', left: 0, right: 0, textAlign: 'center',
-                                fontSize: '0.42rem', color: 'rgba(255,215,0,0.6)', zIndex: 2,
-                              }}>
-                                {'★'.repeat(stars)}
-                              </div>
+                            </div>
+                            {/* Confidence stars — outside the card SVG so they're always visible */}
+                            <div style={{ textAlign: 'center', fontSize: '0.65rem', letterSpacing: 1, lineHeight: 1 }}>
+                              <span style={{ color: '#ffd700' }}>{'★'.repeat(stars)}</span>
+                              <span style={{ color: 'rgba(255,255,255,0.2)' }}>{'★'.repeat(5 - stars)}</span>
                             </div>
 
                             {/* Equipped skill card indicator */}
