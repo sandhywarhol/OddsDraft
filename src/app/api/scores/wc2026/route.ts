@@ -65,12 +65,15 @@ export async function GET() {
   const end = new Date();
   end.setUTCDate(end.getUTCDate() + 1);
 
-  const todayUTC = new Date();
-  const tomorrowUTC = new Date(todayUTC.getTime() + 86_400_000);
   const fmtUTC = (d: Date) =>
     `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
-  const todayStr = fmtUTC(todayUTC);
-  const tomorrowStr = fmtUTC(tomorrowUTC);
+
+  // Treat the last 4 days + tomorrow as "recent" — no CDN/ISR cache so results are always fresh
+  const recentDates = new Set<string>();
+  for (let i = -3; i <= 1; i++) {
+    const d = new Date(end.getTime() + i * 86_400_000);
+    recentDates.add(fmtUTC(d));
+  }
 
   const dates: string[] = [];
   for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
@@ -78,7 +81,7 @@ export async function GET() {
   }
 
   const allEventArrays = await Promise.all(
-    dates.map(d => fetchESPNDay(d, d === todayStr || d === tomorrowStr))
+    dates.map(d => fetchESPNDay(d, recentDates.has(d)))
   );
   const allEvents = allEventArrays.flat();
 
