@@ -1209,7 +1209,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         // Use /api/scores/wc2026 which already matches team names → fixture IDs
         const res = await fetch('/api/scores/wc2026');
         if (!res.ok || !isMounted) return;
-        const data: Record<string, { home: number; away: number; espnId?: string }> = await res.json();
+        const data: Record<string, { home: number; away: number }> = await res.json();
         const entry = data[contestId];
         if (entry && isMounted) {
           setScore({ home: entry.home, away: entry.away });

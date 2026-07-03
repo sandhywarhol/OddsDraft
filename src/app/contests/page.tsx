@@ -10,7 +10,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useEffect, useState } from 'react';
 import type { MatchResult } from '@/app/api/match/result/route';
 
-type FixtureScore = { home: number; away: number; espnId?: string };
+type FixtureScore = { home: number; away: number };
 
 export default function ContestsPage() {
   const { appMode, liveFixtures, allFixtures } = useTxLine();
@@ -22,10 +22,8 @@ export default function ContestsPage() {
   const [matchResult, setMatchResult] = useState<{ fixture: DemoFixture; data: MatchResult | null; loading: boolean } | null>(null);
 
   const openMatchResult = (fixture: DemoFixture) => {
-    const espnId = finishedScores[fixture.fixtureId]?.espnId;
     setMatchResult({ fixture, data: null, loading: true });
-    if (!espnId) { setMatchResult({ fixture, data: null, loading: false }); return; }
-    fetch(`/api/match/result?espnId=${espnId}`)
+    fetch(`/api/match/result?fixtureId=${fixture.fixtureId}`)
       .then(r => r.json())
       .then((data: MatchResult) => setMatchResult({ fixture, data, loading: false }))
       .catch(() => setMatchResult({ fixture, data: null, loading: false }));
@@ -326,7 +324,7 @@ export default function ContestsPage() {
                     fixture={fixture}
                     onSelect={setSelectedFixture}
                     counts={contestCounts[fixture.fixtureId]}
-                    onViewResult={finishedScores[fixture.fixtureId]?.espnId ? openMatchResult : undefined}
+                    onViewResult={finishedScores[fixture.fixtureId] ? openMatchResult : undefined}
                   />
                 ))}
               </div>

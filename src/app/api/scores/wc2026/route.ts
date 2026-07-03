@@ -55,11 +55,10 @@ async function fetchESPNDay(dateStr: string, isRecent = false): Promise<any[]> {
 export interface FixtureScore {
   home: number;
   away: number;
-  espnId?: string; // ESPN event ID — used to fetch match details (scorers, cards)
 }
 
 // GET /api/scores/wc2026
-// Returns { [txlineFixtureId]: { home, away, espnId } }
+// Returns { [txlineFixtureId]: { home, away } }
 export async function GET() {
   const start = new Date('2026-06-13');
   const end = new Date();
@@ -110,11 +109,7 @@ export async function GET() {
     );
 
     if (fixture) {
-      results[fixture.fixtureId] = {
-        home: homeScore,
-        away: awayScore,
-        espnId: String(event.id),
-      };
+      results[fixture.fixtureId] = { home: homeScore, away: awayScore };
     }
   }
 

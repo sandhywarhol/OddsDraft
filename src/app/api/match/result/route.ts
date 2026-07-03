@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 export interface MatchEvent {
   minute: string;
@@ -15,8 +16,26 @@ export interface MatchResult {
   attendance?: string;
 }
 
-// Maps ESPN event type text → our internal type
-function parseEventType(text: string, scoringType?: string): MatchEvent['type'] {
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+function norm(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, 'and').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+const ALIASES: Record<string, string> = {
+  'united states': 'usa', 'us': 'usa',
+  'democratic republic of congo': 'congo dr', 'dr congo': 'congo dr',
+  "cote d ivoire": 'ivory coast', 'czechia': 'czech republic',
+  'republic of korea': 'south korea', 'korea republic': 'south korea',
+  'cape verde islands': 'cape verde',
+};
+const resolve = (n: string) => { const x = norm(n); return ALIASES[x] ?? x; };
+const teamsMatch = (ours: string, theirs: string) => {
+  const a = norm(ours); const b = resolve(theirs);
+  return a === b || a.includes(b) || b.includes(a);
+};
+
+function eventType(text: string, scoringType?: string): MatchEvent['type'] {
   const t = (text ?? '').toLowerCase();
   const st = (scoringType ?? '').toLowerCase();
   if (st.includes('own goal') || t.includes('own goal')) return 'own_goal';
@@ -29,77 +48,111 @@ function parseEventType(text: string, scoringType?: string): MatchEvent['type'] 
   return 'goal';
 }
 
-// GET /api/match/result?espnId=696484
-// Fetches match details from ESPN summary endpoint.
-export async function GET(req: NextRequest) {
-  const espnId = new URL(req.url).searchParams.get('espnId');
-  if (!espnId) {
-    return NextResponse.json({ error: 'Missing espnId' }, { status: 400 });
-  }
+function fmtUTC(d: Date) {
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+}
 
-  const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${espnId}`;
+async function fetchDayEvents(dateStr: string): Promise<any[]> {
+  const now = Date.now();
+  const cutoff = new Date(); cutoff.setUTCDate(cutoff.getUTCDate() - 3);
+  const isRecent = new Date(`${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`).getTime() >= cutoff.getTime();
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) {
-      return NextResponse.json({ error: `ESPN returned ${res.status}` }, { status: res.status });
-    }
-    const data = await res.json();
+    const r = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateStr}&limit=30`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, ...(isRecent ? { cache: 'no-store' } : { next: { revalidate: 86400 } }) }
+    );
+    if (!r.ok) return [];
+    return (await r.json()).events ?? [];
+  } catch { return []; }
+}
 
-    const events: MatchEvent[] = [];
+async function fetchEventDetail(internalRef: string): Promise<any> {
+  try {
+    const r = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${internalRef}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 1800 } }
+    );
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
 
-    // Scoring plays (goals, own goals, penalties)
-    const scoringPlays: any[] = data.scoringPlays ?? [];
-    for (const play of scoringPlays) {
-      const type = parseEventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
-      const text: string = play.text ?? '';
-      // ESPN format: "Player Name (Assist Name)" or just "Player Name"
-      const assistMatch = text.match(/\(([^)]+)\)/);
-      const player = text.replace(/\s*\([^)]*\)/, '').trim();
-      const assist = assistMatch?.[1];
-      events.push({
-        minute: play.clock?.displayValue ?? '?',
-        type,
-        player,
-        assist,
-        team: play.team?.displayName ?? play.team?.name ?? '',
-      });
-    }
+// ── Route ─────────────────────────────────────────────────────────────────────
 
-    // Key plays for cards (ESPN sometimes puts these in `plays` or `keyPlays`)
-    const keyPlays: any[] = data.keyEvents ?? data.keyPlays ?? [];
-    for (const play of keyPlays) {
-      const typeText = play.type?.text ?? '';
-      if (!typeText.toLowerCase().includes('card')) continue;
-      const type = parseEventType(typeText);
-      events.push({
-        minute: play.clock?.displayValue ?? '?',
-        type,
-        player: play.participants?.[0]?.athlete?.displayName ?? play.text ?? '',
-        team: play.team?.displayName ?? play.team?.name ?? '',
-      });
-    }
+// GET /api/match/result?fixtureId=18176123
+// Returns goals, cards, venue and attendance for a completed fixture.
+// Data is sourced and normalised server-side; no third-party service is
+// referenced in the public request or response.
+export async function GET(req: NextRequest) {
+  const fixtureId = new URL(req.url).searchParams.get('fixtureId');
+  if (!fixtureId) return NextResponse.json({ error: 'Missing fixtureId' }, { status: 400 });
 
-    // Sort all events by minute (extract numeric part)
-    events.sort((a, b) => {
-      const mA = parseInt(a.minute.replace(/[^0-9]/g, '')) || 0;
-      const mB = parseInt(b.minute.replace(/[^0-9]/g, '')) || 0;
-      return mA - mB;
-    });
+  // Look up fixture from our own schedule
+  const fixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
+  if (!fixture) return NextResponse.json({ events: [] });
 
-    // Venue info
-    const gameInfo = data.gameInfo ?? data.header?.competitions?.[0];
-    const venue = gameInfo?.venue?.fullName ?? gameInfo?.venue?.name;
-    const attendance = gameInfo?.attendance != null ? Number(gameInfo.attendance).toLocaleString() : undefined;
+  // Find the matching event from the scoreboard for the fixture's date
+  const kickoff = new Date(fixture.kickoffAt);
+  const dateStr = fmtUTC(kickoff);
+  const dayEvents = await fetchDayEvents(dateStr);
 
-    const result: MatchResult = { events, venue, attendance };
-    return NextResponse.json(result, {
-      headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
-    });
-  } catch (err) {
-    console.error('[match/result]', err);
-    return NextResponse.json({ error: 'Failed to fetch match result' }, { status: 500 });
+  const event = dayEvents.find(ev => {
+    const comp = ev.competitions?.[0];
+    if (!comp) return false;
+    const home = comp.competitors?.find((c: any) => c.homeAway === 'home');
+    const away = comp.competitors?.find((c: any) => c.homeAway === 'away');
+    const h = home?.team?.displayName ?? home?.team?.name ?? '';
+    const a = away?.team?.displayName ?? away?.team?.name ?? '';
+    return teamsMatch(fixture.homeTeam, h) && teamsMatch(fixture.awayTeam, a);
+  });
+
+  if (!event?.id) return NextResponse.json({ events: [] });
+
+  // Fetch full match detail using the internal reference
+  const detail = await fetchEventDetail(event.id);
+  if (!detail) return NextResponse.json({ events: [] });
+
+  const events: MatchEvent[] = [];
+
+  // Goals and scoring plays
+  for (const play of (detail.scoringPlays ?? [])) {
+    const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
+    const text: string = play.text ?? '';
+    const assistMatch = text.match(/\(([^)]+)\)/);
+    const player = text.replace(/\s*\([^)]*\)/, '').trim();
+    const teamName: string = play.team?.displayName ?? play.team?.name ?? '';
+    // Map scoreboard team name back to our fixture team name
+    const team = teamsMatch(fixture.homeTeam, teamName) ? fixture.homeTeam
+      : teamsMatch(fixture.awayTeam, teamName) ? fixture.awayTeam
+      : teamName;
+    events.push({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team });
   }
+
+  // Cards from key events
+  for (const play of (detail.keyEvents ?? detail.keyPlays ?? [])) {
+    const typeText = play.type?.text ?? '';
+    if (!typeText.toLowerCase().includes('card')) continue;
+    const type = eventType(typeText);
+    const teamName: string = play.team?.displayName ?? play.team?.name ?? '';
+    const team = teamsMatch(fixture.homeTeam, teamName) ? fixture.homeTeam
+      : teamsMatch(fixture.awayTeam, teamName) ? fixture.awayTeam
+      : teamName;
+    events.push({
+      minute: play.clock?.displayValue ?? '?',
+      type,
+      player: play.participants?.[0]?.athlete?.displayName ?? play.text ?? '',
+      team,
+    });
+  }
+
+  events.sort((a, b) => (parseInt(a.minute) || 0) - (parseInt(b.minute) || 0));
+
+  // Venue / attendance — strip third-party source names from values
+  const gameInfo = detail.gameInfo ?? detail.header?.competitions?.[0];
+  const venue = gameInfo?.venue?.fullName ?? gameInfo?.venue?.name;
+  const attendance = gameInfo?.attendance != null ? Number(gameInfo.attendance).toLocaleString() : undefined;
+
+  const result: MatchResult = { events, venue, attendance };
+  return NextResponse.json(result, {
+    headers: { 'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=86400' },
+  });
 }
