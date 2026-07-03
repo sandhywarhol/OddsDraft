@@ -197,8 +197,12 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
       setGuestJwt(jwt);
       localStorage.setItem('txline_guest_jwt', jwt);
       localStorage.removeItem('txline_pending_txsig');
-    } catch (error) {
+    } catch (error: any) {
+      // Log full details so we can diagnose the exact failure in browser DevTools
       console.error('[TxLINE] Failed to subscribe & activate:', error);
+      if (error?.logs?.length) console.error('[TxLINE] TX logs:', error.logs.join('\n'));
+      if (error?.message) console.error('[TxLINE] message:', error.message);
+      if (error?.code) console.error('[TxLINE] code:', error.code);
       throw error;
     } finally {
       setIsSubscribing(false);
