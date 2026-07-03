@@ -16,7 +16,7 @@ import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEve
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates } from '@/lib/txline-bridge';
-import { fetchLiveScoreUpdates } from '@/lib/txline';
+import { fetchLiveScoreUpdates, fetchScoreSnapshot } from '@/lib/txline';
 
 // Demo live events that replay at interval to simulate a live match
 const LIVE_EVENTS = [
@@ -707,7 +707,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const contestType = (searchParamsObj.contestType as string) || 'top3';
   const { publicKey } = useWallet();
   const { playSFX } = useAudio();
-  const { appMode, apiToken, guestJwt, liveFixtures } = useTxLine();
+  const { appMode, apiToken, guestJwt, liveFixtures, allFixtures } = useTxLine();
 
   // Read persisted mode directly from localStorage for useState initializers.
   // TxLineContext's useEffect hasn't run yet on the first render, so appMode
@@ -862,6 +862,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const liveInitDoneRef = useRef(false);
   const showPopupRef = useRef(false);
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
+  const [minutesToKickoff, setMinutesToKickoff] = useState<number | null>(null);
 
   // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
   const equippedCardDefsRef = useRef<Record<string, SkillCard | null>>({});
@@ -950,6 +951,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     showPopupRef.current = showPopup;
   }, [showPopup]);
 
+  // ── Kickoff countdown (live mode, pre-match) ──────────────────────────────
+  useEffect(() => {
+    if (appMode !== 'live' || !wcFixture) return;
+    const update = () => {
+      const diff = new Date(wcFixture.kickoffAt).getTime() - Date.now();
+      setMinutesToKickoff(diff > 0 ? Math.ceil(diff / 60000) : null);
+    };
+    update();
+    const t = setInterval(update, 30000);
+    return () => clearInterval(t);
+  }, [appMode, wcFixture]);
+
   // ── LIVE MODE: TxLINE API polling ──────────────────────────────────────────
   useEffect(() => {
     if (appMode !== 'live' || !apiToken) return;
@@ -965,12 +978,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       console.log('[LivePage] Starting bootstrap — contestId:', contestId, 'home:', fixture.homeTeam, 'away:', fixture.awayTeam);
       console.log('[LivePage] TxLINE liveFixtures count:', liveFixtures?.length ?? 0);
 
-      // Try to match a better fixture ID from liveFixtures (in case devnet uses different IDs)
-      if (liveFixtures?.length > 0) {
+      // Try to match a better fixture ID from liveFixtures or allFixtures (in case devnet uses different IDs).
+      // allFixtures covers pre-match fixtures not yet in liveFixtures.
+      const fixturePool = liveFixtures?.length > 0 ? liveFixtures : allFixtures;
+      if (fixturePool?.length > 0) {
         const normStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' ').trim();
         const normHome = normStr(fixture.homeTeam);
         const normAway = normStr(fixture.awayTeam);
-        const matched = liveFixtures.find((f: any) => {
+        const matched = fixturePool.find((f: any) => {
           const p1 = normStr(f.Participant1 || f.homeTeam?.name || f.home || '');
           const p2 = normStr(f.Participant2 || f.awayTeam?.name || f.away || '');
           return (p1.includes(normHome.split(' ')[0]) || normHome.includes(p1.split(' ')[0]))
@@ -978,14 +993,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         });
         if (matched) {
           const resolvedId = matched.FixtureId || matched.fixtureId || matched.id;
-          console.log('[LivePage] Matched live fixture from context:', JSON.stringify(matched));
+          const poolName = liveFixtures?.length > 0 ? 'liveFixtures' : 'allFixtures';
+          console.log(`[LivePage] Matched fixture from ${poolName}:`, JSON.stringify(matched));
           if (resolvedId && resolvedId !== contestId) {
             console.log(`[LivePage] Fixture ID override: ${contestId} → ${resolvedId}`);
             txlineFixtureIdRef.current = resolvedId;
           }
         } else {
-          console.warn('[LivePage] No match in liveFixtures for', fixture.homeTeam, 'vs', fixture.awayTeam);
-          console.log('[LivePage] liveFixtures sample:', JSON.stringify(liveFixtures.slice(0, 3)));
+          console.warn('[LivePage] No match in fixture pool for', fixture.homeTeam, 'vs', fixture.awayTeam);
+          console.log('[LivePage] pool sample:', JSON.stringify(fixturePool.slice(0, 3)));
         }
       }
 
@@ -1003,8 +1019,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const raw = await fetchLiveScoreUpdates(apiToken!, txlineFixtureIdRef.current, guestJwt);
         if (!isMounted) return;
 
-        // null = 404 (fixture not live on TxLINE yet) — show waiting state
+        // null = 404 (fixture not live on TxLINE yet) — try snapshot fallback
         if (raw === null) {
+          const snap = await fetchScoreSnapshot(apiToken!, txlineFixtureIdRef.current!, guestJwt);
+          if (snap && isMounted) {
+            const snapUpdates = Array.isArray(snap) ? snap : [snap];
+            const latest = snapUpdates[snapUpdates.length - 1];
+            const s = latest?.score ?? (latest?.Score ? { home: latest.Score.Home ?? 0, away: latest.Score.Away ?? 0 } : null);
+            if (s) { setScore({ home: s.home ?? 0, away: s.away ?? 0 }); scoreRef.current = { home: s.home ?? 0, away: s.away ?? 0 }; }
+          }
           setTxlineStatus('waiting');
           return;
         }
@@ -1871,30 +1894,73 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           </Link>
 
           {/* Score Bug */}
-          <div className="score-bug" style={{ marginBottom: 24 }}>
-            <div className="score-bug__team">
-              <span className="score-bug__flag">{fixture.homeFlag}</span>
-              <span className="score-bug__name">{fixture.homeTeam}</span>
-            </div>
-            <div className="score-bug__score-container">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span className="score-bug__score">{score.home}</span>
-                <span className="score-bug__separator">—</span>
-                <span className="score-bug__score">{score.away}</span>
+          {(() => {
+            const isPreMatch = appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0;
+            const fixtureStatus = wcFixture ? getFixtureStatus(wcFixture) : 'live';
+            const isFinished = fixtureStatus === 'finished' && score.home === 0 && score.away === 0 && events.length === 0;
+            return (
+              <div className="score-bug" style={{ marginBottom: 24 }}>
+                <div className="score-bug__team">
+                  <span className="score-bug__flag">{fixture.homeFlag}</span>
+                  <span className="score-bug__name">{fixture.homeTeam}</span>
+                </div>
+                <div className="score-bug__score-container">
+                  {isPreMatch ? (
+                    <>
+                      <div style={{ fontSize: '0.75rem', color: '#ffd700', fontWeight: 700, letterSpacing: 1 }}>
+                        KICK OFF IN
+                      </div>
+                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2rem', lineHeight: 1, color: '#fff' }}>
+                        {minutesToKickoff < 60
+                          ? `${minutesToKickoff} MIN`
+                          : `${Math.floor(minutesToKickoff / 60)}h ${minutesToKickoff % 60}m`}
+                      </div>
+                      <span style={{
+                        fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                        background: 'rgba(255,193,7,0.15)', color: '#ffc107', border: '1px solid #ffc10744',
+                      }}>
+                        PRE-MATCH
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span className="score-bug__score">{score.home}</span>
+                        <span className="score-bug__separator">—</span>
+                        <span className="score-bug__score">{score.away}</span>
+                      </div>
+                      <div className="score-bug__minute">
+                        {appMode !== 'live' || txlineStatus === 'live' ? (minute < 90 ? `${minute}'` : 'FT') : (isFinished ? 'FT' : '—')}
+                      </div>
+                      {appMode === 'live' ? (
+                        <span
+                          className={txlineStatus === 'live' ? 'badge badge--live' : undefined}
+                          style={txlineStatus !== 'live' ? {
+                            fontSize: '0.65rem', padding: '2px 8px', borderRadius: 4, fontWeight: 700,
+                            background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                          } : { fontSize: '0.65rem' }}
+                        >
+                          {txlineStatus === 'live' ? (
+                            <><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} /> LIVE</>
+                          ) : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                        </span>
+                      ) : (
+                        <span className="badge badge--live" style={{ fontSize: '0.65rem' }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />
+                          LIVE
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="score-bug__team">
+                  <span className="score-bug__flag">{fixture.awayFlag}</span>
+                  <span className="score-bug__name">{fixture.awayTeam}</span>
+                </div>
               </div>
-              <div className="score-bug__minute">
-                {minute < 90 ? `${minute}'` : 'FT'}
-              </div>
-              <span className="badge badge--live" style={{ fontSize: '0.65rem' }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />
-                LIVE
-              </span>
-            </div>
-            <div className="score-bug__team">
-              <span className="score-bug__flag">{fixture.awayFlag}</span>
-              <span className="score-bug__name">{fixture.awayTeam}</span>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Controls — demo mode only */}
           {appMode !== 'live' && (
@@ -2176,10 +2242,35 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
                 {events.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
-                    {appMode === 'live' && txlineStatus === 'waiting'
-                      ? 'Waiting for TxLINE live data — match may not have started yet'
-                      : 'Waiting for match events...'}
+                    {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
+                      <>
+                        <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
+                        <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>
+                          {fixture.homeTeam} vs {fixture.awayTeam}
+                        </div>
+                        <div>
+                          Match kicks off in {minutesToKickoff < 60
+                            ? `${minutesToKickoff} minute${minutesToKickoff !== 1 ? 's' : ''}`
+                            : `${Math.floor(minutesToKickoff / 60)}h ${minutesToKickoff % 60}m`}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', marginTop: 8, color: 'rgba(255,255,255,0.25)' }}>
+                          Events will appear here as the match unfolds
+                        </div>
+                      </>
+                    ) : appMode === 'live' && txlineStatus === 'waiting' ? (
+                      <>
+                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>📡</div>
+                        <div>Waiting for live data — checking TxLINE every 10s</div>
+                        <div style={{ fontSize: '0.75rem', marginTop: 4, color: 'rgba(255,255,255,0.25)' }}>
+                          Score updates via ESPN are shown above while we wait
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
+                        <div>Waiting for match events...</div>
+                      </>
+                    )}
                   </div>
                 )}
 
