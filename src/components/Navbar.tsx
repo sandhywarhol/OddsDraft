@@ -251,7 +251,7 @@ export default function Navbar() {
                 Activate Live Mode
               </div>
               <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
-                On-chain subscription gagal. Paste TxLINE API token kamu di bawah untuk langsung aktifkan Live Mode.
+                On-chain subscription failed. Paste your TxLINE API token below to activate Live Mode directly.
               </div>
             </div>
 
@@ -297,7 +297,7 @@ export default function Navbar() {
             </div>
 
             <div style={{ marginTop: 14, fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', lineHeight: 1.5 }}>
-              Token bisa didapat dari TxLINE dashboard atau tim hackathon TxODDS.
+              Get your token from the TxLINE dashboard or contact the TxODDS hackathon team.
             </div>
           </div>
         </div>
@@ -347,7 +347,7 @@ export default function Navbar() {
               boxShadow: `0 0 6px ${tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
             }} />
             <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {isSubscribing ? 'Connecting...' : appMode === 'live' ? 'Mode: LIVE — Switch ke Demo' : 'Mode: DEMO — Switch ke Live'}
+              {isSubscribing ? 'Connecting...' : appMode === 'live' ? 'Mode: LIVE — Switch to Demo' : 'Mode: DEMO — Switch to Live'}
             </span>
           </button>
 
