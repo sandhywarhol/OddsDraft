@@ -1076,13 +1076,66 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           fixture.homeFlag, fixture.awayFlag,
           seenSeqsRef.current,
         );
-        if (snapEvents.length > 0 && isMounted) {
-          setEvents(snapEvents.slice().reverse());
-          setMinute(snapEvents[snapEvents.length - 1].minute);
+
+        // ── Game state synthesis from snapshot ──────────────────────────────
+        // The /api/scores/updates endpoint often omits GameState; snapshot always has it.
+        // We synthesize match-flow events here so they appear even when joining late.
+        const snapGs = latestSnap?.gameState ?? null;
+        const synthBootEvents: typeof matchEvents = [];
+        const isMatchLive = ['FirstHalf','SecondHalf','HalfTime','ExtraTime','Penalties'].includes(snapGs ?? '');
+
+        if (snapGs && lastGameStateRef.current === null) {
+          lastGameStateRef.current = snapGs; // prevent poll from re-synthesizing the same state
+
+          // Award starting_xi appearance points once (skip players already in snapshot events)
+          if (isMatchLive && userLineupRef.current?.players?.length > 0) {
+            const { players, captain, confidence } = userLineupRef.current;
+            let totalBonus = 0;
+            for (const p of (players as any[])) {
+              if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+              let pts = 2;
+              const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+              pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+              if (captain === p.id) pts *= 2;
+              pts = Math.round(pts * 100) / 100;
+              totalBonus += pts;
+              appearedPlayersRef.current.add(p.id);
+              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+              setPlayerHistory(prev => ({
+                ...prev,
+                [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }],
+              }));
+            }
+            if (totalBonus > 0 && isMounted) {
+              setLeaderboard(prev => {
+                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+              });
+            }
+          }
+
+          // Synthesize a match-flow marker event for the feed
+          if (snapGs === 'FirstHalf') {
+            synthBootEvents.push({ id: 'synth-ko-boot', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Kick off! Match has started.' });
+          } else if (snapGs === 'HalfTime') {
+            synthBootEvents.push({ id: 'synth-ht-boot', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half time!' });
+          } else if (snapGs === 'SecondHalf') {
+            synthBootEvents.push({ id: 'synth-ko-boot', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' });
+          } else if (snapGs === 'FullTime') {
+            synthBootEvents.push({ id: 'synth-ft-boot', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' });
+          }
+          console.log(`[LivePage] Snapshot GameState: ${snapGs} — synthesized ${synthBootEvents.length} flow events`);
+        }
+
+        // Merge: synthBootEvents (low minute, e.g. kick_off@0) + real snapshot events (sorted ascending)
+        const allBootEvents = [...synthBootEvents, ...snapEvents];
+        if (allBootEvents.length > 0 && isMounted) {
+          setEvents(allBootEvents.slice().reverse()); // most recent first
+          setMinute(allBootEvents[allBootEvents.length - 1]?.minute ?? 0);
           setTxlineStatus('live');
-          console.log(`[LivePage] Snapshot loaded ${snapEvents.length} events`);
+          console.log(`[LivePage] Snapshot loaded — ${snapEvents.length} real events + ${synthBootEvents.length} flow events`);
         } else {
-          console.log('[LivePage] Snapshot: no events yet (match may have just kicked off)');
+          console.log('[LivePage] Snapshot: no events and no game state (match not started yet)');
         }
       }
     };
@@ -2135,7 +2188,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                       Fantasy Points
                     </div>
-                    <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '3rem', color: 'var(--color-primary)', lineHeight: 1 }}>
+                    <div suppressHydrationWarning style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '3rem', color: 'var(--color-primary)', lineHeight: 1 }}>
                       {userPoints.toFixed(1)}
                     </div>
                   </div>
