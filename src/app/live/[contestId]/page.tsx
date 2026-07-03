@@ -951,12 +951,27 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     showPopupRef.current = showPopup;
   }, [showPopup]);
 
-  // ── Kickoff countdown (live mode, pre-match) ──────────────────────────────
+  // ── Kickoff countdown + live clock fallback ───────────────────────────────
+  // minutesToKickoff: positive = pre-match; null = match in progress or finished
+  // When in live mode and events haven't arrived yet, we derive the match minute
+  // from elapsed time since kickoff so the display doesn't stick at 0'.
+  const [liveClockMinute, setLiveClockMinute] = useState<number>(0);
   useEffect(() => {
     if (appMode !== 'live' || !wcFixture) return;
     const update = () => {
       const diff = new Date(wcFixture.kickoffAt).getTime() - Date.now();
-      setMinutesToKickoff(diff > 0 ? Math.ceil(diff / 60000) : null);
+      if (diff > 0) {
+        setMinutesToKickoff(Math.ceil(diff / 60000));
+        setLiveClockMinute(0);
+      } else {
+        setMinutesToKickoff(null);
+        // Approximate match clock accounting for a ~15-min halftime break
+        const elapsed = Math.floor(-diff / 60000);
+        const approx = elapsed <= 47 ? Math.min(elapsed, 45)
+          : elapsed <= 62 ? 45   // halftime window
+          : Math.min(elapsed - 17, 90); // second half (subtract break)
+        setLiveClockMinute(approx);
+      }
     };
     update();
     const t = setInterval(update, 30000);
@@ -968,6 +983,30 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     if (appMode !== 'live' || !apiToken) return;
 
     let isMounted = true;
+
+    // Accepts PascalCase (devnet) or camelCase (mainnet) — normalise to camelCase
+    const normalizeUpdate = (u: any) => ({
+      seq:       u.seq       ?? u.Seq,
+      ts:        u.ts        ?? u.Ts,
+      fixtureId: u.fixtureId ?? u.FixtureId,
+      gameState: u.gameState ?? u.GameState,
+      score: u.score ?? (u.Score
+        ? { home: u.Score.Home ?? u.Score.home ?? 0, away: u.Score.Away ?? u.Score.away ?? 0 }
+        : u.ScoreSoccer
+          ? { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 }
+          : undefined),
+      events: (u.events ?? u.Events ?? []).map((e: any) => ({
+        type:              (e.type ?? e.Type ?? '').toLowerCase(),
+        minute:            e.minute ?? e.Minute ?? 0,
+        period:            e.period ?? e.Period ?? '',
+        participant:       e.participant ?? e.Participant ?? 1,
+        playerId:          e.playerId ?? e.PlayerId,
+        playerName:        e.playerName ?? e.PlayerName,
+        assistPlayerId:    e.assistPlayerId ?? e.AssistPlayerId,
+        assistPlayerName:  e.assistPlayerName ?? e.AssistPlayerName,
+        goalType:          e.goalType ?? e.GoalType,
+      })),
+    });
 
     const bootstrap = async () => {
       if (liveInitDoneRef.current) return;
@@ -1006,10 +1045,44 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
 
       const resolvedFixtureId = txlineFixtureIdRef.current ?? contestId;
+
+      // Build player ID map (from lineups or snapshot events)
       const pMap = await buildPlayerIdMap(apiToken!, resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, guestJwt);
       if (isMounted) {
         playerIdMapRef.current = pMap;
         console.log(`[LivePage] Player map — ${Object.keys(pMap).length} players matched`);
+      }
+
+      // Load all events that happened before we connected via the score snapshot
+      const snap = await fetchScoreSnapshot(apiToken!, resolvedFixtureId, guestJwt);
+      if (snap && isMounted) {
+        const snapRaw = Array.isArray(snap) ? snap : [snap];
+        const snapUpdates = snapRaw.map(normalizeUpdate);
+        console.log('[LivePage] Snapshot raw (first 800):', JSON.stringify(snapRaw)?.slice(0, 800));
+
+        // Apply score from snapshot
+        const latestSnap = snapUpdates[snapUpdates.length - 1];
+        if (latestSnap?.score) {
+          setScore({ home: latestSnap.score.home ?? 0, away: latestSnap.score.away ?? 0 });
+          scoreRef.current = { home: latestSnap.score.home ?? 0, away: latestSnap.score.away ?? 0 };
+        }
+
+        // Apply historical events from snapshot
+        const snapEvents = convertTxLineUpdates(
+          snapUpdates,
+          playerIdMapRef.current,
+          fixture.homeTeam, fixture.awayTeam,
+          fixture.homeFlag, fixture.awayFlag,
+          seenSeqsRef.current,
+        );
+        if (snapEvents.length > 0 && isMounted) {
+          setEvents(snapEvents.slice().reverse());
+          setMinute(snapEvents[snapEvents.length - 1].minute);
+          setTxlineStatus('live');
+          console.log(`[LivePage] Snapshot loaded ${snapEvents.length} events`);
+        } else {
+          console.log('[LivePage] Snapshot: no events yet (match may have just kicked off)');
+        }
       }
     };
 
@@ -1032,35 +1105,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           return;
         }
 
-        // Log raw response ONCE per session so we can inspect the real structure
+        // Log raw response ONCE so we can inspect real structure if events are missing
         if (seenSeqsRef.current.size === 0) {
-          console.log('[LivePage] TxLINE raw response (first poll):', JSON.stringify(raw)?.slice(0, 1000));
+          console.log('[LivePage] TxLINE first poll raw:', JSON.stringify(raw)?.slice(0, 1000));
         }
-
-        // Normalize: TxLINE V2 may use PascalCase fields (GameState, Score.Home, Events[].Type)
-        // or lowercase fields depending on network. Accept both.
-        const normalizeUpdate = (u: any) => ({
-          seq:       u.seq       ?? u.Seq,
-          ts:        u.ts        ?? u.Ts,
-          fixtureId: u.fixtureId ?? u.FixtureId,
-          gameState: u.gameState ?? u.GameState,
-          score: u.score ?? (u.Score
-            ? { home: u.Score.Home ?? u.Score.home ?? 0, away: u.Score.Away ?? u.Score.away ?? 0 }
-            : u.ScoreSoccer
-              ? { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 }
-              : undefined),
-          events: (u.events ?? u.Events ?? []).map((e: any) => ({
-            type:              (e.type ?? e.Type ?? '').toLowerCase(),
-            minute:            e.minute ?? e.Minute ?? 0,
-            period:            e.period ?? e.Period ?? '',
-            participant:       e.participant ?? e.Participant ?? 1,
-            playerId:          e.playerId ?? e.PlayerId,
-            playerName:        e.playerName ?? e.PlayerName,
-            assistPlayerId:    e.assistPlayerId ?? e.AssistPlayerId,
-            assistPlayerName:  e.assistPlayerName ?? e.AssistPlayerName,
-            goalType:          e.goalType ?? e.GoalType,
-          })),
-        });
 
         const rawUpdates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
         const updates = rawUpdates.map(normalizeUpdate);
@@ -1930,7 +1978,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         <span className="score-bug__score">{score.away}</span>
                       </div>
                       <div className="score-bug__minute">
-                        {appMode !== 'live' || txlineStatus === 'live' ? (minute < 90 ? `${minute}'` : 'FT') : (isFinished ? 'FT' : '—')}
+                        {appMode !== 'live'
+                          ? (minute < 90 ? `${minute}'` : 'FT')
+                          : txlineStatus === 'live'
+                            ? (minute > 0 ? `${minute}'` : liveClockMinute > 0 ? `~${liveClockMinute}'` : `0'`)
+                            : (isFinished ? 'FT' : '—')}
                       </div>
                       {appMode === 'live' ? (
                         <span
@@ -2255,6 +2307,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         </div>
                         <div style={{ fontSize: '0.75rem', marginTop: 8, color: 'rgba(255,255,255,0.25)' }}>
                           Events will appear here as the match unfolds
+                        </div>
+                      </>
+                    ) : appMode === 'live' && txlineStatus === 'live' ? (
+                      <>
+                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚽</div>
+                        <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match in progress</div>
+                        <div>Connected to TxLINE — waiting for first notable event</div>
+                        <div style={{ fontSize: '0.75rem', marginTop: 4, color: 'rgba(255,255,255,0.25)' }}>
+                          Goals, cards and key plays will appear here instantly
                         </div>
                       </>
                     ) : appMode === 'live' && txlineStatus === 'waiting' ? (
