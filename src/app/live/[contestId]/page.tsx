@@ -1941,13 +1941,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             ← Back to Lobby
           </Link>
 
-          {/* Score Bug */}
+          {/* Score Bug — suppressHydrationWarning because minute/score are initialised from
+              localStorage (persistedIsLive) which is unavailable on the server */}
           {(() => {
             const isPreMatch = appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0;
             const fixtureStatus = wcFixture ? getFixtureStatus(wcFixture) : 'live';
             const isFinished = fixtureStatus === 'finished' && score.home === 0 && score.away === 0 && events.length === 0;
             return (
-              <div className="score-bug" style={{ marginBottom: 24 }}>
+              <div className="score-bug" style={{ marginBottom: 24 }} suppressHydrationWarning>
                 <div className="score-bug__team">
                   <span className="score-bug__flag">{fixture.homeFlag}</span>
                   <span className="score-bug__name">{fixture.homeTeam}</span>
@@ -1973,11 +1974,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   ) : (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span className="score-bug__score">{score.home}</span>
+                        <span className="score-bug__score" suppressHydrationWarning>{score.home}</span>
                         <span className="score-bug__separator">—</span>
-                        <span className="score-bug__score">{score.away}</span>
+                        <span className="score-bug__score" suppressHydrationWarning>{score.away}</span>
                       </div>
-                      <div className="score-bug__minute">
+                      <div className="score-bug__minute" suppressHydrationWarning>
                         {appMode !== 'live'
                           ? (minute < 90 ? `${minute}'` : 'FT')
                           : txlineStatus === 'live'
