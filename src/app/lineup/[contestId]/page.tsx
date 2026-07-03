@@ -114,7 +114,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const [confidence, setConfidence] = useState<Record<string, number>>({});
   const [playerSearch, setPlayerSearch] = useState('');
   const [activeTeam, setActiveTeam] = useState<'home' | 'away'>('home');
-  const [submitted, setSubmitted] = useState(false);
+  const enteredContestsKey = `txodds_entered_contests_${contestId}`;
+  const alreadyEntered = typeof window !== 'undefined'
+    ? (JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]') as string[]).includes(contestType)
+    : false;
+  const [submitted, setSubmitted] = useState(alreadyEntered);
   const [submitting, setSubmitting] = useState(false);
   const [airdropping, setAirdropping] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -512,12 +516,21 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       await new Promise(r => setTimeout(r, 1000));
     }
 
+    // Mark this contest type as entered so the user can't re-enter the same category
+    try {
+      const entered: string[] = JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]');
+      if (!entered.includes(contestType)) {
+        entered.push(contestType);
+        localStorage.setItem(enteredContestsKey, JSON.stringify(entered));
+      }
+    } catch { /* ignore */ }
+
     setSubmitted(true);
     setSubmitting(false);
 
     // Redirect to live page after brief success flash
     setTimeout(() => {
-      router.push(`/live/${contestId}`);
+      router.push(`/live/${contestId}?contestType=${contestType}`);
     }, 1800);
   };
 
@@ -541,14 +554,27 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const timeToKickoff = formatDistanceToNow(kickoffTime, { addSuffix: true });
 
   if (submitted) {
+    const contestLabel = contestType === '5050' ? 'Double Up (50/50)' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 Classic';
     return (
       <div style={{ minHeight: '100vh', background: 'transparent' }}>
         <Navbar />
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', gap: 24, padding: '0 24px', textAlign: 'center' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Lineup Submitted!</h1>
-          <p style={{ color: 'var(--text-secondary)', maxWidth: 400 }}>
-            Your 5-player lineup is locked in. Watch the live match to see your fantasy points update in real-time!
-          </p>
+          {alreadyEntered ? (
+            <>
+              <div style={{ fontSize: '3rem' }}>✅</div>
+              <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Already Entered</h1>
+              <p style={{ color: 'var(--text-secondary)', maxWidth: 400 }}>
+                You have already submitted a lineup for <strong>{contestLabel}</strong> in this match. Head to the live page to track your points, or choose a different prize pool from the contests lobby.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>Lineup Submitted!</h1>
+              <p style={{ color: 'var(--text-secondary)', maxWidth: 400 }}>
+                Your 5-player lineup is locked in for <strong>{contestLabel}</strong>. Watch the live match to see your fantasy points update in real-time!
+              </p>
+            </>
+          )}
           <div className="card" style={{ padding: 24, display: 'flex', gap: 32 }}>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2rem', color: 'var(--color-primary)' }}>

@@ -15,6 +15,7 @@ type FixtureScore = { home: number; away: number; espnId?: string };
 export default function ContestsPage() {
   const { appMode, liveFixtures, allFixtures } = useTxLine();
   const [mounted, setMounted] = useState(false);
+  const [enteredContests, setEnteredContests] = useState<Record<string, string[]>>({});
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);
   const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number }>>({});
   const [finishedScores, setFinishedScores] = useState<Record<string, FixtureScore>>({});
@@ -30,7 +31,19 @@ export default function ContestsPage() {
       .catch(() => setMatchResult({ fixture, data: null, loading: false }));
   };
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    // Load which contest types the user has already entered per fixture
+    const map: Record<string, string[]> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('txodds_entered_contests_')) {
+        const fixtureId = key.replace('txodds_entered_contests_', '');
+        try { map[fixtureId] = JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { /* */ }
+      }
+    }
+    setEnteredContests(map);
+  }, []);
 
   const isDemo = appMode === 'demo';
 
@@ -363,26 +376,45 @@ export default function ContestsPage() {
                   const fixtureCount = contestCounts[selectedFixture.fixtureId];
                   const totalPlayers = fixtureCount?.total ?? 0;
                   const showCount = !isDemo && totalPlayers > 0;
-                  return (
-                    <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}`} key={ct.id} style={{ textDecoration: 'none' }}>
-                      <div className="card card--hoverable" style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'center', background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>
-                        <div style={{ fontSize: '2rem' }}>{ct.icon}</div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{ct.title}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{ct.desc}</div>
+                  const joined = (enteredContests[selectedFixture.fixtureId] ?? []).includes(ct.id);
+                  const card = (
+                    <div className={joined ? 'card' : 'card card--hoverable'} style={{
+                      padding: 16, display: 'flex', gap: 16, alignItems: 'center',
+                      background: joined ? 'rgba(255,255,255,0.03)' : 'var(--bg-elevated)',
+                      border: joined ? '1px solid rgba(255,215,0,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                      cursor: joined ? 'default' : 'pointer',
+                      opacity: joined ? 0.85 : 1,
+                    }}>
+                      <div style={{ fontSize: '2rem' }}>{joined ? '✅' : ct.icon}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {ct.title}
+                          {joined && <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, background: 'rgba(255,215,0,0.15)', color: '#ffd700', border: '1px solid rgba(255,215,0,0.3)', fontWeight: 700 }}>JOINED</span>}
                         </div>
-                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                          <div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entry</div>
-                            <div style={{ fontWeight: 700, color: 'var(--color-accent)' }}>0.1 SOL</div>
-                          </div>
-                          <div style={{ fontSize: '0.65rem', color: showCount ? 'var(--text-secondary)' : 'var(--text-muted)', textAlign: 'right' }}>
-                            {showCount ? `${totalPlayers} joined` : isDemo ? 'Demo mode' : 'Be first!'}
-                          </div>
-                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{joined ? 'You have already entered this contest.' : ct.desc}</div>
                       </div>
-                    </Link>
+                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                        {joined ? (
+                          <Link href={`/live/${selectedFixture.fixtureId}?contestType=${ct.id}`} className="btn btn--sm btn--primary" onClick={e => e.stopPropagation()} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>
+                            Watch Live →
+                          </Link>
+                        ) : (
+                          <>
+                            <div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entry</div>
+                              <div style={{ fontWeight: 700, color: 'var(--color-accent)' }}>0.1 SOL</div>
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: showCount ? 'var(--text-secondary)' : 'var(--text-muted)', textAlign: 'right' }}>
+                              {showCount ? `${totalPlayers} joined` : isDemo ? 'Demo mode' : 'Be first!'}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   );
+                  return joined
+                    ? <div key={ct.id}>{card}</div>
+                    : <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}`} key={ct.id} style={{ textDecoration: 'none' }}>{card}</Link>;
                 })}
               </div>
             </div>
