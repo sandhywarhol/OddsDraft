@@ -11,7 +11,7 @@ import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { User, LogOut, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 
 export default function Navbar() {
-  const { appMode, toggleAppMode, apiToken, isSubscribing, subscribeAndActivate } = useTxLine();
+  const { appMode, toggleAppMode, apiToken, isSubscribing, subscribeAndActivate, setManualApiToken } = useTxLine();
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
 
@@ -21,6 +21,9 @@ export default function Navbar() {
   const [errorMsg, setErrorMsg] = useState('');
   const [walletToast, setWalletToast] = useState<{ balance: number } | null>(null);
   const [toastExiting, setToastExiting] = useState(false);
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [manualInput, setManualInput] = useState('');
+  const [manualInputError, setManualInputError] = useState('');
   const prevConnectedRef = useRef(false);
   const pendingLiveRef = useRef(false);
   const pathname = usePathname();
@@ -82,10 +85,23 @@ export default function Navbar() {
       // useEffect above will call toggleAppMode once apiToken is set
     } catch (e: any) {
       pendingLiveRef.current = false;
-      setErrorMsg(e?.message?.includes('rejected') ? 'Rejected' : 'Failed');
-      setTokenError(true);
-      setTimeout(() => setTokenError(false), 3000);
+      // Show manual token modal as fallback instead of just an error badge
+      setShowTokenModal(true);
     }
+  };
+
+  const handleManualActivate = () => {
+    const token = manualInput.trim();
+    if (!token) {
+      setManualInputError('Paste your TxLINE API token first');
+      return;
+    }
+    setManualApiToken(token);
+    setManualInput('');
+    setManualInputError('');
+    setShowTokenModal(false);
+    // pendingLiveRef ensures toggleAppMode fires once apiToken is set
+    pendingLiveRef.current = true;
   };
 
   return (
@@ -208,6 +224,82 @@ export default function Navbar() {
               </a>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Manual API Token Modal */}
+      {showTokenModal && (
+        <div
+          onClick={() => setShowTokenModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100000,
+            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 16px',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#0d1420', border: '1px solid rgba(0,229,255,0.25)',
+              borderRadius: 12, padding: '28px 24px', width: '100%', maxWidth: 420,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
+            }}
+          >
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', marginBottom: 6 }}>
+                Activate Live Mode
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
+                On-chain subscription gagal. Paste TxLINE API token kamu di bawah untuk langsung aktifkan Live Mode.
+              </div>
+            </div>
+
+            <input
+              autoFocus
+              type="text"
+              placeholder="Paste TxLINE API token..."
+              value={manualInput}
+              onChange={e => { setManualInput(e.target.value); setManualInputError(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') handleManualActivate(); }}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: 8,
+                background: 'rgba(255,255,255,0.06)', border: `1px solid ${manualInputError ? '#ff4d4d' : 'rgba(255,255,255,0.15)'}`,
+                color: '#fff', fontSize: '0.8rem', fontFamily: 'monospace',
+                outline: 'none', boxSizing: 'border-box', marginBottom: manualInputError ? 6 : 16,
+              }}
+            />
+            {manualInputError && (
+              <div style={{ fontSize: '0.72rem', color: '#ff6b6b', marginBottom: 12 }}>{manualInputError}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={handleManualActivate}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
+                  background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
+                  color: '#fff', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                Activate
+              </button>
+              <button
+                onClick={() => { setShowTokenModal(false); setManualInput(''); setManualInputError(''); }}
+                style={{
+                  padding: '10px 18px', borderRadius: 8,
+                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div style={{ marginTop: 14, fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', lineHeight: 1.5 }}>
+              Token bisa didapat dari TxLINE dashboard atau tim hackathon TxODDS.
+            </div>
+          </div>
         </div>
       )}
 
