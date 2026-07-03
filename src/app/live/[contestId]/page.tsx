@@ -709,6 +709,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt, liveFixtures } = useTxLine();
 
+  // Read persisted mode directly from localStorage for useState initializers.
+  // TxLineContext's useEffect hasn't run yet on the first render, so appMode
+  // is still 'demo' even after a page refresh in live mode.
+  const persistedIsLive = typeof window !== 'undefined'
+    && localStorage.getItem('txline_app_mode') === 'live'
+    && !!localStorage.getItem('txline_api_token');
+
   // Always prefer WC2026 real fixtures (works in both demo and live modes)
   const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   const fixture = wcFixture
@@ -719,7 +726,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   const [initialState] = useState(() => {
     // Live mode: always start clean — API provides score/events/minute
-    if (appMode === 'live') {
+    if (persistedIsLive) {
       return {
         initialMin: 0,
         initialIdx: 0,
@@ -760,7 +767,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [score, setScore] = useState({ home: initialState.homeScore, away: initialState.awayScore });
   const [minute, setMinute] = useState(initialState.initialMin);
   const [leaderboard, setLeaderboard] = useState(() => {
-    if (appMode === 'live') {
+    if (persistedIsLive) {
       // Live mode: start with only the current user at 0 pts.
       // Real participants are loaded asynchronously via useEffect below.
       const walletStr = publicKey?.toString() ?? '';
@@ -953,24 +960,47 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       if (liveInitDoneRef.current) return;
       liveInitDoneRef.current = true;
 
-      // Log live fixtures from TxLINE context to help debug fixture ID matching
-      console.log('[LivePage] TxLINE liveFixtures:', JSON.stringify(liveFixtures?.slice(0,5)));
-
-      // contestId IS the real TxLINE FixtureId for WC2026 matches — use directly
+      // Default: our WC2026 fixture ID matches TxLINE fixture ID
       txlineFixtureIdRef.current = contestId;
-      console.log('[LivePage] TxLINE fixtureId:', contestId);
+      console.log('[LivePage] Starting bootstrap — contestId:', contestId, 'home:', fixture.homeTeam, 'away:', fixture.awayTeam);
+      console.log('[LivePage] TxLINE liveFixtures count:', liveFixtures?.length ?? 0);
 
-      const pMap = await buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt);
+      // Try to match a better fixture ID from liveFixtures (in case devnet uses different IDs)
+      if (liveFixtures?.length > 0) {
+        const normStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' ').trim();
+        const normHome = normStr(fixture.homeTeam);
+        const normAway = normStr(fixture.awayTeam);
+        const matched = liveFixtures.find((f: any) => {
+          const p1 = normStr(f.Participant1 || f.homeTeam?.name || f.home || '');
+          const p2 = normStr(f.Participant2 || f.awayTeam?.name || f.away || '');
+          return (p1.includes(normHome.split(' ')[0]) || normHome.includes(p1.split(' ')[0]))
+              && (p2.includes(normAway.split(' ')[0]) || normAway.includes(p2.split(' ')[0]));
+        });
+        if (matched) {
+          const resolvedId = matched.FixtureId || matched.fixtureId || matched.id;
+          console.log('[LivePage] Matched live fixture from context:', JSON.stringify(matched));
+          if (resolvedId && resolvedId !== contestId) {
+            console.log(`[LivePage] Fixture ID override: ${contestId} → ${resolvedId}`);
+            txlineFixtureIdRef.current = resolvedId;
+          }
+        } else {
+          console.warn('[LivePage] No match in liveFixtures for', fixture.homeTeam, 'vs', fixture.awayTeam);
+          console.log('[LivePage] liveFixtures sample:', JSON.stringify(liveFixtures.slice(0, 3)));
+        }
+      }
+
+      const resolvedFixtureId = txlineFixtureIdRef.current ?? contestId;
+      const pMap = await buildPlayerIdMap(apiToken!, resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, guestJwt);
       if (isMounted) {
         playerIdMapRef.current = pMap;
-        console.log(`[LivePage] Player map built — ${Object.keys(pMap).length} players matched`);
+        console.log(`[LivePage] Player map — ${Object.keys(pMap).length} players matched`);
       }
     };
 
     const poll = async () => {
       if (!txlineFixtureIdRef.current) return;
       try {
-        const raw = await fetchLiveScoreUpdates(apiToken, txlineFixtureIdRef.current, guestJwt);
+        const raw = await fetchLiveScoreUpdates(apiToken!, txlineFixtureIdRef.current, guestJwt);
         if (!isMounted) return;
 
         // null = 404 (fixture not live on TxLINE yet) — show waiting state
@@ -979,7 +1009,38 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           return;
         }
 
-        const updates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+        // Log raw response ONCE per session so we can inspect the real structure
+        if (seenSeqsRef.current.size === 0) {
+          console.log('[LivePage] TxLINE raw response (first poll):', JSON.stringify(raw)?.slice(0, 1000));
+        }
+
+        // Normalize: TxLINE V2 may use PascalCase fields (GameState, Score.Home, Events[].Type)
+        // or lowercase fields depending on network. Accept both.
+        const normalizeUpdate = (u: any) => ({
+          seq:       u.seq       ?? u.Seq,
+          ts:        u.ts        ?? u.Ts,
+          fixtureId: u.fixtureId ?? u.FixtureId,
+          gameState: u.gameState ?? u.GameState,
+          score: u.score ?? (u.Score
+            ? { home: u.Score.Home ?? u.Score.home ?? 0, away: u.Score.Away ?? u.Score.away ?? 0 }
+            : u.ScoreSoccer
+              ? { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 }
+              : undefined),
+          events: (u.events ?? u.Events ?? []).map((e: any) => ({
+            type:              (e.type ?? e.Type ?? '').toLowerCase(),
+            minute:            e.minute ?? e.Minute ?? 0,
+            period:            e.period ?? e.Period ?? '',
+            participant:       e.participant ?? e.Participant ?? 1,
+            playerId:          e.playerId ?? e.PlayerId,
+            playerName:        e.playerName ?? e.PlayerName,
+            assistPlayerId:    e.assistPlayerId ?? e.AssistPlayerId,
+            assistPlayerName:  e.assistPlayerName ?? e.AssistPlayerName,
+            goalType:          e.goalType ?? e.GoalType,
+          })),
+        });
+
+        const rawUpdates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+        const updates = rawUpdates.map(normalizeUpdate);
         if (updates.length === 0) { setTxlineStatus('waiting'); return; }
         setTxlineStatus('live');
 
@@ -1144,7 +1205,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // Simulate live events
   useEffect(() => {
     if (appMode === 'live' || !isPlaying || showPopup) return;
-    
+
     const tickRate = isFastForward ? 2000 : 60000;
 
     const interval = setInterval(() => {
@@ -1156,7 +1217,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     }, tickRate);
 
     return () => clearInterval(interval);
-  }, [isPlaying, showPopup, isFastForward]);
+  // appMode must be in deps so the timer stops immediately when switching to live
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appMode, isPlaying, showPopup, isFastForward]);
 
     // Trigger events based on minute (demo mode only)
     useEffect(() => {
