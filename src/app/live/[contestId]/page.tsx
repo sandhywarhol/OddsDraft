@@ -1227,7 +1227,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // ── DEMO MODE: Simulate live events via minute ticker ──────────────────────
   // Simulate live events
   useEffect(() => {
-    if (appMode === 'live' || !isPlaying || showPopup) return;
+    if (appMode === 'live' || persistedIsLive || !isPlaying || showPopup) return;
 
     const tickRate = isFastForward ? 2000 : 60000;
 
@@ -1246,7 +1246,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
     // Trigger events based on minute (demo mode only)
     useEffect(() => {
-      if (appMode === 'live') return;
+      if (appMode === 'live' || persistedIsLive) return;
       if (showPopup) return;
       const event = matchEvents[currentEventIdx];
       if (!event || minute < event.minute) return;
