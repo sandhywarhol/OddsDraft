@@ -6,20 +6,87 @@ import { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAudio } from '@/context/AudioContext';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { User, Settings, LogOut, ChevronDown, Volume2, VolumeX } from 'lucide-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { User, LogOut, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 
 export default function Navbar() {
-  const { appMode, toggleAppMode } = useTxLine();
+  const { appMode, toggleAppMode, apiToken, isSubscribing, subscribeAndActivate } = useTxLine();
+  const { connected, publicKey } = useWallet();
+  const { connection } = useConnection();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [tokenError, setTokenError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [walletToast, setWalletToast] = useState<{ balance: number } | null>(null);
+  const [toastExiting, setToastExiting] = useState(false);
+  const prevConnectedRef = useRef(false);
+  const pendingLiveRef = useRef(false);
   const pathname = usePathname();
   const { isMuted, toggleMute } = useAudio();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Show toast when wallet first connects
+  useEffect(() => {
+    if (connected && !prevConnectedRef.current && publicKey) {
+      prevConnectedRef.current = true;
+      connection.getBalance(publicKey).then(lamports => {
+        setWalletToast({ balance: lamports / LAMPORTS_PER_SOL });
+        setToastExiting(false);
+        setTimeout(() => setToastExiting(true), 5000);
+        setTimeout(() => setWalletToast(null), 5400);
+      }).catch(() => {
+        setWalletToast({ balance: 0 });
+        setTimeout(() => setToastExiting(true), 5000);
+        setTimeout(() => setWalletToast(null), 5400);
+      });
+    }
+    if (!connected) {
+      prevConnectedRef.current = false;
+      setWalletToast(null);
+    }
+  }, [connected, publicKey, connection]);
+
+  // After on-chain subscription completes, auto-switch to live
+  useEffect(() => {
+    if (apiToken && pendingLiveRef.current && appMode === 'demo') {
+      pendingLiveRef.current = false;
+      toggleAppMode();
+    }
+  }, [apiToken]);
+
+  const handleModeToggle = async () => {
+    if (appMode === 'live') {
+      toggleAppMode();
+      return;
+    }
+    if (apiToken) {
+      toggleAppMode();
+      return;
+    }
+    if (!connected) {
+      setErrorMsg('Connect wallet first');
+      setTokenError(true);
+      setTimeout(() => setTokenError(false), 3000);
+      return;
+    }
+    // On-chain subscription — SERVICE_LEVEL_ID=12 (free tier, no TxL tokens needed)
+    pendingLiveRef.current = true;
+    setTokenError(false);
+    try {
+      await subscribeAndActivate();
+      // useEffect above will call toggleAppMode once apiToken is set
+    } catch (e: any) {
+      pendingLiveRef.current = false;
+      setErrorMsg(e?.message?.includes('rejected') ? 'Rejected' : 'Failed');
+      setTokenError(true);
+      setTimeout(() => setTokenError(false), 3000);
+    }
+  };
 
   return (
     <nav className="navbar">
@@ -35,10 +102,11 @@ export default function Navbar() {
         </Link>
 
         {/* Desktop Nav (Center) */}
-        <div className="navbar__nav" style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="navbar__nav">
           <Link href="/contests" className={`navbar__link ${pathname === '/contests' || pathname?.startsWith('/lineup') ? 'navbar__link--active' : ''}`}>Match Schedule</Link>
           <Link href="/teams" className={`navbar__link ${pathname === '/teams' ? 'navbar__link--active' : ''}`}>Teams</Link>
           <Link href="/leaderboard" className={`navbar__link ${pathname === '/leaderboard' ? 'navbar__link--active' : ''}`}>Leaderboard</Link>
+          <Link href="/cards" className={`navbar__link ${pathname === '/cards' ? 'navbar__link--active' : ''}`}>My Cards</Link>
           <Link href="/how-it-works" className={`navbar__link ${pathname === '/how-it-works' ? 'navbar__link--active' : ''}`}>How It Works</Link>
         </div>
 
@@ -46,30 +114,37 @@ export default function Navbar() {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
           
           <button
-            onClick={toggleAppMode}
-            style={{ 
-              height: '24px', 
+            onClick={handleModeToggle}
+            disabled={isSubscribing}
+            style={{
+              height: '24px',
               borderRadius: '12px',
               padding: '0 8px',
-              fontSize: '0.58rem', 
+              fontSize: '0.58rem',
               fontWeight: 700,
               letterSpacing: '0.05em',
-              background: appMode === 'live' ? 'linear-gradient(145deg, #0d1b2a, #0a111a)' : 'linear-gradient(145deg, #2a0d1b, #1a0a11)',
-              color: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              border: `1px solid ${appMode === 'live' ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
+              background: tokenError
+                ? 'linear-gradient(145deg, #2a0d0d, #1a0808)'
+                : appMode === 'live'
+                  ? 'linear-gradient(145deg, #0d1b2a, #0a111a)'
+                  : 'linear-gradient(145deg, #2a0d1b, #1a0a11)',
+              color: tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d',
+              border: `1px solid ${tokenError ? 'rgba(255,107,107,0.4)' : appMode === 'live' ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
               display: 'flex', alignItems: 'center', gap: 4,
               boxShadow: appMode === 'live' ? '0 0 6px rgba(0,229,255,0.2), inset 0 1px 1px rgba(255,255,255,0.05)' : '0 0 6px rgba(255,77,109,0.2), inset 0 1px 1px rgba(255,255,255,0.05)',
-              cursor: 'pointer', transition: 'all 0.3s ease'
+              cursor: isSubscribing ? 'wait' : 'pointer', transition: 'all 0.3s ease',
+              opacity: isSubscribing ? 0.7 : 1,
             }}
-            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseOver={(e) => { if (!isSubscribing) e.currentTarget.style.transform = 'scale(1.05)'; }}
             onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
           >
-            <span style={{ 
-              width: 4, height: 4, borderRadius: '50%', 
-              background: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              boxShadow: `0 0 4px ${appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`
+            <span style={{
+              width: 4, height: 4, borderRadius: '50%',
+              background: tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d',
+              boxShadow: `0 0 4px ${tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
+              animation: isSubscribing ? 'pulse 1s infinite' : 'none',
             }} />
-            {appMode === 'live' ? 'LIVE MODE' : 'DEMO MODE'}
+            {isSubscribing ? '...' : tokenError ? (errorMsg || 'ERROR') : appMode === 'live' ? 'LIVE' : 'DEMO'}
           </button>
 
           {mounted ? (
@@ -80,16 +155,61 @@ export default function Navbar() {
           ) : <div style={{width: 80, height: 24}}></div>}
           {/* Mobile menu toggle */}
           <button
-            className="btn btn--ghost btn--sm"
+            className="btn btn--ghost btn--sm navbar__toggle"
             onClick={() => setMobileOpen(!mobileOpen)}
-            style={{ display: 'none' }}
             aria-label="Toggle mobile menu"
             id="mobile-menu-toggle"
+            style={{ padding: '0 8px', height: '24px', fontSize: '1rem', lineHeight: '24px', display: 'inline-flex', alignItems: 'center' }}
           >
             ☰
           </button>
         </div>
       </div>
+
+      {/* Wallet Connected Toast */}
+      {walletToast && (
+        <div style={{
+          position: 'fixed',
+          top: 72,
+          right: 24,
+          width: 320,
+          background: '#090f1a',
+          borderLeft: `5px solid ${walletToast.balance < 0.105 ? '#ffaa00' : '#00e87a'}`,
+          borderRadius: 8,
+          padding: '14px 16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          zIndex: 99999,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          opacity: toastExiting ? 0 : 1,
+          transform: toastExiting ? 'translateX(20px)' : 'translateX(0)',
+          transition: 'opacity 0.35s ease, transform 0.35s ease',
+          animation: 'toast-slide-in 0.3s cubic-bezier(0.16,1,0.3,1)',
+        }}>
+          <style>{`@keyframes toast-slide-in { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '1.3rem' }}>👛</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#00e87a' }}>Wallet Connected</div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff', marginTop: 2 }}>
+                Balance: <span style={{ color: walletToast.balance < 0.105 ? '#ffaa00' : '#00e87a' }}>
+                  {walletToast.balance.toFixed(3)} SOL
+                </span>
+              </div>
+            </div>
+          </div>
+          {walletToast.balance < 0.105 && (
+            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', paddingLeft: 2 }}>
+              You need at least 0.1 SOL to play.{' '}
+              <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
+                style={{ color: '#ffaa00', fontWeight: 700, textDecoration: 'underline' }}>
+                Get Devnet SOL →
+              </a>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Mobile Nav */}
       {mobileOpen && (
@@ -98,17 +218,56 @@ export default function Navbar() {
           top: 64,
           left: 0,
           right: 0,
-          background: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-subtle)',
-          padding: 'var(--space-4)',
+          background: '#1a1008',
+          borderBottom: '4px solid #ffd700',
+          padding: '16px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 'var(--space-4)',
+          gap: '8px',
           zIndex: 200,
+          boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
         }}>
-          <Link href="/contests" className={`navbar__link ${pathname === '/contests' || pathname?.startsWith('/lineup') ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>Contests</Link>
+          <Link href="/contests" className={`navbar__link ${pathname === '/contests' || pathname?.startsWith('/lineup') ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>Match Schedule</Link>
+          <Link href="/teams" className={`navbar__link ${pathname === '/teams' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>Teams</Link>
           <Link href="/leaderboard" className={`navbar__link ${pathname === '/leaderboard' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>Leaderboard</Link>
+          <Link href="/cards" className={`navbar__link ${pathname === '/cards' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>My Cards</Link>
           <Link href="/how-it-works" className={`navbar__link ${pathname === '/how-it-works' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>How It Works</Link>
+          {connected && (
+            <Link href="/profile" className="navbar__link" onClick={() => setMobileOpen(false)}>Profile</Link>
+          )}
+
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '4px 0' }} />
+
+          {/* Mode toggle */}
+          <button
+            onClick={() => { handleModeToggle(); setMobileOpen(false); }}
+            disabled={isSubscribing}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 8, padding: '10px 14px', cursor: 'pointer', color: '#fff', textAlign: 'left', width: '100%',
+            }}
+          >
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+              background: tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d',
+              boxShadow: `0 0 6px ${tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
+            }} />
+            <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+              {isSubscribing ? 'Connecting...' : appMode === 'live' ? 'Mode: LIVE — Switch ke Demo' : 'Mode: DEMO — Switch ke Live'}
+            </span>
+          </button>
+
+          {/* Wallet button */}
+          <div style={{ marginTop: 4 }}>
+            {mounted && <WalletMultiButton style={{
+              width: '100%', height: '40px', borderRadius: '8px',
+              fontSize: '0.85rem', fontWeight: 700,
+              background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)',
+              color: '#1a1a1a', border: 'none', fontFamily: 'inherit',
+            }} />}
+          </div>
         </div>
       )}
     </nav>
@@ -182,11 +341,15 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
           transition: 'all 0.2s ease',
         }}
       >
-        <img 
-          src={avatar} 
-          alt="Avatar" 
-          style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#fff' }} 
-        />
+        {avatar ? (
+          <img 
+            src={avatar} 
+            alt="Avatar" 
+            style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#fff', objectFit: 'cover' }} 
+          />
+        ) : (
+          <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#475569' }} />
+        )}
         <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>
           {username}
         </span>

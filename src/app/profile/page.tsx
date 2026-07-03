@@ -1,19 +1,37 @@
 'use client';
 
 import Navbar from '@/components/Navbar';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useState, useEffect } from 'react';
-import { User, Shield, Camera, Save, ArrowLeft } from 'lucide-react';
+import { User, Shield, Camera, Save, ArrowLeft, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProfilePage() {
   const { connected, publicKey } = useWallet();
+  const { connection } = useConnection();
   const [mounted, setMounted] = useState(false);
   const [username, setUsername] = useState('');
   const [avatar, setAvatar] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [matchHistory, setMatchHistory] = useState<{ contestId: string; players: string[]; captain: string; submittedAt: string }[]>([]);
+
+  const fetchBalance = async () => {
+    if (!publicKey) return;
+    setBalanceLoading(true);
+    try {
+      const lamports = await connection.getBalance(publicKey, 'confirmed');
+      setSolBalance(lamports / LAMPORTS_PER_SOL);
+    } catch {
+      setSolBalance(null);
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -30,8 +48,31 @@ export default function ProfilePage() {
         setUsername(`User_${publicKey.toString().substring(0, 4)}`);
         setAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`);
       }
+      fetchBalance();
     }
   }, [connected, publicKey]);
+
+  // Load match history from localStorage
+  useEffect(() => {
+    const history: { contestId: string; players: string[]; captain: string; submittedAt: string }[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('txodds_user_lineup_')) continue;
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const data = JSON.parse(raw);
+        const contestId = key.replace('txodds_user_lineup_', '');
+        history.push({
+          contestId,
+          players: (data.players ?? []).map((p: any) => p.name ?? p.id),
+          captain: data.captain ?? '',
+          submittedAt: data.submittedAt ?? '',
+        });
+      } catch { /* skip corrupt entries */ }
+    }
+    setMatchHistory(history);
+  }, [mounted]);
 
   const handleSave = () => {
     if (!publicKey) return;
@@ -83,6 +124,26 @@ export default function ProfilePage() {
               Customize your manager identity for the global leaderboard.
             </p>
           </div>
+
+          {/* Stats Summary */}
+          {connected && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+              {[
+                { label: 'Contests Entered', value: matchHistory.length, icon: '🏟️' },
+                { label: 'SOL Spent', value: matchHistory.length > 0 ? `${(matchHistory.length * 0.1).toFixed(1)} SOL` : '–', icon: '◎' },
+                { label: 'Lineups Saved', value: matchHistory.length, icon: '📋' },
+              ].map(stat => (
+                <div key={stat.label} style={{
+                  padding: '16px', background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-subtle)', borderRadius: 8, textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: '1.4rem', marginBottom: 6 }}>{stat.icon}</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f8fafc' }}>{stat.value}</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="ro-window">
             <div className="ro-window__header">
@@ -162,9 +223,9 @@ export default function ProfilePage() {
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
                         Wallet Address
                       </label>
-                      <div style={{ 
-                        padding: '12px 16px', 
-                        background: 'rgba(0,0,0,0.2)', 
+                      <div style={{
+                        padding: '12px 16px',
+                        background: 'rgba(0,0,0,0.2)',
                         border: '1px solid var(--border-subtle)',
                         borderRadius: '8px',
                         color: 'var(--text-muted)',
@@ -172,6 +233,56 @@ export default function ProfilePage() {
                         fontSize: '0.9rem'
                       }}>
                         {publicKey?.toString()}
+                      </div>
+                    </div>
+
+                    {/* SOL Balance */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                        SOL Balance
+                      </label>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'rgba(0,232,122,0.05)',
+                        border: '1px solid rgba(0,232,122,0.2)',
+                        borderRadius: '8px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: '1.4rem' }}>◎</span>
+                          <div>
+                            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: solBalance !== null && solBalance < 0.105 ? '#ffaa00' : '#00e87a' }}>
+                              {balanceLoading ? '...' : solBalance !== null ? `${solBalance.toFixed(4)} SOL` : 'Error'}
+                            </div>
+                            {solBalance !== null && solBalance < 0.105 && !balanceLoading && (
+                              <div style={{ fontSize: '0.72rem', color: '#ffaa00', marginTop: 2 }}>
+                                Requires min. 0.1 SOL to play
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {solBalance !== null && solBalance < 0.105 && (
+                            <a
+                              href="https://faucet.solana.com"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn--sm"
+                              style={{ fontSize: '0.75rem', padding: '6px 12px', background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.4)', borderRadius: 6, textDecoration: 'none', fontWeight: 700 }}
+                            >
+                              💧 Get SOL
+                            </a>
+                          )}
+                          <button
+                            onClick={fetchBalance}
+                            disabled={balanceLoading}
+                            className="btn btn--secondary btn--sm"
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', padding: '6px 12px' }}
+                          >
+                            <RefreshCw size={12} style={{ animation: balanceLoading ? 'spin 1s linear infinite' : 'none' }} />
+                            Refresh
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -217,7 +328,55 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
-          
+          {/* Match History */}
+          {connected && (
+            <div className="ro-window" style={{ marginTop: 24 }}>
+              <div className="ro-window__header">
+                <span>Match History</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{matchHistory.length} entries</span>
+              </div>
+              <div className="ro-window__body" style={{ padding: matchHistory.length === 0 ? '32px' : '0' }}>
+                {matchHistory.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>📋</div>
+                    <p style={{ fontSize: '0.9rem' }}>No lineups submitted yet.</p>
+                    <Link href="/contests" className="btn btn--primary btn--sm" style={{ marginTop: 12, display: 'inline-block' }}>
+                      Browse Contests →
+                    </Link>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {matchHistory.map((entry, idx) => (
+                      <div key={entry.contestId} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        borderBottom: idx < matchHistory.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                        gap: 12,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>
+                            Match #{entry.contestId.slice(-6)}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {entry.players.slice(0, 3).join(', ')}{entry.players.length > 3 ? ` +${entry.players.length - 3}` : ''}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.7rem', color: '#ffd700', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 4, padding: '2px 8px', fontWeight: 700 }}>
+                            0.1 SOL
+                          </span>
+                          <Link href={`/live/${entry.contestId}`} style={{ fontSize: '0.72rem', color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}>
+                            View →
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
       </main>
     </div>

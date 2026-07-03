@@ -1,13 +1,19 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES, type Player, getPlayersByTeam } from '@/lib/players';
+import { DEMO_FIXTURES, type Player, type DemoFixture, getPlayersByTeam } from '@/lib/players';
+import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
 import { calculateFantasyPoints } from '@/lib/fantasy-engine';
+import { getCardsForLineupPosition, getCardById, type OwnedCard } from '@/lib/card-collection';
+import { RARITY_COLOR } from '@/lib/skill-cards';
 import { formatDistanceToNow } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 // Demo score events for showing fantasy points in action
 const DEMO_EVENTS = [
   { playerId: 'fra-mbappe', playerName: 'Mbappé', eventType: 'goal', minute: 23, points: 10 },
@@ -36,13 +42,19 @@ const getPositionColor = (label: string) => {
 };
 
 const TEAM_FLAG_CODES: Record<string, string> = {
-  'Brazil': 'br',
-  'Argentina': 'ar',
-  'France': 'fr',
-  'England': 'gb',
-  'Portugal': 'pt',
-  'Spain': 'es',
-  'Germany': 'de',
+  'Brazil': 'br', 'Argentina': 'ar', 'France': 'fr', 'England': 'gb-eng',
+  'Portugal': 'pt', 'Spain': 'es', 'Germany': 'de', 'Italy': 'it',
+  'Netherlands': 'nl', 'Belgium': 'be', 'Croatia': 'hr', 'Uruguay': 'uy',
+  'Colombia': 'co', 'Mexico': 'mx', 'USA': 'us', 'Japan': 'jp',
+  'South Korea': 'kr', 'Senegal': 'sn', 'Morocco': 'ma', 'Ivory Coast': 'ci',
+  'Austria': 'at', 'Algeria': 'dz', 'Norway': 'no', 'Canada': 'ca',
+  'Switzerland': 'ch', 'Turkey': 'tr', 'Ecuador': 'ec', 'Australia': 'au',
+  'Egypt': 'eg', 'Saudi Arabia': 'sa', 'Ghana': 'gh', 'Sweden': 'se',
+  'Scotland': 'gb-sct', 'Iran': 'ir', 'Paraguay': 'py', 'Qatar': 'qa',
+  'Uzbekistan': 'uz', 'Congo DR': 'cd', 'Bosnia & Herzegovina': 'ba',
+  'Czech Republic': 'cz', 'South Africa': 'za', 'Panama': 'pa',
+  'New Zealand': 'nz', 'Tunisia': 'tn', 'Iraq': 'iq', 'Jordan': 'jo',
+  'Cape Verde': 'cv', 'Curacao': 'cw', 'Haiti': 'ht',
 };
 
 const getPositionDescription = (label: string) => {
@@ -60,28 +72,34 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const { contestId } = use(params);
   const searchParamsObj = use(searchParams);
   const contestType = (searchParamsObj.contestType as string) || 'top3';
-  const { appMode, liveFixtures, allFixtures } = useTxLine();
-  
+  const { appMode, liveFixtures } = useTxLine();
+  const { publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
+  const router = useRouter();
+
   const isDemo = appMode === 'demo';
 
-  // Find fixture
-  let fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId);
-  if (!isDemo && allFixtures) {
-    const rawFixture = allFixtures.find((f: any) => f.id === contestId || f.fixtureId === contestId || f._id === contestId);
-    if (rawFixture) {
-      fixture = {
-        fixtureId: rawFixture.id || rawFixture.fixtureId || rawFixture._id || contestId,
-        kickoffAt: rawFixture.kickoff_time || rawFixture.date || rawFixture.kickoffAt || new Date().toISOString(),
-        homeTeam: rawFixture.homeTeam?.name || rawFixture.home_team?.name || rawFixture.homeTeam || 'Home',
-        homeFlag: rawFixture.homeTeam?.code ? '🏳️' : '🏳️',
-        awayTeam: rawFixture.awayTeam?.name || rawFixture.away_team?.name || rawFixture.awayTeam || 'Away',
-        awayFlag: rawFixture.awayTeam?.code ? '🏳️' : '🏳️',
-        status: rawFixture.status || 'upcoming',
-      };
-    }
-  }
-  // Fallback
-  if (!fixture) fixture = DEMO_FIXTURES[0];
+  // Always prefer WC2026 real fixture; fall back to demo fixtures, then placeholder
+  const wcMatch = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+  let fixture: DemoFixture | undefined = wcMatch
+    ? {
+        fixtureId: wcMatch.fixtureId,
+        kickoffAt: wcMatch.kickoffAt,
+        homeTeam: wcMatch.homeTeam,
+        homeFlag: wcMatch.homeFlag,
+        awayTeam: wcMatch.awayTeam,
+        awayFlag: wcMatch.awayFlag,
+        status: 'upcoming' as const,
+      }
+    : DEMO_FIXTURES.find(f => f.fixtureId === contestId);
+
+  if (!fixture) fixture = {
+    fixtureId: contestId,
+    kickoffAt: new Date().toISOString(),
+    homeTeam: 'Home', homeFlag: '🏳️',
+    awayTeam: 'Away', awayFlag: '🏳️',
+    status: 'upcoming' as const,
+  };
 
   const isTxLineLive = !isDemo && liveFixtures?.some(f => 
     f.homeTeam?.name === fixture.homeTeam || f.awayTeam?.name === fixture.awayTeam
@@ -98,6 +116,35 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const [activeTeam, setActiveTeam] = useState<'home' | 'away'>('home');
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [airdropping, setAirdropping] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [equippedCards, setEquippedCards] = useState<Record<string, string>>({});
+  const [equipModalPlayerId, setEquipModalPlayerId] = useState<string | null>(null);
+
+  // Fetch wallet SOL balance in live mode
+  useEffect(() => {
+    if (isDemo || !publicKey) return;
+    connection.getBalance(publicKey).then(lamports => {
+      setWalletBalance(lamports / LAMPORTS_PER_SOL);
+    }).catch(() => {});
+  }, [publicKey, isDemo, connection]);
+
+  const handleAirdrop = async () => {
+    if (!publicKey) return;
+    setAirdropping(true);
+    try {
+      const sig = await connection.requestAirdrop(publicKey, 2 * LAMPORTS_PER_SOL);
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+      const lamports = await connection.getBalance(publicKey);
+      setWalletBalance(lamports / LAMPORTS_PER_SOL);
+    } catch (e) {
+      console.error('[Airdrop] failed:', e);
+      alert('Airdrop failed. Try again or visit https://faucet.solana.com');
+    } finally {
+      setAirdropping(false);
+    }
+  };
 
   const [tutorialStep, setTutorialStep] = useState(0);
   const [zoomedElementId, setZoomedElementId] = useState<string | null>(null);
@@ -129,6 +176,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   };
 
   useEffect(() => {
+    if (window.innerWidth < 768) {
+      return;
+    }
     const hasSeenTutorial = localStorage.getItem('hasSeenLineupTutorial');
     if (!hasSeenTutorial) {
       setTutorialStep(1);
@@ -340,11 +390,154 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const handleSubmit = async () => {
     if (!isLineupFull || !captain) return;
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1500)); // simulate tx
+
+    const lineupData = { players: filledPlayers, captain, confidence, equippedCards };
+
+    // Save to localStorage for live/replay pages
+    try {
+      localStorage.setItem(`txodds_user_lineup_${contestId}`, JSON.stringify(lineupData));
+    } catch (e) {
+      console.error('Failed to save lineup to localStorage', e);
+    }
+
+    let entryTxSig: string | null = null;
+
+    if (!isDemo && publicKey) {
+      // ── Balance check — use devnet RPC directly to avoid stale wallet state
+      let balanceSol: number | null = null;
+      try {
+        const lamports = await connection.getBalance(publicKey, 'confirmed');
+        balanceSol = lamports / LAMPORTS_PER_SOL;
+        setWalletBalance(balanceSol);
+      } catch {
+        // RPC failed — don't gate on balance; let sendTransaction surface the error
+      }
+
+      if (balanceSol !== null && balanceSol < 0.105) {
+        setSubmitting(false);
+        return; // UI already shows the "Get Devnet SOL" button
+      }
+
+      // ── Solana payment: 0.1 SOL → treasury ─────────────────────────────
+      const treasuryAddr = process.env.NEXT_PUBLIC_TREASURY_WALLET;
+      if (treasuryAddr) {
+        const treasury = new PublicKey(treasuryAddr);
+        const MAX_ATTEMPTS = 3;
+        let paid = false;
+
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          try {
+            // Fetch a fresh blockhash immediately before each send attempt so it
+            // doesn't expire while the wallet popup is open.
+            const { blockhash, lastValidBlockHeight } =
+              await connection.getLatestBlockhash('confirmed');
+
+            const tx = new Transaction().add(
+              SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: treasury,
+                lamports: Math.floor(0.1 * LAMPORTS_PER_SOL),
+              })
+            );
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = publicKey;
+
+            const sig = await sendTransaction(tx, connection, {
+              skipPreflight: attempt > 1, // skip preflight on retries — devnet RPC can be flaky
+              preflightCommitment: 'confirmed',
+            });
+            await connection.confirmTransaction(
+              { signature: sig, blockhash, lastValidBlockHeight },
+              'confirmed'
+            );
+            entryTxSig = sig;
+            paid = true;
+            console.log('[Payment] 0.1 SOL sent:', sig);
+            break;
+          } catch (payErr: any) {
+            const errMsg: string = payErr?.message ?? '';
+            const isBlockhashExpiry =
+              errMsg.includes('block height exceeded') ||
+              errMsg.includes('Blockhash not found') ||
+              errMsg.includes('expired');
+
+            if (isBlockhashExpiry && attempt < MAX_ATTEMPTS) {
+              console.warn(`[Payment] Blockhash expired, retrying (${attempt}/${MAX_ATTEMPTS})…`);
+              continue;
+            }
+
+            console.error('[Payment] Failed:', payErr);
+            const isInsufficientFunds =
+              errMsg.includes('no record of a prior credit') ||
+              errMsg.includes('insufficient funds') ||
+              errMsg.includes('Attempt to debit');
+            if (isInsufficientFunds) {
+              try {
+                const lamports = await connection.getBalance(publicKey, 'confirmed');
+                setWalletBalance(lamports / LAMPORTS_PER_SOL);
+              } catch { setWalletBalance(0); }
+            } else {
+              alert(`Payment failed: ${errMsg || 'Unknown error'}. Please try again.`);
+            }
+            setSubmitting(false);
+            return;
+          }
+        }
+
+        if (!paid) {
+          alert('Payment failed: transaction expired after 3 attempts. Please try again.');
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      // ── Persist entry to Supabase ───────────────────────────────────────
+      try {
+        await fetch('/api/contest/enter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fixtureId: contestId,
+            walletAddress: publicKey.toString(),
+            contestType,
+            lineup: lineupData,
+            entryTxSig,
+          }),
+        });
+      } catch (e) {
+        console.error('Failed to save entry to Supabase', e);
+      }
+    } else {
+      // Demo: simulate tx delay
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
     setSubmitted(true);
     setSubmitting(false);
+
+    // Redirect to live page after brief success flash
+    setTimeout(() => {
+      router.push(`/live/${contestId}`);
+    }, 1800);
   };
 
+  const [countdown, setCountdown] = useState('');
+  useEffect(() => {
+    const compute = () => {
+      const diff = kickoffTime.getTime() - Date.now();
+      if (diff <= 0) { setCountdown('Kickoff!'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(h > 0
+        ? `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+        : `${m}m ${String(s).padStart(2,'0')}s`
+      );
+    };
+    compute();
+    const id = setInterval(compute, 1000);
+    return () => clearInterval(id);
+  }, [kickoffTime]);
   const timeToKickoff = formatDistanceToNow(kickoffTime, { addSuffix: true });
 
   if (submitted) {
@@ -556,11 +749,40 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               <Link href="/contests" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
                 ← Back to Contests
               </Link>
-              <div id="lineup-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>
-                  {fixture.homeFlag} {fixture.homeTeam} vs {fixture.awayTeam} {fixture.awayFlag}
-                </h1>
-                <span className="badge badge--upcoming">Kickoff {timeToKickoff}</span>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <div id="lineup-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                  <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>
+                    {fixture.homeFlag} {fixture.homeTeam} vs {fixture.awayTeam} {fixture.awayFlag}
+                  </h1>
+                  <span className="badge badge--upcoming" style={{ fontFamily: 'monospace', letterSpacing: '0.04em' }}>
+                    ⏱ {countdown || timeToKickoff}
+                  </span>
+                </div>
+                {/* SOL balance widget */}
+                {!isDemo && publicKey && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 12px',
+                    background: walletBalance !== null && walletBalance < 0.105 ? 'rgba(255,170,0,0.08)' : 'rgba(0,232,122,0.06)',
+                    border: `1px solid ${walletBalance !== null && walletBalance < 0.105 ? 'rgba(255,170,0,0.3)' : 'rgba(0,232,122,0.2)'}`,
+                    borderRadius: 8,
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ fontSize: '1rem' }}>◎</span>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Wallet</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: walletBalance !== null && walletBalance < 0.105 ? '#ffaa00' : '#00e87a' }}>
+                        {walletBalance !== null ? `${walletBalance.toFixed(3)} SOL` : '...'}
+                      </div>
+                    </div>
+                    {walletBalance !== null && walletBalance < 0.105 && (
+                      <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: '0.7rem', color: '#ffaa00', fontWeight: 700, textDecoration: 'underline', marginLeft: 4 }}>
+                        Get SOL
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
               <p style={{ color: 'var(--text-secondary)', marginTop: 8 }}>
                 Pick your 5-a-side lineup (GK, DEF, MID, DEF, ATT) • Select a captain (2× pts) • Set confidence
@@ -885,14 +1107,169 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
 
               {/* BOTTOM: Stacked Content below player cards */}
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: 24, 
-                maxWidth: 800, 
-                margin: '0 auto', 
-                width: '100%' 
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 24,
+                maxWidth: 800,
+                margin: '0 auto',
+                width: '100%'
               }}>
+
+                {/* ── Skill Card Equipment panel ────────────────────────── */}
+                {filledPlayers.length > 0 && !isLocked && (() => {
+                  const collectionCards = filledPlayers.map(p => ({
+                    player: p,
+                    cards: getCardsForLineupPosition(p.position),
+                    equippedInstanceId: equippedCards[p.id] ?? null,
+                  }));
+
+                  return (
+                    <div className="ro-window">
+                      <div className="ro-window__header">
+                        <span>🎴 Skill Card Equipment</span>
+                        <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>Equip before kickoff — locked at match start</span>
+                      </div>
+                      <div className="ro-window__body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginBottom: 4, lineHeight: 1.5 }}>
+                          Equip a Skill Card to each player for bonus points. Cards are applied after the Fantasy Engine calculation.
+                          {' '}<a href="/cards" style={{ color: '#ffd700', fontWeight: 700 }}>View My Collection →</a>
+                        </div>
+
+                        {collectionCards.map(({ player, cards, equippedInstanceId }) => {
+                          const equippedInstance = equippedInstanceId ? cards.find(c => c.instance.instanceId === equippedInstanceId) : null;
+                          const equippedCardDef = equippedInstance?.card ?? null;
+
+                          return (
+                            <div key={player.id} style={{
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              padding: '8px 12px',
+                              background: equippedCardDef ? `${RARITY_COLOR[equippedCardDef.rarity]}0d` : 'rgba(255,255,255,0.03)',
+                              border: equippedCardDef ? `1px solid ${RARITY_COLOR[equippedCardDef.rarity]}33` : '1px solid rgba(255,255,255,0.06)',
+                              borderRadius: 8,
+                              flexWrap: 'wrap',
+                            }}>
+                              <div style={{ flex: 1, minWidth: 80 }}>
+                                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>{player.name}</div>
+                                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{player.position}</div>
+                              </div>
+
+                              {equippedCardDef ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 2 }}>
+                                  <div style={{
+                                    background: `${RARITY_COLOR[equippedCardDef.rarity]}22`,
+                                    border: `1px solid ${RARITY_COLOR[equippedCardDef.rarity]}55`,
+                                    borderRadius: 6, padding: '4px 10px',
+                                    display: 'flex', flexDirection: 'column', gap: 1,
+                                  }}>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: RARITY_COLOR[equippedCardDef.rarity] }}>{equippedCardDef.name}</span>
+                                    <span style={{ fontSize: '0.64rem', color: 'rgba(255,255,255,0.45)' }}>{equippedCardDef.effectText}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => setEquippedCards(prev => { const n = { ...prev }; delete n[player.id]; return n; })}
+                                    style={{
+                                      padding: '4px 10px', background: 'rgba(244,67,54,0.12)',
+                                      border: '1px solid rgba(244,67,54,0.3)', borderRadius: 6,
+                                      color: '#ef9a9a', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer',
+                                    }}
+                                  >✕</button>
+                                </div>
+                              ) : cards.length > 0 ? (
+                                <button
+                                  onClick={() => setEquipModalPlayerId(player.id)}
+                                  style={{
+                                    padding: '6px 14px', background: 'rgba(255,215,0,0.08)',
+                                    border: '1px solid rgba(255,215,0,0.25)', borderRadius: 6,
+                                    color: '#ffd700', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
+                                  }}
+                                >
+                                  🎴 Equip Card ({cards.length})
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic' }}>
+                                  No cards available — earn one after a match
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Equip-card inline modal */}
+                {equipModalPlayerId && (() => {
+                  const targetPlayer = filledPlayers.find(p => p.id === equipModalPlayerId);
+                  if (!targetPlayer) return null;
+                  const availableCards = getCardsForLineupPosition(targetPlayer.position);
+                  return (
+                    <div style={{
+                      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+                      backdropFilter: 'blur(6px)', zIndex: 8000,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+                    }}>
+                      <div style={{
+                        background: '#0f1929', border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 16, padding: 24, maxWidth: 480, width: '100%', maxHeight: '80vh', overflowY: 'auto',
+                      }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+                          Equip Card for {targetPlayer.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 16 }}>
+                          {targetPlayer.position} cards — select one to equip
+                        </div>
+
+                        {availableCards.length === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>
+                            No cards yet. Earn them by playing matches!
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {availableCards.map(({ instance, card }) => (
+                              <button
+                                key={instance.instanceId}
+                                onClick={() => {
+                                  setEquippedCards(prev => ({ ...prev, [equipModalPlayerId]: instance.instanceId }));
+                                  setEquipModalPlayerId(null);
+                                }}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 12,
+                                  padding: '10px 14px', textAlign: 'left',
+                                  background: `${RARITY_COLOR[card.rarity]}0d`,
+                                  border: `1px solid ${RARITY_COLOR[card.rarity]}33`,
+                                  borderRadius: 8, cursor: 'pointer', width: '100%',
+                                }}
+                              >
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 800, color: RARITY_COLOR[card.rarity] }}>{card.name}</div>
+                                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{card.effectText}</div>
+                                </div>
+                                <span style={{
+                                  fontSize: 10, fontWeight: 700,
+                                  color: RARITY_COLOR[card.rarity],
+                                  border: `1px solid ${RARITY_COLOR[card.rarity]}55`,
+                                  borderRadius: 4, padding: '2px 6px',
+                                  textTransform: 'uppercase', letterSpacing: 1,
+                                }}>{card.rarity}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <button
+                          onClick={() => setEquipModalPlayerId(null)}
+                          style={{
+                            marginTop: 16, width: '100%', padding: '10px 0',
+                            background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: 8, color: 'rgba(255,255,255,0.5)', fontSize: 13, cursor: 'pointer',
+                          }}
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Progress */}
                 <div className="ro-window" id="progress-bar">
                   <div className="ro-window__header">
@@ -922,13 +1299,28 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       <span>⭐</span>
                     </div>
                     <div className="ro-window__body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {/* Tooltip info */}
+                      <div style={{
+                        padding: '10px 14px',
+                        background: 'rgba(255,215,0,0.06)',
+                        border: '1px solid rgba(255,215,0,0.2)',
+                        borderRadius: 6,
+                        fontSize: '0.78rem',
+                        color: 'rgba(255,255,255,0.55)',
+                        lineHeight: 1.6,
+                      }}>
+                        <span style={{ color: '#ffd700', fontWeight: 700 }}>⭐ Confidence Multiplier:</span>{' '}
+                        Rate your confidence in each player (1–5 stars). The higher the rating, the more points you earn — but also the bigger the penalty if the player underperforms (red card, etc.).
+                        <br />
+                        <span style={{ color: '#94a3b8' }}>1★ = ×0.5 &nbsp;|&nbsp; 3★ = ×1.0 &nbsp;|&nbsp; 5★ = ×2.0</span>
+                      </div>
                       {filledPlayers.map((p) => (
                         <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontSize: '0.8rem' }}>{p.teamFlag}</span>
                             <span style={{ fontSize: '0.85rem', fontWeight: p.id === captain ? 700 : 400 }}>
                               {p.name}
-                              {p.id === captain && <span style={{ color: '#ffd700', marginLeft: 6 }}>©</span>}
+                              {p.id === captain && <span style={{ color: '#ffd700', marginLeft: 6, fontSize: '0.75rem', fontWeight: 700 }}>© CAPTAIN</span>}
                             </span>
                           </div>
                           <StarRating
@@ -1049,22 +1441,56 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
                 {/* Captain Hint */}
                 {totalPlayers > 0 && !captain && (
-                  <div className="card card--gold" style={{ padding: 16, fontSize: '0.85rem', color: '#ffd700', textAlign: 'center' }}>
-                    ⭐ Tap a filled player card to set them as captain (2× multiplier)
+                  <div className="card card--gold" style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>👑</span>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', color: '#ffd700', fontWeight: 700, marginBottom: 4 }}>
+                        Pick Your Captain!
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'rgba(255,215,0,0.7)', lineHeight: 1.5 }}>
+                        Tap a selected player card to make them your Captain. The Captain gets a <strong style={{ color: '#ffd700' }}>2× multiplier</strong> — all points from that player are doubled. Pick the player you trust most to perform!
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Devnet balance warning */}
+                {!isDemo && publicKey && walletBalance !== null && walletBalance < 0.105 && (
+                  <div className="card" style={{ padding: 16, background: 'rgba(255, 60, 60, 0.08)', border: '1px solid rgba(255,60,60,0.35)', borderRadius: 0 }}>
+                    <div style={{ fontSize: '0.85rem', color: '#ff6b6b', marginBottom: 10, fontWeight: 700 }}>
+                      Insufficient balance: {walletBalance.toFixed(4)} SOL
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+                      You need at least 0.105 SOL (0.1 entry fee + fees). Get free devnet SOL:
+                    </div>
+                    <button
+                      className="btn btn--secondary"
+                      onClick={handleAirdrop}
+                      disabled={airdropping}
+                      style={{ width: '100%' }}
+                    >
+                      {airdropping ? '⏳ Airdropping...' : '⛽ Get 2 Devnet SOL (Free)'}
+                    </button>
                   </div>
                 )}
 
                 {/* Submit Button */}
                 <div id="submit-button" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  {/* Balance indicator */}
+                  {!isDemo && publicKey && walletBalance !== null && walletBalance >= 0.105 && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', alignSelf: 'flex-end' }}>
+                      Balance: <span style={{ color: '#4ade80', fontWeight: 700 }}>{walletBalance.toFixed(3)} SOL</span>
+                    </div>
+                  )}
                   <button
                     className="btn btn--primary btn--lg"
                     onClick={handleSubmit}
-                    disabled={!isLineupFull || !captain || submitting}
+                    disabled={!isLineupFull || !captain || submitting || (!isDemo && publicKey !== null && walletBalance !== null && walletBalance < 0.105)}
                     style={{
-                      opacity: isLineupFull && captain ? 1 : 0.5,
+                      opacity: isLineupFull && captain && (isDemo || walletBalance === null || walletBalance >= 0.105) ? 1 : 0.5,
                       cursor: isLineupFull && captain ? 'pointer' : 'not-allowed',
                       width: '100%',
-                      maxWidth: '400px', // Prevent it from being too wide on desktop but keep it centered
+                      maxWidth: '400px',
                     }}
                   >
                     {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? '🔒 Lock Lineup & Pay 0.1 SOL' : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}

@@ -4,33 +4,95 @@ import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
+import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { REPLAY_EVENTS } from '@/lib/replay-events';
-import { POINT_MAP } from '@/lib/fantasy-engine';
+import { calculateEventPoints, POINT_MAP } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
+import FantasyToast, { type FantasyNotificationItem } from '@/components/FantasyToast';
+import { useTxLine } from '@/context/TxLineContext';
+import { buildPlayerIdMap, convertTxLineUpdates } from '@/lib/txline-bridge';
+import { fetchLiveScoreUpdates } from '@/lib/txline';
 
-// Demo live events that replay at interval to simulate a live match
+// Fallback events (mirrors live page LIVE_EVENTS with all valid TxLINE event types)
 const LIVE_EVENTS = [
   { id: 'e0', minute: 0, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Kick Off! The match begins!' },
-  { id: 'e1', minute: 12, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', type: 'goal', points: 10, description: 'GOAL! Mbappé fires into the top corner!' },
-  { id: 'e2', minute: 12, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', type: 'assist', points: 6, description: 'Griezmann with the brilliant through ball' },
-  { id: 'e2_1', minute: 18, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', type: 'foul', points: 0, description: 'Foul committed by Romero' },
-  { id: 'e2_2', minute: 19, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', type: 'free_kick', points: 0, description: 'France takes a dangerous free kick' },
-  { id: 'e3', minute: 23, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', type: 'goalkeeper_save', points: 1, description: 'Martínez with a crucial save!' },
-  { id: 'e3_1', minute: 24, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', type: 'corner_kick', points: 0, description: 'Corner kick awarded to France' },
-  { id: 'e4', minute: 31, team: 'France', teamFlag: '🇫🇷', player: 'Dembélé', type: 'yellow_card', points: -2, description: 'Yellow card for Dembélé' },
-  { id: 'e5', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez', type: 'goal', points: 10, description: 'GOAL! Lautaro equalizes for Argentina!' },
-  { id: 'e6', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', type: 'assist', points: 6, description: 'Messi with his magic - the assist!' },
+  // Starting XI — Argentina
+  { id: 'xi_arg_mart',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-martinez',   type: 'starting_xi', points: 2, description: 'E. Martínez starts in goal for Argentina.' },
+  { id: 'xi_arg_rome',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',       playerId: 'arg-romero',    type: 'starting_xi', points: 2, description: 'Romero starts at centre-back.' },
+  { id: 'xi_arg_mess',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',     type: 'starting_xi', points: 2, description: 'MESSI starts for Argentina!' },
+  { id: 'xi_arg_laut',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez',  playerId: 'arg-lautaro',   type: 'starting_xi', points: 2, description: 'Lautaro Martínez starts up front.' },
+  { id: 'xi_arg_alva',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez',      playerId: 'arg-alvarez',   type: 'starting_xi', points: 2, description: 'Julián Álvarez leads the attack.' },
+  // Starting XI — France
+  { id: 'xi_fra_maig',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Maignan',      playerId: 'fra-maignan',   type: 'starting_xi', points: 2, description: 'Maignan starts in goal for France.' },
+  { id: 'xi_fra_mbap',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Mbappé',       playerId: 'fra-mbappe',    type: 'starting_xi', points: 2, description: 'Mbappé starts as captain for France!' },
+  { id: 'xi_fra_grie',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Griezmann',    playerId: 'fra-griezmann', type: 'starting_xi', points: 2, description: 'Griezmann lines up in midfield.' },
+  { id: 'xi_fra_demb',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Dembélé',      playerId: 'fra-dembele',   type: 'starting_xi', points: 2, description: 'Dembélé starts on the right wing.' },
+  { id: 'xi_fra_giro',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Giroud',       playerId: 'fra-giroud',    type: 'starting_xi', points: 2, description: 'Giroud leads the line for France.' },
+  // Danger signal before Mbappé goal
+  { id: 'e0_d1', minute: 10, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'danger_attack', points: 0, description: 'France pressing high! TxLINE signals HIGH DANGER zone for France.' },
+  // Griezmann assists Mbappé's opener — dataSoccer.assistPlayerId
+  { id: 'e_asst_mbap', minute: 11, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'assist', points: 6, description: 'Griezmann threads a perfect through ball into Mbappé\'s path.' },
+  { id: 'e1', minute: 12, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! Mbappé fires a powerful shot into the top corner!' },
+  { id: 'e1_concede', minute: 12, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -2, description: 'Goal conceded by Martínez.' },
+  // Maignan makes a save from Lautaro — dataSoccer.save
+  { id: 'e_save_maig1', minute: 20, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goalkeeper_save', points: 1, description: 'Maignan dives low to keep out Lautaro\'s fierce shot!' },
+  { id: 'e3_1', minute: 24, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'corner_kick', points: 0, description: 'Corner kick awarded to France' },
+  { id: 'e4', minute: 31, team: 'France', teamFlag: '🇫🇷', player: 'Dembélé', playerId: 'fra-dembele', type: 'yellow_card', points: -2, description: 'Yellow card for Dembélé after a late challenge.' },
+  // Danger signal before Argentina equalizer
+  { id: 'e4_d1', minute: 36, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Argentina in the DANGER zone! TxLINE signals high-danger possession.' },
+  // Messi assists Lautaro's equaliser header — dataSoccer.assistPlayerId
+  { id: 'e_asst_laut', minute: 37, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'Messi delivers a pinpoint cross right onto Lautaro\'s head.' },
+  { id: 'e5', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez', playerId: 'arg-lautaro', type: 'goal', points: 10, goalType: 'Head', description: 'GOAL! Lautaro rises highest and heads it home!' },
+  { id: 'e5_concede', minute: 38, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goal_conceded', points: -2, description: 'Goal conceded by Maignan.' },
+  // E. Martínez makes a save before half time — dataSoccer.save
+  { id: 'e_save_mart1', minute: 42, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez spreads his body brilliantly to deny Dembélé!' },
+  // Possession bonus H1 — Argentina dominant
+  { id: 'poss_h1_mess',   minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',       playerId: 'arg-messi',       type: 'possession_bonus', points: 1, description: 'Argentina dominated possession in H1. Messi controlled the midfield.' },
+  { id: 'poss_h1_macall', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister', type: 'possession_bonus', points: 1, description: 'Argentina dominated possession in H1. Mac Allister dictated tempo.' },
   { id: 'e4_5', minute: 45, team: '', teamFlag: '', player: '', type: 'half_time', points: 0, description: 'Half Time! The first half concludes!' },
   { id: 'e4_6', minute: 46, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Second Half Kick Off! We are underway again!' },
-  { id: 'e6_1', minute: 49, team: 'Argentina', teamFlag: '🇦🇷', player: 'Di María', type: 'offside', points: 0, description: 'Di María is caught offside' },
-  { id: 'e7', minute: 52, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', type: 'goal', points: 10, description: 'GOAL! Giroud puts France back ahead!' },
-  { id: 'e7_1', minute: 54, team: '', teamFlag: '', player: '', type: 'var_review', points: 0, description: 'VAR Review ongoing for a potential foul' },
-  { id: 'e7_2', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', type: 'substitution', points: 0, description: 'Substitution: Coman comes on' },
-  { id: 'e8', minute: 67, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', type: 'goal', points: 10, description: 'GOAL! MESSI! The GOAT strikes!' },
-  { id: 'e9', minute: 79, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', type: 'goal', points: 10, description: 'Hat-trick! Mbappé with an incredible finish!' },
-  { id: 'e10', minute: 90, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', type: 'goal', points: 10, description: '90th minute! Álvarez scores in stoppage time!' },
-  { id: 'e11', minute: 90, team: '', teamFlag: '', player: '', type: 'full_time', points: 0, description: 'Full Time! The match is over!' },
+  // Danger signal before Giroud goal
+  { id: 'e6_d1', minute: 50, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', playerId: 'fra-giroud', type: 'danger_attack', points: 0, description: 'France building pressure! TxLINE: HighDanger possession for France in the box.' },
+  // Griezmann assists Giroud header — dataSoccer.assistPlayerId
+  { id: 'e_asst_giro', minute: 51, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'assist', points: 6, description: 'Griezmann whips in a dangerous cross from the right — Giroud is waiting.' },
+  { id: 'e7', minute: 52, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', playerId: 'fra-giroud', type: 'goal', points: 10, goalType: 'Head', description: 'GOAL! Giroud powers a towering header into the net!' },
+  { id: 'e7_concede', minute: 52, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -2, description: 'Goal conceded by Martínez.' },
+  { id: 'e7_1', minute: 54, team: '', teamFlag: '', player: '', type: 'var_review', points: 0, description: 'VAR Review ongoing for a potential foul in the build-up.' },
+  // Maignan saves from Álvarez — dataSoccer.save
+  { id: 'e_save_maig2', minute: 58, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goalkeeper_save', points: 1, description: 'Maignan tips over Álvarez\'s powerful header — outstanding reflexes!' },
+  { id: 'e7_2', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'substitution', points: 0, playerInId: 'fra-coman', playerOutId: 'fra-dembele', description: 'Substitution: Coman replaces Dembélé.' },
+  { id: 'e7_2_sub', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'sub_appearance', points: 1, description: 'Coman enters the pitch as a substitute for France.' },
+  // Danger signal before Messi goal
+  { id: 'e7_d2', minute: 65, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'DANGER! Argentina attacking at full speed!' },
+  // Álvarez assists Messi's curler — dataSoccer.assistPlayerId
+  { id: 'e_asst_mess', minute: 66, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'assist', points: 6, description: 'Álvarez plays a perfectly weighted pass to find Messi in space.' },
+  { id: 'e8', minute: 67, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! MESSI! Curling shot into the far corner — unstoppable!' },
+  { id: 'e8_concede', minute: 67, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goal_conceded', points: -2, description: 'Goal conceded by Maignan.' },
+  { id: 'e8_1', minute: 72, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'penalty_won', points: 3, description: 'Mbappé is brought down in the box! Penalty awarded to France!' },
+  { id: 'e8_2', minute: 72, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'penalty_conceded', points: -3, description: 'Romero concedes the penalty with a reckless challenge.' },
+  { id: 'e8_3', minute: 73, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'penalty_missed', points: -3, description: 'Mbappé steps up... but blazes it over the bar!' },
+  // E. Martínez saves from Griezmann — dataSoccer.save
+  { id: 'e_save_mart2', minute: 75, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez parries Griezmann\'s curling effort around the post!' },
+  // Danger signal before Mbappé hat-trick
+  { id: 'e8_d1', minute: 77, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'danger_attack', points: 0, description: 'France pressing dangerously again! Mbappé is a constant threat.' },
+  // Coman assists Mbappé hat-trick — dataSoccer.assistPlayerId
+  { id: 'e_asst_mbap3', minute: 78, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'assist', points: 6, description: 'Coman bursts down the left and cuts the ball back to Mbappé.' },
+  { id: 'e9', minute: 79, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'goal', points: 10, goalType: 'Other', description: 'Hat-trick! Mbappé taps in from close range — his third of the game!' },
+  { id: 'e9_concede', minute: 79, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -2, description: 'Goal conceded by Martínez.' },
+  // E. Martínez saves from Coman — dataSoccer.save
+  { id: 'e_save_mart3', minute: 85, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez pulls off a brilliant save to deny Coman a second!' },
+  // Danger signal before Álvarez late goal
+  { id: 'e9_d1', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'danger_attack', points: 0, description: 'Argentina desperate! TxLINE: sustained Danger possession in French half.' },
+  // Messi assists Álvarez late goal — dataSoccer.assistPlayerId
+  { id: 'e_asst_alva', minute: 89, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'Messi picks out Álvarez with a defence-splitting through ball.' },
+  { id: 'e10', minute: 90, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'goal', points: 10, goalType: 'Shot', description: '90th minute! Álvarez drives a low shot into the bottom corner!' },
+  { id: 'e10_concede', minute: 90, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goal_conceded', points: -2, description: 'Goal conceded by Maignan.' },
+  // Possession bonus H2 — France dominant
+  { id: 'poss_h2_grie',  minute: 89, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'possession_bonus', points: 1, description: 'France dominated possession in H2. Griezmann pulled the strings in midfield.' },
+  { id: 'poss_h2_kante', minute: 89, team: 'France', teamFlag: '🇫🇷', player: 'Kanté',     playerId: 'fra-kante',      type: 'possession_bonus', points: 1, description: 'France dominated H2 possession. Kanté covered every blade of grass.' },
+  // Full time — both teams scored, no clean sheet
+  { id: 'e11', minute: 90, team: '', teamFlag: '', player: '', type: 'full_time', points: 0, description: 'Full Time! France 3–2 Argentina! What a match!' },
 ];
 
 // Demo leaderboard
@@ -58,29 +120,59 @@ const DEMO_LEADERBOARD = [
 ];
 
 const EVENT_COLORS: Record<string, string> = {
-  goal: '#2e7d32', // rich dark green
-  assist: '#1565c0', // rich dark blue
-  goalkeeper_save: '#00838f', // rich dark cyan
-  yellow_card: '#e65100', // rich dark orange
-  red_card: '#c62828', // rich dark red
-  own_goal: '#c62828',
-  penalty_save: '#2e7d32',
-  kick_off: '#0288d1', // sky blue
-  half_time: '#5e35b1', // purple
-  full_time: '#c62828', // red
+  goal:                    '#2e7d32',
+  goal_conceded:           '#c62828',
+  own_goal:                '#c62828',
+  assist:                  '#1565c0',
+  goalkeeper_save:         '#00838f',
+  penalty_save:            '#f9a825',
+  yellow_card:             '#e65100',
+  red_card:                '#c62828',
+  kick_off:                '#0288d1',
+  half_time:               '#5e35b1',
+  full_time:               '#c62828',
+  extra_time:              '#5e35b1',
+  penalty_won:             '#2e7d32',
+  penalty_missed:          '#c62828',
+  penalty_conceded:        '#c62828',
+  penalty_scored:          '#2e7d32',
+  penalty_missed_shootout: '#c62828',
+  corner_kick:             '#00838f',
+  substitution:            '#fbc02d',
+  var_review:              '#424242',
+  danger_attack:           '#e65100',
+  starting_xi:             '#ffd700',
+  sub_appearance:          '#00acc1',
+  possession_bonus:        '#00acc1',
+  clean_sheet:             '#2e7d32',
 };
 
 const EVENT_ICONS: Record<string, string> = {
-  goal: '⚽',
-  assist: '🎯',
-  goalkeeper_save: '🧤',
-  yellow_card: '🟨',
-  red_card: '🟥',
-  own_goal: '😰',
-  penalty_save: '🙅',
-  kick_off: '📢',
-  half_time: '⏸️',
-  full_time: '🛑',
+  goal:                    '⚽',
+  goal_conceded:           '😓',
+  own_goal:                '😰',
+  assist:                  '🎯',
+  goalkeeper_save:         '🧤',
+  penalty_save:            '🧤',
+  yellow_card:             '🟨',
+  red_card:                '🟥',
+  kick_off:                '📢',
+  half_time:               '⏸️',
+  full_time:               '🛑',
+  extra_time:              '⏱️',
+  penalty_won:             '✅',
+  penalty_missed:          '❌',
+  penalty_conceded:        '⚠️',
+  penalty_scored:          '🥅',
+  penalty_missed_shootout: '❌',
+  corner_kick:             '⛳',
+  substitution:            '🔄',
+  var_review:              '📺',
+  danger_attack:           '⚡',
+  starting_xi:             '🌟',
+  sub_appearance:          '🔄',
+  possession_bonus:        '🎮',
+  clean_sheet:             '🛡️',
 };
 
 interface DialogData {
@@ -242,20 +334,43 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator2Image: '/NPC/Comentator 2 Calm.svg',
         };
       }
-    case 'goal':
+    case 'goal': {
+      const goalType = event.goalType as string | undefined;
+      let goalTypeDesc = '';
+      if (goalType === 'Head') goalTypeDesc = 'A thunderous header';
+      else if (goalType === 'Shot') goalTypeDesc = 'A powerful shot';
+      else goalTypeDesc = 'A clinical finish';
+
       if (step === 1) {
         return {
           speakerTitle: 'Martin',
-          text: event.description ? `"${event.description}"` : `"GOAL! ${player} finds the back of the net in the ${minute} minute with a brilliant finish to put his team in front!"`,
+          text: event.description
+            ? `"${event.description}"`
+            : `"GOAL! ${player} finds the back of the net in the ${minute} minute! ${goalTypeDesc} — and ${team} take the lead!"`,
           commentator1Image: '/NPC/Comentator 1.svg',
         };
       } else {
-        return {
-          speakerTitle: 'Alan',
-          text: `"A brilliant team move from ${team} finally breaks through the ${opponent} defense and ends with a well-deserved goal!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
+        if (goalType === 'Head') {
+          return {
+            speakerTitle: 'Alan',
+            text: `"What a delivery! ${player} attacked the ball with complete conviction — that's an aerial masterclass!"`,
+            commentator2Image: '/NPC/Comentator 2.svg',
+          };
+        } else if (goalType === 'Shot') {
+          return {
+            speakerTitle: 'Alan',
+            text: `"Pure technique from ${player}! That shot had pace, precision, and the goalkeeper stood absolutely no chance!"`,
+            commentator2Image: '/NPC/Comentator 2.svg',
+          };
+        } else {
+          return {
+            speakerTitle: 'Alan',
+            text: `"A brilliant team move from ${team} finally breaks through the ${opponent} defense and ends with a well-deserved goal!"`,
+            commentator2Image: '/NPC/Comentator 2.svg',
+          };
+        }
       }
+    }
     case 'yellow_card':
       if (step === 1) {
         return {
@@ -301,54 +416,6 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator2Image: '/NPC/Comentator 2.svg',
         };
       }
-    case 'assist':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"Sensational vision from ${player}! A perfectly weighted pass to open up the defense."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"Absolutely spot on! That kind of creativity is exactly what you need to break down a stubborn defense."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'shot_on_target':
-      return {
-        speakerTitle: 'Martin',
-        text: `"Great strike by ${player}! The goalkeeper had to be alert to keep that one out."`,
-        commentator1Image: '/NPC/Komentator 1 calm.svg',
-      };
-    case 'pass_accuracy':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"Excellent distribution by ${player}! Controlling the tempo of the game with pinpoint passing."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"Exactly right. Keeping possession and moving the ball intelligently is dictating the flow of the entire match."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'clean_sheet':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"Solid defensive display! ${team} has managed to keep a clean sheet today."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"A fantastic effort from the backline. Defending as a unit like that wins you championships."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
     case 'substitution':
       if (step === 1) {
         return {
@@ -367,69 +434,6 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"Fresh legs on the pitch often provide that extra spark. It will be interesting to see how the opposition responds."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'goalkeeper_save':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"What a save by ${player}! Incredible reflexes to deny the attacker. Outstanding goalkeeping!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"I couldn't agree more. It's moments of brilliance like that from the keeper that keep the team in the game."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'penalty_save':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"SAVED! ${player} guesses correctly and makes a heroic penalty save! Absolutely incredible!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"What a massive psychological boost! You have to praise the keeper's composure under such intense pressure."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'foul':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Referee',
-          text: 'FOUL',
-          refereeImage: '/NPC/Foul.svg',
-          isRefereeStyle: true,
-        };
-      } else if (step === 2) {
-        return {
-          speakerTitle: 'Alan',
-          text: event.description ? `"${event.description}"` : `"That's a careless foul by ${player}. The referee awards a free kick."`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"He needs to be careful not to pick up a silly booking early on."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'free_kick':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"${team} wins a dangerous free kick just outside the box. This is a great scoring opportunity!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"They've clearly been practicing these set pieces on the training ground. Let's see what they can do."`,
           commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
@@ -454,27 +458,6 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
-    case 'offside':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Referee',
-          text: 'OFFSIDE',
-          refereeImage: '/NPC/Offside.svg',
-          isRefereeStyle: true,
-        };
-      } else if (step === 2) {
-        return {
-          speakerTitle: 'Alan',
-          text: event.description ? `"${event.description}"` : `"The linesman's flag goes up! ${player} is caught offside."`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"It was a very tight call, but the high defensive line did its job perfectly."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
     case 'var_review':
       if (step === 1) {
         return {
@@ -496,6 +479,215 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
+    case 'penalty_won':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Referee',
+          text: 'PENALTY',
+          refereeImage: '/NPC/Foul.svg',
+          isRefereeStyle: true,
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: event.description ? `"${event.description}"` : `"PENALTY! The referee points to the spot! A massive opportunity for ${team} here!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'penalty_conceded':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: `"That is a disastrous challenge by ${player} in the box. He leaves the referee with absolutely no choice."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"What was he thinking? You simply cannot make a tackle like that inside the area."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      }
+    case 'penalty_missed':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"MISSED! I don't believe it! ${player} has completely fluffed his lines!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"He'll be having nightmares about that one. A golden chance wasted."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
+    case 'danger_attack':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"${team} is in a highly dangerous position! TxLINE data shows they are in the Danger zone right now — a goal could come at any moment!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"${opponent} needs to hold their defensive shape carefully. The pressure from ${team} is relentless and any lapse in concentration could be fatal!"`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
+    case 'starting_xi':
+      return {
+        speakerTitle: 'Alan',
+        text: event.description
+          ? `"${event.description}"`
+          : `"${player} is confirmed in the starting eleven for ${team} today!"`,
+        commentator2Image: '/NPC/Comentator 2 Calm.svg',
+      };
+    case 'sub_appearance':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Referee',
+          text: 'SUBSTITUTION',
+          refereeImage: '/NPC/Player subtitution.svg',
+          isRefereeStyle: true,
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: event.description
+            ? `"${event.description}"`
+            : `"${player} is now on the pitch! Fresh legs that could make all the difference for ${team} in the closing stages."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      }
+    case 'possession_bonus':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"${team} has been absolutely dominant in possession this half! ${player} has been the engine in midfield, controlling the tempo beautifully."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"When you control the ball like that, you control the game. ${player} deserves full credit for the work rate shown today."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      }
+    case 'clean_sheet':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"CLEAN SHEET! ${team} has successfully kept the opposition off the scoreboard — ${player} has been absolutely magnificent today!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"A clean sheet is the ultimate reward for a solid defensive performance. The entire backline for ${team} deserves enormous credit today."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
+    case 'assist':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"What a pass from ${player}! The vision to pick out that run was exceptional — that assist was every bit as important as the goal itself!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"Creative genius from ${player}! He saw the run nobody else spotted and delivered the perfect ball. That's the mark of a truly world-class player."`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'goalkeeper_save':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"INCREDIBLE SAVE from ${player}! That looked destined for the net, but he has pulled off an absolutely stunning stop!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"What a moment from ${player}! That save alone could be worth three points for ${team}. He has single-handedly kept them in this match."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      }
+    case 'penalty_save':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: `"SAVED!! ${player} guesses correctly and palms it away! The penalty taker is absolutely devastated — what a moment for the goalkeeper!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+          refereeImage: '/NPC/ End of Game.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"A defining save that could completely change the course of this match! ${player} is the hero — ${team} are absolutely ecstatic!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'extra_time':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Referee',
+          text: 'EXTRA TIME',
+          refereeImage: '/NPC/Referee Kick OFF.svg',
+          isRefereeStyle: true,
+          refereePosition: 'left',
+        };
+      } else if (step === 2) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"We are going to extra time! Ninety minutes were not enough to separate these two sides — thirty more minutes to decide this contest!"`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"Both squads must dig deep now. Fatigue is a real factor, but so is the prize. One moment of quality could decide everything!"`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
+    case 'penalty_scored':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: `"SCORED! ${player} steps up and sends the keeper the wrong way — nerves of steel from the ${team} player!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"Ice in the veins! That is how you take a penalty under the biggest pressure possible. ${team} are one step closer!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'penalty_missed_shootout':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"MISSED! ${player} has blazed it wide — that is an absolutely cruel moment in a penalty shootout. ${team} are on the brink!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"The pressure of a penalty shootout can break the best players in the world. ${player} will need enormous support from the bench and the fans right now."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
     default:
       return {
         speakerTitle: 'Commentator',
@@ -508,45 +700,107 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
 export default function ReplayPage({ params }: { params: Promise<{ contestId: string }> }) {
   const { contestId } = use(params);
   const { playSFX } = useAudio();
-  const fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0];
+  const { appMode, apiToken, guestJwt } = useTxLine();
 
-  const matchEvents = getDynamicEvents(fixture, REPLAY_EVENTS[contestId] || LIVE_EVENTS);
+  // Fixture resolution — WC2026 takes priority in both modes
+  const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+  const isDemoFixture = DEMO_FIXTURES.some(f => f.fixtureId === contestId);
 
-  const [initialState] = useState(() => {
-    const initialMin = 0; // Always start at 0 for replay
-    
-    let initialIdx = matchEvents.findIndex(e => e.minute >= initialMin);
-    if (initialIdx === -1) initialIdx = matchEvents.length;
+  const fixture = wcFixture
+    ? { ...wcFixture, status: getFixtureStatus(wcFixture), homeScore: 0, awayScore: 0 }
+    : (DEMO_FIXTURES.find(f => f.fixtureId === contestId) || DEMO_FIXTURES[0]);
 
-    const initialEvents = matchEvents.slice(0, initialIdx).reverse();
-    
-    let homeScore = 0;
-    let awayScore = 0;
-    
-    initialEvents.forEach(e => {
-      if (e.type === 'goal' || e.type === 'own_goal') {
-        if (e.team === fixture.homeTeam) homeScore++;
-        else if (e.team === fixture.awayTeam) awayScore++;
-      }
-    });
+  // Mutable events queue — starts with demo fallback, swapped with API data in live mode
+  const eventsQueueRef = useRef<any[]>(
+    getDynamicEvents(fixture, REPLAY_EVENTS[contestId] || LIVE_EVENTS)
+  );
 
-    const triggered = new Set<string>();
-    initialEvents.forEach(e => triggered.add(e.id));
+  // apiVersion increments after API events load, triggering the event trigger effect to re-evaluate
+  const [apiVersion, setApiVersion] = useState(0);
+  // true while fetching from TxLINE API
+  const [apiLoading, setApiLoading] = useState(
+    appMode === 'live' && !!wcFixture
+  );
 
-    return { initialMin, initialIdx, initialEvents, homeScore, awayScore, triggered };
-  });
-
-  const [events, setEvents] = useState<typeof matchEvents>(initialState.initialEvents);
-  const [currentEventIdx, setCurrentEventIdx] = useState(initialState.initialIdx);
-  const [score, setScore] = useState({ home: initialState.homeScore, away: initialState.awayScore });
-  const [minute, setMinute] = useState(initialState.initialMin);
+  // All state hooks — always called unconditionally (Rules of Hooks)
+  const [events, setEvents] = useState<any[]>([]);
+  const [currentEventIdx, setCurrentEventIdx] = useState(0);
+  const [score, setScore] = useState({ home: 0, away: 0 });
+  const [minute, setMinute] = useState(0);
   const [leaderboard, setLeaderboard] = useState(DEMO_LEADERBOARD);
-  const [latestEvent, setLatestEvent] = useState<(typeof matchEvents)[0] | null>(null);
+  const [latestEvent, setLatestEvent] = useState<any>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isFastForward, setIsFastForward] = useState(true);
   const eventRef = useRef<HTMLDivElement>(null);
-  const triggeredEventsRef = useRef<Set<string>>(initialState.triggered);
+  const triggeredEventsRef = useRef<Set<string>>(new Set());
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [activeToasts, setActiveToasts] = useState<FantasyNotificationItem[]>([]);
+  const prevRankRef = useRef<number>(2);
+  const notifiedEventsRef = useRef<Set<string>>(new Set());
+  const leaderboardRef = useRef(leaderboard);
+  const userLineupRef = useRef<any>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}`);
+      if (stored) {
+        userLineupRef.current = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.error('Failed to parse user lineup:', e);
+    }
+  }, [contestId]);
+
+  useEffect(() => {
+    leaderboardRef.current = leaderboard;
+  }, [leaderboard]);
+
+  // ── Live mode: fetch full match event history from TxLINE API ─────────────
+  useEffect(() => {
+    if (appMode !== 'live' || !apiToken || !wcFixture) {
+      setApiLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    Promise.all([
+      fetchLiveScoreUpdates(apiToken, contestId, guestJwt),
+      buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt),
+    ])
+      .then(([raw, pMap]) => {
+        if (cancelled) return;
+        const updates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+        const seenSeqs = new Set<number>();
+        const apiEvents = convertTxLineUpdates(
+          updates, pMap,
+          fixture.homeTeam, fixture.awayTeam,
+          (fixture as any).homeFlag ?? '', (fixture as any).awayFlag ?? '',
+          seenSeqs,
+        );
+
+        if (apiEvents.length > 0) {
+          // Sort chronologically
+          eventsQueueRef.current = [...apiEvents].sort((a, b) => a.minute - b.minute);
+          // Reset replay to beginning
+          setEvents([]);
+          setMinute(0);
+          setCurrentEventIdx(0);
+          setScore({ home: 0, away: 0 });
+          triggeredEventsRef.current.clear();
+          notifiedEventsRef.current.clear();
+          setApiVersion(v => v + 1);
+          console.log(`[Replay] Loaded ${apiEvents.length} events from TxLINE API`);
+        }
+      })
+      .catch(err => console.error('[Replay] API fetch error:', err))
+      .finally(() => { if (!cancelled) setApiLoading(false); });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appMode, apiToken, contestId]);
+
   const [dialogStep, setDialogStep] = useState(1);
 
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verifying' | 'success'>('pending');
@@ -557,7 +811,11 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
       setVerificationStatus('success');
     }, 2000);
   };
-
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
   // Simulate live events
   useEffect(() => {
     if (!isPlaying || showPopup) return;
@@ -565,11 +823,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     const tickRate = isFastForward ? 2000 : 60000;
 
     const interval = setInterval(() => {
-      setMinute((m) => Math.min(m + 1, 90));
-      setCurrentEventIdx((idx) => {
-        if (idx >= matchEvents.length) return idx;
-        return idx;
-      });
+      setMinute((m) => Math.min(m + 1, 120)); // allow up to 120' for extra time
     }, tickRate);
 
     return () => clearInterval(interval);
@@ -578,7 +832,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     // Trigger events based on minute
     useEffect(() => {
       if (showPopup) return;
-      const event = matchEvents[currentEventIdx];
+      const event = eventsQueueRef.current[currentEventIdx];
       if (!event || minute < event.minute) return;
       if (triggeredEventsRef.current.has(event.id)) return;
       if (events.find((e) => e.id === event.id)) return;
@@ -590,7 +844,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         playSFX('goal');
       } else if (event.type === 'full_time') {
         playSFX('end_game');
-      } else if (['kick_off', 'foul', 'yellow_card', 'red_card', 'penalty_save', 'free_kick', 'corner_kick', 'offside', 'substitution'].includes(event.type)) {
+      } else if (['kick_off', 'half_time', 'yellow_card', 'red_card', 'corner_kick', 'substitution', 'extra_time', 'penalty_save'].includes(event.type)) {
         playSFX('whistle');
       }
 
@@ -609,20 +863,122 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         }));
       }
   
-      // Shuffle leaderboard slightly
+      // Determine authentic points for user
+      let delta = 0;
+      let isCap = false;
+
+      if (userLineupRef.current && event.playerId) {
+        const { players, captain, confidence } = userLineupRef.current;
+        const matchedPlayer = players.find((p: any) => p && p.id === event.playerId);
+        
+        if (matchedPlayer) {
+          delta = calculateEventPoints(event.type, matchedPlayer.position);
+          if (captain === event.playerId) {
+            delta *= 2;
+            isCap = true;
+          }
+          const stars = confidence?.[event.playerId] ?? 3;
+          let confidenceMultiplier = 1;
+          if (delta >= 0) {
+            confidenceMultiplier = stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+          } else {
+            confidenceMultiplier = stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+          }
+          delta = delta * confidenceMultiplier;
+        }
+      }
+
+      // Shuffle leaderboard
       setLeaderboard((prev) => {
         const next = [...prev];
-        next[1] = { ...next[1], points: next[1].points + Math.abs(event.points) * 0.8 };
-        return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+        // Simulate bot point accumulation based on event
+        next.forEach((entry, i) => {
+          if (i !== 1) { // not user
+            entry.points += Math.abs(event.points) * (Math.random() * 0.4);
+          }
+        });
+        
+        // Authentic user points
+        next[1] = { ...next[1], points: next[1].points + delta };
+        
+        const sorted = next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+        return sorted;
       });
-    }, [minute, currentEventIdx, events, fixture.homeTeam, showPopup]);
+
+      // Fantasy Point Notification Trigger
+      if (delta !== 0 && !notifiedEventsRef.current.has(event.id)) {
+        notifiedEventsRef.current.add(event.id);
+        
+        const roundedDelta = Math.round(delta * 100) / 100;
+        const valueStr = roundedDelta > 0 ? `+${roundedDelta} pts` : `${roundedDelta} pts`;
+        
+        const newToasts: FantasyNotificationItem[] = [
+          {
+            id: `toast-${Date.now()}-${event.id}`,
+            type: event.type as any,
+            title: event.type.replace('_', ' '),
+            subtitle: event.player || 'Player Action',
+            value: valueStr,
+          }
+        ];
+
+        // Authentic captain bonus simulation
+        if (isCap) {
+          const capBonus = roundedDelta / 2;
+          newToasts.unshift({
+            id: `toast-cap-${Date.now()}`,
+            type: 'captain_bonus',
+            title: 'Captain Bonus',
+            subtitle: event.player,
+            value: `+${capBonus} pts`,
+          });
+        }
+
+        // Rank up simulation
+        const nextBoard = [...leaderboardRef.current];
+        nextBoard[1] = { ...nextBoard[1], points: nextBoard[1].points + delta };
+        const sorted = nextBoard.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+        const newUserRank = sorted.find((e) => e.isUser)?.rank ?? 2;
+        
+        if (newUserRank < prevRankRef.current) {
+          newToasts.unshift({
+            id: `toast-rank-${Date.now()}`,
+            type: 'rank_up',
+            title: 'Rank Up!',
+            subtitle: `#${prevRankRef.current} → #${newUserRank}`,
+            value: 'Rank Up',
+          });
+
+          if (newUserRank === 1) {
+            newToasts.unshift({
+              id: `toast-ach-${Date.now()}`,
+              type: 'achievement',
+              title: 'Achievement',
+              subtitle: "You're now in 1st Place!",
+              value: '🏆 1st Place',
+            });
+          }
+        }
+        prevRankRef.current = newUserRank;
+
+        setActiveToasts(prev => [...newToasts, ...prev]);
+      }
+    }, [minute, currentEventIdx, fixture.homeTeam, showPopup, contestId, apiVersion]);
 
     // Auto-advance or auto-close JRPG dialog popups
     useEffect(() => {
       if (!showPopup || !latestEvent) return;
 
       let timer: NodeJS.Timeout;
-      const multiStepEvents = ['goal', 'own_goal', 'yellow_card', 'red_card', 'assist', 'pass_accuracy', 'clean_sheet', 'substitution', 'goalkeeper_save', 'penalty_save', 'free_kick'];
+      // Only events with 2 dialog steps (valid TxLINE events)
+      const multiStepEvents = [
+        'goal', 'own_goal', 'yellow_card', 'red_card',
+        'penalty_won', 'penalty_conceded', 'penalty_missed',
+        'penalty_save', 'penalty_scored', 'penalty_missed_shootout',
+        'clean_sheet', 'substitution', 'sub_appearance',
+        'possession_bonus', 'danger_attack', 'starting_xi',
+        'assist', 'goalkeeper_save',
+      ];
 
       if (latestEvent.type === 'full_time') {
         if (dialogStep === 1) {
@@ -662,7 +1018,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         } else {
           timer = setTimeout(() => setShowPopup(false), 5000);
         }
-      } else if (latestEvent.type === 'var_review' || latestEvent.type === 'foul' || latestEvent.type === 'corner_kick' || latestEvent.type === 'offside') {
+      } else if (['var_review', 'corner_kick', 'extra_time'].includes(latestEvent.type)) {
         if (dialogStep === 1) {
           timer = setTimeout(() => setDialogStep(2), 4000);
         } else if (dialogStep === 2) {
@@ -702,9 +1058,65 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const userPoints = leaderboard.find((e) => e.isUser)?.points ?? 0;
   const userRank = leaderboard.find((e) => e.isUser)?.rank ?? '-';
 
+  // ── Loading screen while fetching API events ────────────────────────────────
+  if (apiLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'transparent' }}>
+        <Navbar />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', gap: 24, padding: '0 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', animation: 'pulse 1.5s infinite' }}>🎬</div>
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>
+            {fixture.homeFlag} {fixture.homeTeam} vs {fixture.awayTeam} {fixture.awayFlag}
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 380, lineHeight: 1.7 }}>
+            Fetching match events from TxLINE API...
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--color-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
+            <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid currentColor', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+            Loading TxLINE data
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── No API data yet (live mode, WC fixture, no demo replay fallback either) ──
+  if (appMode === 'live' && wcFixture && !isDemoFixture && !REPLAY_EVENTS[contestId] && apiVersion === 0) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'transparent' }}>
+        <Navbar />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', gap: 24, padding: '0 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem' }}>🎬</div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, maxWidth: 500 }}>
+            {wcFixture.homeFlag} {wcFixture.homeTeam} vs {wcFixture.awayTeam} {wcFixture.awayFlag}
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 420, lineHeight: 1.7 }}>
+            No replay data available yet. The replay will be available once match events are recorded by TxLINE.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link href="/contests" className="btn btn--primary">← Back to Contests</Link>
+            <Link href={`/live/${contestId}`} className="btn btn--secondary">🔴 Watch Live</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
+
+      {/* Fantasy Notification Toast Queue */}
+      {activeToasts.map((toast, idx) => (
+        <FantasyToast
+          key={toast.id}
+          notification={toast}
+          index={idx}
+          onDismiss={() => {
+            setActiveToasts((prev) => prev.filter((t) => t.id !== toast.id));
+          }}
+        />
+      ))}
 
       {/* Live Event Popup */}
       {showPopup && latestEvent && (() => {
@@ -721,6 +1133,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              userSelect: 'none',
             }}>
               {/* Referee Image */}
               <img
@@ -736,6 +1149,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   zIndex: 1020,
                   animation: (dialog as any).refereePosition === 'left' ? 'slide-in-left 400ms ease-out' : 'slide-in-right 400ms ease-out',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
               
@@ -787,6 +1201,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
             alignItems: 'center',
             justifyContent: 'flex-end',
             paddingBottom: '8vh',
+            userSelect: 'none',
           }}>
             <style>{`
               @keyframes slide-in-left {
@@ -822,6 +1237,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   zIndex: 1005,
                   animation: 'slide-in-left 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
             )}
@@ -841,6 +1257,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   zIndex: 1005,
                   animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
             )}
@@ -859,6 +1276,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   zIndex: 1006,
                   animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
             )}
@@ -872,7 +1290,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                 if (type === 'full_time') maxSteps = 7;
                 else if (type === 'half_time') maxSteps = 4;
                 else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
-                else if (['var_review', 'foul', 'corner_kick', 'offside', 'substitution'].includes(type)) maxSteps = 3;
+                else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
 
                 if (dialogStep < maxSteps) {
                   setDialogStep(prev => prev + 1);
@@ -976,6 +1394,20 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
             </div>
           </div>
 
+          {/* Data source badge */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            {appMode === 'live' && apiVersion > 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px', borderRadius: 20, background: 'rgba(0,229,255,0.07)', border: '1px solid rgba(0,229,255,0.25)', fontSize: '0.7rem', fontWeight: 700, color: '#00e5ff', letterSpacing: '0.06em' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 6px #00e5ff' }} />
+                {eventsQueueRef.current.length} EVENTS FROM TxLINE API
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+                DEMO REPLAY
+              </div>
+            )}
+          </div>
+
           {/* Controls */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
@@ -993,17 +1425,15 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
             </button>
             <button
               className="btn btn--ghost btn--sm"
-              onClick={() => { 
-                setEvents(initialState.initialEvents); 
-                setScore({ home: initialState.homeScore, away: initialState.awayScore }); 
-                setMinute(initialState.initialMin); 
-                setCurrentEventIdx(initialState.initialIdx); 
-                setIsPlaying(true); 
+              onClick={() => {
+                setEvents([]);
+                setScore({ home: 0, away: 0 });
+                setMinute(0);
+                setCurrentEventIdx(0);
+                setIsPlaying(true);
                 setVerificationStatus('pending');
-                
-                const triggered = new Set<string>();
-                initialState.initialEvents.forEach(e => triggered.add(e.id));
-                triggeredEventsRef.current = triggered;
+                triggeredEventsRef.current.clear();
+                notifiedEventsRef.current.clear();
               }}
               id="reset-simulation-btn"
             >

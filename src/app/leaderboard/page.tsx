@@ -13,9 +13,8 @@ const DEMO_LEADERBOARD = [
   { rank: 3, user: 'TacticalMaster', wallet: 'Rz33...9vT', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TacticalMaster', contests: 10, wins: 3, points: 1150.2, sol: 22.0 },
   { rank: 4, user: 'SolanaBaller', wallet: 'Lw8j...mX1', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SolanaBaller', contests: 8, wins: 2, points: 980.5, sol: 15.0 },
   { rank: 5, user: 'FantasyKing', wallet: 'A1b2...c3D', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=FantasyKing', contests: 20, wins: 1, points: 950.0, sol: 8.5 },
-  { rank: 6, user: 'You', wallet: 'YOUR WALLET', avatar: '', contests: 5, wins: 1, points: 450.2, sol: 5.0, isUser: true },
-  { rank: 7, user: 'DiamondHandsFC', wallet: 'Dh88...xYz', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DiamondHandsFC', contests: 11, wins: 2, points: 430.0, sol: 4.8 },
-  { rank: 8, user: 'DegenStriker', wallet: 'Str1...k3r', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DegenStriker', contests: 19, wins: 1, points: 420.5, sol: 4.5 },
+  { rank: 6, user: 'DiamondHandsFC', wallet: 'Dh88...xYz', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DiamondHandsFC', contests: 11, wins: 2, points: 430.0, sol: 4.8 },
+  { rank: 7, user: 'DegenStriker', wallet: 'Str1...k3r', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DegenStriker', contests: 19, wins: 1, points: 420.5, sol: 4.5 },
   { rank: 9, user: 'WhaleWatcher', wallet: 'Wha1...34x', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=WhaleWatcher', contests: 7, wins: 1, points: 410.0, sol: 4.2 },
   { rank: 10, user: 'NFTManager', wallet: 'NfT0...mNg', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NFTManager', contests: 14, wins: 1, points: 395.5, sol: 3.5 },
   { rank: 11, user: 'PeleReborn', wallet: 'Pel3...rBn', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PeleReborn', contests: 9, wins: 0, points: 380.0, sol: 2.0 },
@@ -36,11 +35,34 @@ export default function LeaderboardPage() {
   const [mounted, setMounted] = useState(false);
   const [liveLeaderboard, setLiveLeaderboard] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [userContestCount, setUserContestCount] = useState(0);
+  const [userDisplayName, setUserDisplayName] = useState('');
+  const [userAvatar, setUserAvatar] = useState('');
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Count user's local match history and load profile
+  useEffect(() => {
+    if (!mounted) return;
+    let count = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      if (localStorage.key(i)?.startsWith('txodds_user_lineup_')) count++;
+    }
+    setUserContestCount(count);
+    if (publicKey) {
+      const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
+      if (stored) {
+        const p = JSON.parse(stored);
+        setUserDisplayName(p.username || `User_${publicKey.toString().substring(0, 4)}`);
+        setUserAvatar(p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`);
+      } else {
+        setUserDisplayName(`User_${publicKey.toString().substring(0, 4)}`);
+        setUserAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`);
+      }
+    }
+  }, [mounted, publicKey]);
 
   useEffect(() => {
     if (appMode !== 'live') return;
@@ -48,7 +70,6 @@ export default function LeaderboardPage() {
     const fetchLeaderboard = async () => {
       try {
         setIsLoading(true);
-        setError(null);
         // We query the users table and sort by total_earned_sol descending
         const { data, error } = await supabase
           .from('users')
@@ -79,8 +100,9 @@ export default function LeaderboardPage() {
           setLiveLeaderboard(mapped);
         }
       } catch (err: any) {
-        console.error('Failed to fetch leaderboard:', err);
-        setError('Failed to connect to the database. Make sure Supabase is configured properly.');
+        console.warn('[Leaderboard] Supabase not available, using demo data:', err);
+        // Supabase not configured — show demo data silently
+        setLiveLeaderboard(DEMO_LEADERBOARD);
       } finally {
         setIsLoading(false);
       }
@@ -92,31 +114,7 @@ export default function LeaderboardPage() {
   if (!mounted) return null;
 
   const isDemo = appMode === 'demo';
-  let displayLeaderboard = isDemo ? DEMO_LEADERBOARD : liveLeaderboard;
-
-  if (isDemo && publicKey) {
-    const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
-    let customUser = 'You';
-    let customAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`;
-    
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      customUser = parsed.username || customUser;
-      customAvatar = parsed.avatar || customAvatar;
-    }
-    
-    displayLeaderboard = displayLeaderboard.map(entry => {
-      if (entry.isUser) {
-        return { 
-          ...entry, 
-          user: customUser, 
-          wallet: `${publicKey.toString().substring(0, 4)}...${publicKey.toString().substring(publicKey.toString().length - 3)}`,
-          avatar: customAvatar 
-        };
-      }
-      return entry;
-    });
-  }
+  const displayLeaderboard = isDemo ? DEMO_LEADERBOARD : liveLeaderboard;
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
@@ -124,14 +122,53 @@ export default function LeaderboardPage() {
 
       <main style={{ padding: '48px 0 80px' }}>
         <div className="container-sm">
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 8 }}>
               Global Leaderboard
             </h1>
             <p style={{ color: 'var(--text-secondary)' }}>
-              {isDemo ? 'Top fantasy managers across all World Cup contests.' : 'Real-time global rankings based on SOL earned.'}
+              {isDemo ? 'Simulated rankings — switch to Live Mode for real data.' : 'Real-time global rankings based on SOL earned.'}
             </p>
           </div>
+
+          {/* DEMO banner */}
+          {isDemo && (
+            <div style={{ marginBottom: 20, padding: '10px 16px', background: 'rgba(255,170,0,0.07)', border: '1px solid rgba(255,170,0,0.25)', borderRadius: 8, fontSize: '0.78rem', color: 'rgba(255,170,0,0.85)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '1rem' }}>🎮</span>
+              <span>The data below is a <strong>simulation</strong>. Rankings do not reflect real players. Switch to Live Mode to see the real leaderboard.</span>
+            </div>
+          )}
+
+          {/* Your Position card — only show for connected users */}
+          {publicKey && (
+            <div style={{
+              marginBottom: 20, padding: '14px 20px',
+              background: 'rgba(244,207,126,0.07)', border: '1px solid rgba(244,207,126,0.3)',
+              borderRadius: 8, display: 'flex', alignItems: 'center', gap: 16,
+            }}>
+              <img src={userAvatar} alt="avatar" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--bg-surface)', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: 'var(--color-accent)', marginBottom: 2 }}>
+                  {userDisplayName} <span style={{ fontSize: '0.72rem', background: 'rgba(244,207,126,0.2)', border: '1px solid rgba(244,207,126,0.4)', padding: '1px 6px', borderRadius: 4, marginLeft: 6 }}>YOU</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                  {publicKey.toString().substring(0, 8)}...{publicKey.toString().slice(-4)}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                {userContestCount > 0 ? (
+                  <>
+                    <div style={{ fontWeight: 700, color: '#f8fafc', fontSize: '1rem' }}>{userContestCount} contest{userContestCount > 1 ? 's' : ''}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Entered</div>
+                  </>
+                ) : (
+                  <Link href="/contests" style={{ fontSize: '0.78rem', color: 'var(--color-accent)', fontWeight: 700, textDecoration: 'none' }}>
+                    Join a contest →
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="ro-window">
             <div className="ro-window__header">
@@ -142,10 +179,6 @@ export default function LeaderboardPage() {
               {isLoading ? (
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
                   Loading real-time rankings...
-                </div>
-              ) : error ? (
-                <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-danger)' }}>
-                  {error}
                 </div>
               ) : displayLeaderboard.length === 0 ? (
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>

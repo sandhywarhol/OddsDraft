@@ -5,21 +5,36 @@ import axios from 'axios';
 import idl from './txline_idl.json';
 import type { WalletContextState } from '@solana/wallet-adapter-react';
 
-const TXLINE_PROGRAM_ID = new PublicKey("9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA");
-const TXL_TOKEN_MINT = new PublicKey("Zhw9TVKp68a1QrftncMSd6ELXKDtpVMNuMGr1jNwdeL");
+const IS_DEVNET = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
 
-const TXLINE_API_BASE = "https://txline.txodds.com"; // Mainnet
+const TXLINE_PROGRAM_ID = new PublicKey(
+  IS_DEVNET
+    ? '6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J'
+    : '9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA'
+);
+const TXL_TOKEN_MINT = new PublicKey(
+  IS_DEVNET
+    ? '4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG'
+    : 'Zhw9TVKp68a1QrftncMSd6ELXKDtpVMNuMGr1jNwdeL'
+);
 
-export const SERVICE_LEVEL_ID = 12; // Real-time Free Tier
+// Browser calls go through our proxy to avoid CORS; server-side calls go direct
+const TXLINE_API_BASE = typeof window !== 'undefined'
+  ? '/api/txline'
+  : IS_DEVNET ? 'https://txline-dev.txodds.com' : 'https://txline.txodds.com';
+
+// Free tier ID differs per network: devnet=1, mainnet=12
+export const SERVICE_LEVEL_ID = IS_DEVNET ? 1 : 12;
 export const DURATION_WEEKS = 4;
 export const SELECTED_LEAGUES: number[] = []; // empty for standard bundle
 
 export async function subscribeToFreeTier(wallet: WalletContextState, connection: Connection) {
   if (!wallet.publicKey || !wallet.signTransaction) throw new Error("Wallet not connected");
 
-  // We cast wallet to any because AnchorProvider expects a NodeWallet, but WalletContextState has signTransaction/signAllTransactions
   const provider = new anchor.AnchorProvider(connection, wallet as any, { commitment: 'confirmed' });
-  const program = new anchor.Program(idl as any, provider);
+  // Override IDL address to match current network's program ID
+  const idlWithAddress = { ...idl, address: TXLINE_PROGRAM_ID.toString() };
+  const program = new anchor.Program(idlWithAddress as any, provider);
 
   const [tokenTreasuryPda] = PublicKey.findProgramAddressSync([Buffer.from("token_treasury_v2")], TXLINE_PROGRAM_ID);
   const tokenTreasuryVault = getAssociatedTokenAddressSync(TXL_TOKEN_MINT, tokenTreasuryPda, true, TOKEN_2022_PROGRAM_ID);
@@ -87,29 +102,56 @@ export async function activateApiAccess(wallet: WalletContextState, txSig: strin
     }
   );
 
-  return activationResponse.data.token || activationResponse.data;
+  // API may return a plain string token, or {token: "..."}, or {apiToken: "..."}
+  const raw = activationResponse.data;
+  const token = typeof raw === 'string' ? raw : (raw?.token ?? raw?.apiToken ?? null);
+  if (!token) throw new Error(`Activation failed — unexpected response: ${JSON.stringify(raw)}`);
+  return { token, guestJwt: jwt };
 }
 
-export async function fetchLiveFixtures(apiToken: string) {
-  // We'll call the txLINE Soccer Feed for live events.
+function txlineHeaders(apiToken: string, guestJwt?: string | null) {
+  const h: Record<string, string> = { 'X-Api-Token': apiToken };
+  if (guestJwt) h['Authorization'] = `Bearer ${guestJwt}`;
+  return h;
+}
+
+export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | null) {
   const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/fixtures/live`, {
-    headers: { Authorization: `Bearer ${apiToken}` }
+    headers: txlineHeaders(apiToken, guestJwt),
   });
   return res.data;
 }
 
-export async function fetchAllFixtures(apiToken: string) {
-  // Call the txLINE Soccer Feed for all fixtures (including upcoming)
+export async function fetchAllFixtures(apiToken: string, guestJwt?: string | null) {
   const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/fixtures`, {
-    headers: { Authorization: `Bearer ${apiToken}` }
+    headers: txlineHeaders(apiToken, guestJwt),
   });
   return res.data;
 }
 
-export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string) {
-  // Get live scores/updates for a specific fixture
-  const res = await axios.get(`${TXLINE_API_BASE}/api/scores/updates/${fixtureId}`, {
-    headers: { Authorization: `Bearer ${apiToken}` }
-  });
+export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string, guestJwt?: string | null) {
+  try {
+    const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/scores`, {
+      headers: txlineHeaders(apiToken, guestJwt),
+      params: { FixtureId: fixtureId },
+    });
+    return res.data;
+  } catch (err: any) {
+    // 404 = fixture not live yet / historical data unavailable — expected on devnet
+    if (err?.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function fetchGuestToken(): Promise<string> {
+  const res = await axios.post(`${TXLINE_API_BASE}/auth/guest/start`);
+  return res.data.token;
+}
+
+export async function fetchFixtureLineups(apiToken: string, fixtureId: string, guestJwt?: string | null) {
+  const res = await axios.get(
+    `${TXLINE_API_BASE}/api/soccer/v2/lineups/${fixtureId}`,
+    { headers: txlineHeaders(apiToken, guestJwt), timeout: 10000 }
+  );
   return res.data;
 }

@@ -2,57 +2,109 @@
 
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES, type DemoFixture } from '@/lib/players';
-import { formatDistanceToNow, format, isPast } from 'date-fns';
+import { type DemoFixture } from '@/lib/players';
+import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
+import { formatDistanceToNow, format } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { useEffect, useState } from 'react';
+import type { MatchResult } from '@/app/api/match/result/route';
+
+type FixtureScore = { home: number; away: number; espnId?: string };
 
 export default function ContestsPage() {
-  const { appMode, allFixtures, liveFixtures } = useTxLine();
+  const { appMode, liveFixtures, allFixtures } = useTxLine();
   const [mounted, setMounted] = useState(false);
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);
-  
+  const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number }>>({});
+  const [finishedScores, setFinishedScores] = useState<Record<string, FixtureScore>>({});
+  const [matchResult, setMatchResult] = useState<{ fixture: DemoFixture; data: MatchResult | null; loading: boolean } | null>(null);
+
+  const openMatchResult = (fixture: DemoFixture) => {
+    const espnId = finishedScores[fixture.fixtureId]?.espnId;
+    setMatchResult({ fixture, data: null, loading: true });
+    if (!espnId) { setMatchResult({ fixture, data: null, loading: false }); return; }
+    fetch(`/api/match/result?espnId=${espnId}`)
+      .then(r => r.json())
+      .then((data: MatchResult) => setMatchResult({ fixture, data, loading: false }))
+      .catch(() => setMatchResult({ fixture, data: null, loading: false }));
+  };
+
   useEffect(() => setMounted(true), []);
 
   const isDemo = appMode === 'demo';
 
-  const mappedFixtures: DemoFixture[] = isDemo ? DEMO_FIXTURES : (allFixtures || []).map((f: any) => {
-    const isTxLineLive = liveFixtures?.some(lf => 
-      lf.homeTeam?.name === (f.homeTeam?.name || f.home_team?.name || f.homeTeam) || 
-      lf.awayTeam?.name === (f.awayTeam?.name || f.away_team?.name || f.awayTeam)
-    );
-    
-    const kickoffTime = new Date(f.kickoff_time || f.date || f.kickoffAt || new Date().toISOString());
-    const isPastKickoff = Date.now() > kickoffTime.getTime();
+  // Fetch real participant counts from Supabase for visible fixtures
+  useEffect(() => {
+    if (isDemo) return;
+    const ids = WC2026_FIXTURES.map(f => f.fixtureId).join(',');
+    fetch(`/api/contest/counts?fixtures=${ids}`)
+      .then(r => r.json())
+      .then(data => setContestCounts(data))
+      .catch(() => {});
+  }, [isDemo]);
 
-    let dynamicStatus = f.status || 'upcoming';
-    if (isTxLineLive) {
-      dynamicStatus = 'live';
-    } else if (isPastKickoff && dynamicStatus !== 'finished') {
-      dynamicStatus = 'finished'; 
+  // Try to extract scores from allFixtures (already fetched, no extra API call needed)
+  useEffect(() => {
+    if (isDemo || allFixtures.length === 0) return;
+    const scores: Record<string, { home: number; away: number }> = {};
+    for (const f of allFixtures) {
+      const id = String(f.FixtureId ?? f.fixtureId ?? f.fixture_id ?? f.id ?? '');
+      if (!id) continue;
+      const h = f.score?.home ?? f.Score?.Home ?? f.HomeScore ?? f.home_score;
+      const a = f.score?.away ?? f.Score?.Away ?? f.AwayScore ?? f.away_score;
+      if (h !== undefined && a !== undefined) scores[id] = { home: Number(h), away: Number(a) };
     }
+    if (Object.keys(scores).length > 0) setFinishedScores(prev => ({ ...scores, ...prev }));
+  }, [isDemo, allFixtures]);
 
-    let homeScore = f.score?.home ?? f.homeScore ?? null;
-    let awayScore = f.score?.away ?? f.awayScore ?? null;
-    if (isTxLineLive) {
-      const txMatch = liveFixtures?.find(lf => 
-        lf.homeTeam?.name === (f.homeTeam?.name || f.home_team?.name || f.homeTeam) || 
-        lf.awayTeam?.name === (f.awayTeam?.name || f.away_team?.name || f.awayTeam)
-      );
-      if (txMatch && txMatch.score) {
-        homeScore = txMatch.score.home;
-        awayScore = txMatch.score.away;
-      }
+  // Fetch real final scores for finished WC2026 matches from public sports data
+  useEffect(() => {
+    if (isDemo) return;
+    fetch('/api/scores/wc2026')
+      .then(r => r.json())
+      .then((data: Record<string, { home: number; away: number }>) => {
+        setFinishedScores(prev => ({ ...prev, ...data }));
+      })
+      .catch(() => {});
+  }, [isDemo]);
+
+  // Always show real WC2026 fixture schedule (demo mode = simulated gameplay, live mode = real data)
+  // Status computed from current time; live scores overlaid from TxLINE API when available
+  const mappedFixtures: DemoFixture[] = WC2026_FIXTURES.map(f => {
+    // Check if this fixture is currently live from TxLINE API
+    // TxLINE uses different field names depending on endpoint — try all known variants
+    const fid = String(f.fixtureId);
+    const apiLiveMatch = liveFixtures?.find((lf: any) => {
+      const lfId = String(lf.FixtureId ?? lf.fixtureId ?? lf.fixture_id ?? lf.id ?? '');
+      return lfId === fid;
+    });
+
+    // Status: prefer API live data (authoritative), fallback to time-based calculation
+    const timeStatus = getFixtureStatus(f);
+    const status: 'upcoming' | 'live' | 'finished' = (!isDemo && apiLiveMatch) ? 'live' : timeStatus;
+
+    // Scores from live API match if available (live mode only)
+    let homeScore: number | undefined;
+    let awayScore: number | undefined;
+    if (!isDemo && apiLiveMatch) {
+      homeScore = apiLiveMatch.score?.home ?? apiLiveMatch.Score?.Home ?? apiLiveMatch.HomeScore;
+      awayScore = apiLiveMatch.score?.away ?? apiLiveMatch.Score?.Away ?? apiLiveMatch.AwayScore;
+    }
+    // For finished matches, overlay real final scores fetched from TxLINE batch endpoint
+    if (!isDemo && status === 'finished' && finishedScores[f.fixtureId]) {
+      homeScore = finishedScores[f.fixtureId].home;
+      awayScore = finishedScores[f.fixtureId].away;
     }
 
     return {
-      fixtureId: f.id || f.fixtureId || f._id || Math.random().toString(),
-      kickoffAt: f.kickoff_time || f.date || f.kickoffAt || new Date().toISOString(),
-      homeTeam: f.homeTeam?.name || f.home_team?.name || f.homeTeam || 'Home',
-      homeFlag: f.homeTeam?.code ? '🏳️' : '🏳️',
-      awayTeam: f.awayTeam?.name || f.away_team?.name || f.awayTeam || 'Away',
-      awayFlag: f.awayTeam?.code ? '🏳️' : '🏳️',
-      status: dynamicStatus,
+      fixtureId: f.fixtureId,
+      kickoffAt: f.kickoffAt,
+      homeTeam: f.homeTeam,
+      homeFlag: f.homeFlag,
+      awayTeam: f.awayTeam,
+      awayFlag: f.awayFlag,
+      status,
       homeScore,
       awayScore,
     };
@@ -60,7 +112,10 @@ export default function ContestsPage() {
 
   const upcoming = mappedFixtures.filter((f) => f.status === 'upcoming');
   const live = mappedFixtures.filter((f) => f.status === 'live');
-  const finished = mappedFixtures.filter((f) => f.status === 'finished');
+  // Newest match first — most recently finished at the top
+  const finished = mappedFixtures
+    .filter((f) => f.status === 'finished')
+    .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
 
   if (!mounted) return null;
 
@@ -70,6 +125,28 @@ export default function ContestsPage() {
 
       <main style={{ padding: '48px 0 80px' }}>
         <div className="container">
+          {/* DEMO mode banner */}
+          {isDemo && (
+            <div style={{ marginBottom: 16, padding: '12px 16px', background: 'rgba(255,170,0,0.08)', border: '1px solid rgba(255,170,0,0.35)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.1rem' }}>🎮</span>
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffaa00', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Demo Mode Active</div>
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Match data is simulated. Switch to Live Mode to play with real-time WC2026 data.</div>
+                </div>
+              </div>
+              <SwitchToLiveButton />
+            </div>
+          )}
+
+          {/* TxLINE status banner — live mode only */}
+          {!isDemo && (
+            <div style={{ marginBottom: 16, padding: '8px 16px', background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.25)', borderRadius: 6, fontSize: '0.75rem', color: '#00e87a', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
+              TxLINE API connected ✓ — {WC2026_FIXTURES.length} World Cup 2026 fixtures · live scores from API {liveFixtures.length > 0 ? `(${liveFixtures.length} live now)` : ''}
+            </div>
+          )}
+
           {/* Header */}
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -122,96 +199,91 @@ export default function ContestsPage() {
                 {/* 1. Live Matches Cards (Left) */}
                 <div style={{ flex: '1 1 35%', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {live.map((fixture) => (
-                    <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} />
+                    <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} />
                   ))}
                 </div>
 
-                {/* 2. Live Match Events (Middle) */}
-                <div style={{ flex: '1 1 35%', minWidth: 300 }}>
-                  <div className="ro-window" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #ea6b6b 0%, #b71c1c 100%)' }}>
-                      <span>⚡ Live Updates</span>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.9 }}>🔴 LIVE</span>
-                    </div>
-                    <div className="ro-window__body" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto' }}>
-                      {[
-                        { id: '1', minute: 42, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', type: 'goal', points: 10, description: 'GOAL! Messi scores a brilliant free kick!' },
-                        { id: '2', minute: 38, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', type: 'shot_on_target', points: 2, description: 'Mbappé shoots but it is saved.' },
-                        { id: '3', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'Martínez', type: 'goalkeeper_save', points: 1, description: 'Incredible save by Martínez!' },
-                        { id: '4', minute: 32, team: 'France', teamFlag: '🇫🇷', player: 'Tchouaméni', type: 'tackle', points: 1, description: 'Crucial tackle in the midfield.' },
-                        { id: '5', minute: 28, team: 'Argentina', teamFlag: '🇦🇷', player: 'Di María', type: 'assist', points: 6, description: 'Beautiful cross into the box!' },
-                        { id: '6', minute: 21, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', type: 'yellow_card', points: -2, description: 'Yellow card for a late challenge.' },
-                        { id: '7', minute: 14, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', type: 'clean_sheet', points: 4, description: 'Solid defensive work so far.' },
-                        { id: '8', minute: 7, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', type: 'offside', points: -1, description: 'Flag is up! Giroud caught offside.' },
-                        { id: '9', minute: 1, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Kick Off! Argentina vs France has begun!' },
-                      ].map((event) => (
-                        <div key={event.id} style={{ display: 'flex', gap: 12 }}>
-                          <div style={{ width: 28, fontSize: '0.8rem', fontWeight: 700, color: '#94a3b8', paddingTop: 2 }}>
-                            {event.minute}'
-                          </div>
-                          <div style={{ 
-                            flex: 1, 
-                            background: 'rgba(0,0,0,0.3)', 
-                            padding: '10px 12px', 
-                            border: '1px solid #4f6382',
-                            boxShadow: 'inset 0 1px 1px rgba(0, 0, 0, 0.5)'
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <strong style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>{event.teamFlag} {event.player}</strong>
-                              {event.points !== 0 && (
-                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: event.points > 0 ? '#00e87a' : '#ff4d6d' }}>
-                                  {event.points > 0 ? '+' : ''}{event.points} pts
-                                </span>
-                              )}
+                {/* 2 & 3. Demo-only side panels — fake events and fake leaderboard */}
+                {isDemo && (
+                  <>
+                    {/* Demo Live Match Events (Middle) */}
+                    <div style={{ flex: '1 1 35%', minWidth: 300 }}>
+                      <div className="ro-window" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #ea6b6b 0%, #b71c1c 100%)' }}>
+                          <span>⚡ Live Updates</span>
+                          <span style={{ fontSize: '0.7rem', opacity: 0.9 }}>🟡 SIMULATED</span>
+                        </div>
+                        <div className="ro-window__body" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto' }}>
+                          {[
+                            { id: '1', minute: 42, teamFlag: '🇦🇷', player: 'Messi', points: 10, description: 'GOAL! Messi curls a stunning shot into the top corner!' },
+                            { id: '2', minute: 38, teamFlag: '🇦🇷', player: 'Messi', points: 0, description: 'TxLINE: HighDanger possession for Argentina in the box!' },
+                            { id: '3', minute: 33, teamFlag: '🇦🇷', player: 'Mac Allister', points: 1, description: 'Argentina dominant in possession. Mac Allister controls midfield.' },
+                            { id: '4', minute: 28, teamFlag: '🇫🇷', player: 'Mbappé', points: 3, description: 'Mbappé is brought down in the box — penalty awarded!' },
+                            { id: '5', minute: 21, teamFlag: '🇫🇷', player: 'Griezmann', points: -2, description: 'Yellow card for Griezmann after a late challenge.' },
+                            { id: '6', minute: 12, teamFlag: '🇫🇷', player: 'Mbappé', points: 10, description: 'GOAL! Mbappé fires into the top corner on the counter!' },
+                            { id: '7', minute: 8, teamFlag: '🇫🇷', player: 'Mbappé', points: 0, description: 'TxLINE: HighDanger — France pressing high, Mbappé causing havoc.' },
+                            { id: '8', minute: 3, teamFlag: '🇫🇷', player: 'Dembélé', points: 0, description: 'Corner kick awarded to France.' },
+                            { id: '9', minute: 1, teamFlag: '', player: '', points: 0, description: 'Kick Off! Argentina vs France has begun!' },
+                          ].map((event) => (
+                            <div key={event.id} style={{ display: 'flex', gap: 12 }}>
+                              <div style={{ width: 28, fontSize: '0.8rem', fontWeight: 700, color: '#94a3b8', paddingTop: 2 }}>
+                                {event.minute}&apos;
+                              </div>
+                              <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 12px', border: '1px solid #4f6382', boxShadow: 'inset 0 1px 1px rgba(0, 0, 0, 0.5)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                  <strong style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>{event.teamFlag} {event.player}</strong>
+                                  {event.points !== 0 && (
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: event.points > 0 ? '#00e87a' : '#ff4d6d' }}>
+                                      {event.points > 0 ? '+' : ''}{event.points} pts
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{event.description}</div>
+                              </div>
                             </div>
-                            <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{event.description}</div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* 3. Live Leaderboard (Right) */}
-                <div style={{ flex: '1 1 25%', minWidth: 260 }}>
-                  <div className="ro-window" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)' }}>
-                      <span>🏆 Live Leaderboard</span>
-                    </div>
-                    <div className="ro-window__body" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto' }}>
-                      {[
-                        { rank: 1, user: 'CryptoKing', pts: 86, prize: '1.2' },
-                        { rank: 2, user: 'SatoshiStriker', pts: 78, prize: '0.85' },
-                        { rank: 3, user: 'Web3Winner', pts: 72, prize: '0.6' },
-                        { rank: 4, user: 'BlockBetter', pts: 68, prize: '0.45' },
-                        { rank: 5, user: 'NFTNinja', pts: 64, prize: '0.35' },
-                        { rank: 6, user: 'SolanaSurfer', pts: 59, prize: '0.2' },
-                        { rank: 7, user: 'DefiDon', pts: 55, prize: '0.1' },
-                        { rank: 8, user: 'TokenTactician', pts: 51, prize: '0.1' },
-                        { rank: 9, user: 'MetaManager', pts: 48, prize: '0.05' },
-                        { rank: 10, user: 'AlphaApe', pts: 45, prize: '0.05' },
-                        { rank: 11, user: 'BetBros', pts: 42, prize: '-' },
-                        { rank: 12, user: 'ChainChamp', pts: 40, prize: '-' },
-                      ].map((entry) => (
-                        <div key={entry.rank} style={{ 
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                          background: 'rgba(0,0,0,0.3)', padding: '10px 12px', 
-                          border: '1px solid #4f6382',
-                          boxShadow: 'inset 0 1px 1px rgba(0, 0, 0, 0.5)'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontWeight: 800, color: entry.rank === 1 ? '#ffd700' : entry.rank === 2 ? '#c0c0c0' : '#cd7f32' }}>#{entry.rank}</span>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>{entry.user}</span>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                            <span style={{ fontSize: '0.8rem', color: '#00e87a' }}>{entry.pts} pts</span>
-                            <span style={{ fontSize: '0.75rem', color: '#ffd700', fontWeight: 700 }}>{entry.prize} SOL</span>
-                          </div>
+                    {/* Demo Live Leaderboard (Right) */}
+                    <div style={{ flex: '1 1 25%', minWidth: 260 }}>
+                      <div className="ro-window" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)' }}>
+                          <span>🏆 Live Leaderboard</span>
+                          <span style={{ fontSize: '0.65rem', opacity: 0.75 }}>SIMULATED</span>
                         </div>
-                      ))}
+                        <div className="ro-window__body" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto' }}>
+                          {[
+                            { rank: 1, user: 'CryptoKing', pts: 86, prize: '1.2' },
+                            { rank: 2, user: 'SatoshiStriker', pts: 78, prize: '0.85' },
+                            { rank: 3, user: 'Web3Winner', pts: 72, prize: '0.6' },
+                            { rank: 4, user: 'BlockBetter', pts: 68, prize: '0.45' },
+                            { rank: 5, user: 'NFTNinja', pts: 64, prize: '0.35' },
+                            { rank: 6, user: 'SolanaSurfer', pts: 59, prize: '0.2' },
+                            { rank: 7, user: 'DefiDon', pts: 55, prize: '0.1' },
+                            { rank: 8, user: 'TokenTactician', pts: 51, prize: '0.1' },
+                            { rank: 9, user: 'MetaManager', pts: 48, prize: '0.05' },
+                            { rank: 10, user: 'AlphaApe', pts: 45, prize: '0.05' },
+                            { rank: 11, user: 'BetBros', pts: 42, prize: '-' },
+                            { rank: 12, user: 'ChainChamp', pts: 40, prize: '-' },
+                          ].map((entry) => (
+                            <div key={entry.rank} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '10px 12px', border: '1px solid #4f6382', boxShadow: 'inset 0 1px 1px rgba(0, 0, 0, 0.5)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontWeight: 800, color: entry.rank === 1 ? '#ffd700' : entry.rank === 2 ? '#c0c0c0' : '#cd7f32' }}>#{entry.rank}</span>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#e2e8f0' }}>{entry.user}</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                <span style={{ fontSize: '0.8rem', color: '#00e87a' }}>{entry.pts} pts</span>
+                                <span style={{ fontSize: '0.75rem', color: '#ffd700', fontWeight: 700 }}>{entry.prize} SOL</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </section>
           )}
@@ -222,7 +294,7 @@ export default function ContestsPage() {
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 20 }}>Upcoming</h2>
               <div className="grid-contests">
                 {upcoming.map((fixture) => (
-                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} />
+                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} />
                 ))}
               </div>
             </section>
@@ -236,7 +308,13 @@ export default function ContestsPage() {
               </h2>
               <div className="grid-contests">
                 {finished.map((fixture) => (
-                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} />
+                  <ContestCard
+                    key={fixture.fixtureId}
+                    fixture={fixture}
+                    onSelect={setSelectedFixture}
+                    counts={contestCounts[fixture.fixtureId]}
+                    onViewResult={finishedScores[fixture.fixtureId]?.espnId ? openMatchResult : undefined}
+                  />
                 ))}
               </div>
             </section>
@@ -263,42 +341,159 @@ export default function ContestsPage() {
               <button onClick={() => setSelectedFixture(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
             </div>
             <div className="ro-window__body" style={{ padding: 24 }}>
-              <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>{selectedFixture.homeTeam} vs {selectedFixture.awayTeam}</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Choose a prize structure to compete in</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: 4 }}>Choose a prize structure to compete in</p>
               </div>
-              
+
+              {/* Demo mode notice inside modal */}
+              {isDemo && (
+                <div style={{ marginBottom: 16, padding: '8px 12px', background: 'rgba(255,170,0,0.07)', border: '1px solid rgba(255,170,0,0.25)', borderRadius: 6, fontSize: '0.75rem', color: 'rgba(255,170,0,0.85)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>🎮</span>
+                  <span>Demo Mode — this lineup is a simulation and requires no SOL. <button onClick={() => setSelectedFixture(null)} style={{ background: 'none', border: 'none', color: '#ffaa00', cursor: 'pointer', fontWeight: 700, padding: 0, textDecoration: 'underline', fontSize: 'inherit' }}>Switch to Live</button> to play for real.</span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {[
-                  { id: 'top3', title: 'Top 3 Classic', desc: '50% / 30% / 20% prize split. The standard competitive mode.', entry: '0.1 SOL', icon: '🏆', participants: 42 },
-                  { id: '5050', title: 'Double Up (50/50)', desc: 'Top 50% of the leaderboard double their entry fee.', entry: '0.1 SOL', icon: '⚖️', participants: 87 },
-                  { id: 'wta', title: 'Winner Takes All', desc: '1st place gets 100% of the prize pool. High risk, high reward.', entry: '0.1 SOL', icon: '💀', participants: 15 },
-                ].map(ct => (
-                  <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}`} key={ct.id} style={{ textDecoration: 'none' }}>
-                    <div className="card card--hoverable" style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'center', background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>
-                      <div style={{ fontSize: '2rem' }}>{ct.icon}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{ct.title}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{ct.desc}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entry</div>
-                          <div style={{ fontWeight: 700, color: 'var(--color-accent)' }}>{ct.entry}</div>
+                  { id: 'top3', title: 'Top 3 Classic', desc: '50% / 30% / 20% prize split for the top 3 managers.', icon: '🏆' },
+                  { id: '5050', title: 'Double Up (50/50)', desc: 'Top 50% of the leaderboard doubles their entry fee.', icon: '⚖️' },
+                  { id: 'wta', title: 'Winner Takes All', desc: 'Rank 1 takes 100% of the prize pool. High risk, high reward.', icon: '💀' },
+                ].map(ct => {
+                  const fixtureCount = contestCounts[selectedFixture.fixtureId];
+                  const totalPlayers = fixtureCount?.total ?? 0;
+                  const showCount = !isDemo && totalPlayers > 0;
+                  return (
+                    <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}`} key={ct.id} style={{ textDecoration: 'none' }}>
+                      <div className="card card--hoverable" style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'center', background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }}>
+                        <div style={{ fontSize: '2rem' }}>{ct.icon}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{ct.title}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{ct.desc}</div>
                         </div>
-                        <div style={{ width: 80, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', marginBottom: 2 }}>
-                            Lobby: {ct.participants}/100
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                          <div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entry</div>
+                            <div style={{ fontWeight: 700, color: 'var(--color-accent)' }}>0.1 SOL</div>
                           </div>
-                          <div style={{ width: '100%', height: 4, background: 'var(--bg-glass)', borderRadius: 999, overflow: 'hidden' }}>
-                            <div style={{ width: `${ct.participants}%`, height: '100%', background: 'var(--color-primary)', borderRadius: 999 }} />
+                          <div style={{ fontSize: '0.65rem', color: showCount ? 'var(--text-secondary)' : 'var(--text-muted)', textAlign: 'right' }}>
+                            {showCount ? `${totalPlayers} joined` : isDemo ? 'Demo mode' : 'Be first!'}
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  );
+                })}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MATCH RESULT MODAL */}
+      {matchResult && (
+        <div
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setMatchResult(null)}
+        >
+          <div
+            className="ro-window"
+            style={{ width: '100%', maxWidth: 520, maxHeight: '85vh', display: 'flex', flexDirection: 'column', animation: 'slide-in-bottom 0.2s ease-out' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #4f5f70 0%, #2c353f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🏁 Match Result</span>
+              <button onClick={() => setMatchResult(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}>×</button>
+            </div>
+
+            <div className="ro-window__body" style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              {/* Score header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '2rem', marginBottom: 4 }}>{matchResult.fixture.homeFlag}</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{matchResult.fixture.homeTeam}</div>
+                </div>
+                <div style={{ textAlign: 'center', padding: '0 16px' }}>
+                  <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2.5rem', letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
+                    {matchResult.fixture.homeScore ?? '?'} — {matchResult.fixture.awayScore ?? '?'}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Full Time</div>
+                </div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <div style={{ fontSize: '2rem', marginBottom: 4 }}>{matchResult.fixture.awayFlag}</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{matchResult.fixture.awayTeam}</div>
+                </div>
+              </div>
+
+              {/* Loading */}
+              {matchResult.loading && (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  Loading match details...
+                </div>
+              )}
+
+              {/* No data */}
+              {!matchResult.loading && !matchResult.data && (
+                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  Match details not available.
+                </div>
+              )}
+
+              {/* Events */}
+              {!matchResult.loading && matchResult.data && (
+                <>
+                  {matchResult.data.events.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      No key events recorded.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                      {matchResult.data.events.map((ev, i) => {
+                        const isHome = ev.team === matchResult.fixture.homeTeam ||
+                          matchResult.fixture.homeTeam.toLowerCase().includes(ev.team.toLowerCase()) ||
+                          ev.team.toLowerCase().includes(matchResult.fixture.homeTeam.toLowerCase());
+                        const icon =
+                          ev.type === 'goal' ? '⚽' :
+                          ev.type === 'own_goal' ? '⚽' :
+                          ev.type === 'penalty' ? '⚽ (P)' :
+                          ev.type === 'yellow_card' ? '🟨' :
+                          ev.type === 'red_card' ? '🟥' :
+                          ev.type === 'yellow_red_card' ? '🟨🟥' :
+                          ev.type === 'sub' ? '🔄' : '•';
+                        const label =
+                          ev.type === 'own_goal' ? 'Own Goal' :
+                          ev.type === 'penalty' ? 'Penalty' :
+                          ev.type === 'yellow_card' ? 'Yellow Card' :
+                          ev.type === 'red_card' ? 'Red Card' :
+                          ev.type === 'yellow_red_card' ? '2nd Yellow' :
+                          ev.type === 'sub' ? 'Sub' : '';
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', width: 32, flexShrink: 0, textAlign: 'right' }}>{ev.minute}&apos;</span>
+                            <span style={{ fontSize: '1rem', flexShrink: 0 }}>{icon}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {isHome ? matchResult.fixture.homeFlag : matchResult.fixture.awayFlag}
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.player}</span>
+                                {label && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>({label})</span>}
+                              </div>
+                              {ev.assist && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 1 }}>Assist: {ev.assist}</div>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Venue */}
+                  {matchResult.data.venue && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 12 }}>
+                      📍 {matchResult.data.venue}{matchResult.data.attendance ? ` · ${matchResult.data.attendance} attendance` : ''}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -307,15 +502,57 @@ export default function ContestsPage() {
   );
 }
 
-function ContestCard({ fixture, onSelect }: { fixture: DemoFixture, onSelect?: (f: DemoFixture) => void }) {
+function SwitchToLiveButton() {
+  const { appMode, toggleAppMode, apiToken, isSubscribing, subscribeAndActivate } = useTxLine();
+  const { connected } = useWallet();
+  const [err, setErr] = useState('');
+
+  const handleSwitch = async () => {
+    if (appMode === 'live') return;
+    if (apiToken) { toggleAppMode(); return; }
+    if (!connected) { setErr('Connect wallet first'); setTimeout(() => setErr(''), 3000); return; }
+    try {
+      await subscribeAndActivate();
+      toggleAppMode();
+    } catch {
+      setErr('Failed — try again');
+      setTimeout(() => setErr(''), 3000);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      {err && <span style={{ fontSize: '0.75rem', color: '#ff6b6b' }}>{err}</span>}
+      <button
+        onClick={handleSwitch}
+        disabled={isSubscribing}
+        style={{
+          padding: '7px 16px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 700,
+          background: 'linear-gradient(135deg, #ffaa00, #ff8800)', color: '#1a1008',
+          border: 'none', cursor: isSubscribing ? 'wait' : 'pointer',
+          opacity: isSubscribing ? 0.7 : 1, whiteSpace: 'nowrap',
+          boxShadow: '0 2px 8px rgba(255,170,0,0.3)',
+        }}
+      >
+        {isSubscribing ? 'Connecting...' : '⚡ Switch to Live Mode'}
+      </button>
+    </div>
+  );
+}
+
+function ContestCard({ fixture, onSelect, counts, onViewResult }: {
+  fixture: DemoFixture;
+  onSelect?: (f: DemoFixture) => void;
+  counts?: { total: number; prizePool: number };
+  onViewResult?: (f: DemoFixture) => void;
+}) {
   const kickoff = new Date(fixture.kickoffAt);
   const isLive = fixture.status === 'live';
   const isFinished = fixture.status === 'finished';
   const isUpcoming = fixture.status === 'upcoming';
 
-  // Simulated participant count & prize pool
-  const participants = isLive ? 47 : isFinished ? 83 : Math.floor(Math.random() * 30) + 10;
-  const prizePool = (participants * 0.1).toFixed(1);
+  const participants = counts?.total ?? 0;
+  const prizePool = counts?.prizePool?.toFixed(2) ?? '0.00';
 
   return (
     <div
@@ -392,7 +629,7 @@ function ContestCard({ fixture, onSelect }: { fixture: DemoFixture, onSelect?: (
                 color: 'var(--text-secondary)',
                 letterSpacing: '0.08em',
               }}>
-                {fixture.homeScore} — {fixture.awayScore}
+                {fixture.homeScore ?? '?'} — {fixture.awayScore ?? '?'}
               </div>
             ) : (
               <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', color: 'var(--text-muted)' }}>
@@ -427,16 +664,16 @@ function ContestCard({ fixture, onSelect }: { fixture: DemoFixture, onSelect?: (
           marginBottom: 16,
         }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.3rem', color: 'var(--color-primary)' }}>
-              {prizePool}
+            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.3rem', color: participants > 0 ? 'var(--color-primary)' : 'var(--text-muted)' }}>
+              {participants > 0 ? `${prizePool} SOL` : '–'}
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Prize Pool
             </div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.3rem', color: 'var(--text-primary)' }}>
-              {participants}
+            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.3rem', color: participants > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              {participants > 0 ? participants : '–'}
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Players
@@ -444,10 +681,10 @@ function ContestCard({ fixture, onSelect }: { fixture: DemoFixture, onSelect?: (
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.3rem', color: 'var(--color-accent)' }}>
-              0.1
+              0.1 SOL
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Entry SOL
+              Entry Fee
             </div>
           </div>
         </div>
@@ -456,37 +693,47 @@ function ContestCard({ fixture, onSelect }: { fixture: DemoFixture, onSelect?: (
 
         {/* CTA */}
         {isUpcoming && (
-          <button
-            onClick={() => onSelect?.(fixture)}
-            className="btn btn--primary btn--full"
-            id={`join-${fixture.fixtureId}`}
-          >
-            Build Lineup →
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => onSelect?.(fixture)}
+              className="btn btn--primary"
+              id={`join-${fixture.fixtureId}`}
+              style={{ flex: 1 }}
+            >
+              Build Lineup →
+            </button>
+            <Link
+              href={`/live/${fixture.fixtureId}`}
+              className="btn btn--ghost"
+              id={`watch-${fixture.fixtureId}`}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              👁 Watch
+            </Link>
+          </div>
         )}
         {isLive && (
           <div style={{ display: 'flex', gap: 8 }}>
             <Link href={`/live/${fixture.fixtureId}`} className="btn btn--danger btn--full" id={`live-${fixture.fixtureId}`}>
               🔴 Watch Live
             </Link>
-            <button 
-              onClick={() => onSelect?.(fixture)} 
-              className="btn btn--secondary" 
-              id={`join-live-${fixture.fixtureId}`} 
+            <button
+              onClick={() => onSelect?.(fixture)}
+              className="btn btn--secondary"
+              id={`join-live-${fixture.fixtureId}`}
               style={{ whiteSpace: 'nowrap' }}
             >
               Join
             </button>
           </div>
         )}
-        {isFinished && (
-          <Link
-            href={`/contest/${fixture.fixtureId}`}
-            className="btn btn--ghost btn--full"
-            id={`results-${fixture.fixtureId}`}
+        {isFinished && onViewResult && (
+          <button
+            onClick={() => onViewResult(fixture)}
+            className="btn btn--secondary btn--full"
           >
-            View Results
-          </Link>
+            📊 Match Details
+          </button>
         )}
       </div>
     </div>

@@ -39,7 +39,10 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    // Check if the user has already seen the tutorial
+    // Check if the user has already seen the tutorial or is on mobile
+    if (window.innerWidth < 768) {
+      return;
+    }
     const hasSeenTutorial = localStorage.getItem('hasSeenOddsDraftTutorial');
     if (!hasSeenTutorial) {
       setTutorialStep(1);
@@ -312,16 +315,47 @@ export default function HomePage() {
               </div>
             </div>
             
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 12 }}>
-              <div style={{ 
-                color: 'rgba(26,16,8,0.5)', 
-                fontSize: '0.9rem', 
-                fontWeight: 800, 
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (zoomedElementId) {
+                    const el = document.getElementById(zoomedElementId);
+                    if (el) { el.style.position=''; el.style.zIndex=''; el.style.transition=''; el.style.transform=''; el.style.background=''; el.style.pointerEvents=''; el.style.boxShadow=''; }
+                  }
+                  localStorage.setItem('hasSeenOddsDraftTutorial', 'true');
+                  setTutorialStep(0);
+                  setZoomedElementId(null);
+                  setWrapperTransform('none');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                style={{
+                  background: 'transparent',
+                  border: '2px solid rgba(26,16,8,0.25)',
+                  color: 'rgba(26,16,8,0.55)',
+                  padding: '6px 16px',
+                  borderRadius: 4,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.background='rgba(26,16,8,0.08)'; e.currentTarget.style.color='rgba(26,16,8,0.8)'; }}
+                onMouseOut={(e) => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='rgba(26,16,8,0.55)'; }}
+              >
+                Skip Tutorial ✕
+              </button>
+              <div style={{
+                color: 'rgba(26,16,8,0.5)',
+                fontSize: '0.9rem',
+                fontWeight: 800,
                 textTransform: 'uppercase',
                 animation: 'blink-text 1.5s infinite',
                 letterSpacing: '0.05em'
               }}>
-                Click anywhere to continue 
+                Click anywhere to continue
                 <span style={{ marginLeft: 8 }}>({tutorialStep}/15)</span>
               </div>
             </div>
@@ -525,7 +559,7 @@ function HeroSection() {
         </p>
 
         {/* CTA Buttons */}
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div className="hero-ctas">
           <Link href="/contests" className="btn-hero-play" id="hero-play-btn">
             🏆 Play Now
           </Link>
@@ -574,8 +608,8 @@ function HeroSection() {
                 <svg viewBox="0 0 508.07 398.17" width="14" height="12" style={{ display: 'block' }}>
                   <defs>
                     <linearGradient id="solana-gradient-final" x1="463" y1="205.16" x2="182.39" y2="742.62" gradientTransform="translate(0 -198)" gradientUnits="userSpaceOnUse">
-                      <stop offset="0" stop-color="#00ffa3"/>
-                      <stop offset="1" stop-color="#dc1fff"/>
+                      <stop offset="0" stopColor="#00ffa3"/>
+                      <stop offset="1" stopColor="#dc1fff"/>
                     </linearGradient>
                   </defs>
                   <path fill="url(#solana-gradient-final)" d="M84.53,358.89A16.63,16.63,0,0,1,96.28,354H501.73a8.3,8.3,0,0,1,5.87,14.18l-80.09,80.09a16.61,16.61,0,0,1-11.75,4.86H10.31A8.31,8.31,0,0,1,4.43,439Z" transform="translate(-1.98 -55)"/>
@@ -1010,17 +1044,11 @@ function Footer() {
       color: 'var(--text-muted)',
     }}>
       <div className="container">
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 16,
-        }}>
+        <div className="footer-inner">
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img src="/Logo OddsDraft.svg" alt="OddsDraft Logo" style={{ height: '48px', width: 'auto', mixBlendMode: 'screen' }} />
+            <img src="/Logo OddsDraft.svg" alt="OddsDraft Logo" className="footer-logo" />
           </div>
-          <div style={{ fontSize: '0.8rem' }}>
+          <div className="footer-text">
             Powered by{' '}
             <a
               href="https://txline-docs.txodds.com"
@@ -1031,9 +1059,9 @@ function Footer() {
               TxODDS
             </a>
             {' '}·{' '}
-            Built on Solana
+            Solana
             {' '}·{' '}
-            World Cup 2026 Hackathon
+            World Cup '26
           </div>
         </div>
       </div>

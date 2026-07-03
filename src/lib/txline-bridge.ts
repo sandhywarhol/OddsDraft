@@ -1,0 +1,365 @@
+// TxLINE Bridge — OddsDraft
+// Resolves TxLINE fixture IDs, maps player IDs, and converts raw API events
+// into the internal event format used by the live page.
+
+import axios from 'axios';
+import { WORLD_CUP_PLAYERS, getPlayerById } from './players';
+import { mapEventToFantasyType } from './txodds';
+
+const IS_DEVNET = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
+
+// Browser calls go through our proxy to avoid CORS; server-side calls go direct
+const TXLINE_API_BASE = typeof window !== 'undefined'
+  ? '/api/txline'
+  : IS_DEVNET ? 'https://txline-dev.txodds.com' : 'https://txline.txodds.com';
+
+// ── TxLINE API types ─────────────────────────────────────────────────────────
+
+export interface TxLineFixture {
+  FixtureId: string;
+  Participant1: string; // home team
+  Participant2: string; // away team
+  StartTime: string;
+  CompetitionId?: number;
+  CompetitionName?: string;
+  Status?: string;
+}
+
+export interface TxLineLineupPlayer {
+  PlayerId: string | number;
+  PlayerName: string;
+  Participant?: number; // 1 = home, 2 = away
+  TeamId?: number | string;
+  Starter?: boolean;
+  Position?: string;
+  JerseyNumber?: number;
+}
+
+export interface TxLineRawEvent {
+  type: string;
+  minute: number;
+  period: string;
+  participant: number; // 1 = home, 2 = away
+  playerId?: string | number;
+  playerName?: string;
+  assistPlayerId?: string | number;
+  assistPlayerName?: string;
+  goalType?: string; // 'Head' | 'Shot' | 'OwnGoal' | 'Other'
+}
+
+export interface TxLineScoreUpdate {
+  seq?: number;
+  ts?: number;
+  fixtureId?: string;
+  gameState?: string;  // 'FirstHalf' | 'SecondHalf' | 'HalfTime' | 'ExtraTime' | 'Penalties' | 'FullTime'
+  score?: { home: number; away: number };
+  events?: TxLineRawEvent[];
+}
+
+// ── Converted event (matches LIVE_EVENTS shape in live/replay pages) ─────────
+
+export interface LiveEvent {
+  id: string;
+  minute: number;
+  team: string;
+  teamFlag: string;
+  player: string;
+  playerId: string;       // our internal ID (e.g. 'arg-messi')
+  type: string;           // our internal event type
+  points: number;
+  description: string;
+  goalType?: string;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Normalize for fuzzy matching: lowercase, remove accents and punctuation
+function norm(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Base points by event type (mirrors POINT_MAP + calculateEventPoints defaults)
+const BASE_POINTS: Record<string, number> = {
+  goal: 10, own_goal: -6, assist: 6,
+  goalkeeper_save: 1, penalty_save: 5,
+  yellow_card: -2, red_card: -5,
+  penalty_won: 3, penalty_conceded: -3,
+  penalty_missed: -3, penalty_scored: 5,
+  penalty_missed_shootout: -3,
+  sub_appearance: 1, starting_xi: 2, extra_time: 2,
+  goal_conceded: -2, substitution: 0, corner_kick: 0,
+  var_review: 0, danger_attack: 0, possession_bonus: 1,
+};
+
+// ── 1. Fixture resolution ────────────────────────────────────────────────────
+
+// Fetches the TxLINE fixture list and finds the one matching homeTeam/awayTeam.
+// Returns the TxLINE FixtureId string, or null if not found / API error.
+export async function resolveTxLineFixtureId(
+  apiToken: string,
+  homeTeam: string,
+  awayTeam: string,
+  guestJwt?: string | null
+): Promise<string | null> {
+  const headers: Record<string, string> = { 'X-Api-Token': apiToken };
+  if (guestJwt) headers['Authorization'] = `Bearer ${guestJwt}`;
+  try {
+    const res = await axios.get(`${TXLINE_API_BASE}/api/soccer/v2/fixtures`, {
+      headers,
+      timeout: 10000,
+    });
+
+    const fixtures: TxLineFixture[] = Array.isArray(res.data) ? res.data : (res.data?.fixtures ?? []);
+    const normHome = norm(homeTeam);
+    const normAway = norm(awayTeam);
+
+    const match = fixtures.find(f => {
+      const p1 = norm(f.Participant1);
+      const p2 = norm(f.Participant2);
+      // Accept if either side contains or is contained by our name
+      const homeMatch = p1.includes(normHome) || normHome.includes(p1);
+      const awayMatch = p2.includes(normAway) || normAway.includes(p2);
+      return homeMatch && awayMatch;
+    });
+
+    if (!match) {
+      console.warn(`[TxLineBridge] No fixture found for ${homeTeam} vs ${awayTeam}`);
+    }
+    return match?.FixtureId ?? null;
+  } catch (err) {
+    console.error('[TxLineBridge] resolveTxLineFixtureId error:', err);
+    return null;
+  }
+}
+
+// ── 2. Player ID mapping ─────────────────────────────────────────────────────
+
+// Try to match a TxLINE player name to one of our internal player IDs.
+// Strategy: exact match → last-name match → substring match.
+function matchPlayerName(txlineName: string, teamName: string): string | null {
+  const normTx = norm(txlineName);
+  const candidates = WORLD_CUP_PLAYERS.filter(
+    p => norm(p.team) === norm(teamName) || norm(p.team).includes(norm(teamName)) || norm(teamName).includes(norm(p.team))
+  );
+
+  // 1. Exact full name
+  let hit = candidates.find(p => norm(p.name) === normTx);
+  if (hit) return hit.id;
+
+  // 2. Last name match (>3 chars to avoid false positives)
+  const txLast = normTx.split(' ').pop() ?? normTx;
+  if (txLast.length > 3) {
+    hit = candidates.find(p => {
+      const ourLast = norm(p.name).split(' ').pop() ?? '';
+      return ourLast === txLast;
+    });
+    if (hit) return hit.id;
+  }
+
+  // 3. Any token overlap
+  const txTokens = normTx.split(' ').filter(t => t.length > 3);
+  hit = candidates.find(p => {
+    const ourTokens = norm(p.name).split(' ');
+    return txTokens.some(t => ourTokens.includes(t));
+  });
+  return hit?.id ?? null;
+}
+
+// Fetch TxLINE lineups for a fixture and return txlinePlayerId → our internal ID.
+export async function buildPlayerIdMap(
+  apiToken: string,
+  txlineFixtureId: string,
+  homeTeam: string,
+  awayTeam: string,
+  guestJwt?: string | null
+): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { 'X-Api-Token': apiToken };
+  if (guestJwt) headers['Authorization'] = `Bearer ${guestJwt}`;
+  try {
+    const res = await axios.get(
+      `${TXLINE_API_BASE}/api/soccer/v2/lineups/${txlineFixtureId}`,
+      { headers, timeout: 10000 }
+    );
+
+    // TxLINE may return { lineups: [...] } or a flat array
+    const players: TxLineLineupPlayer[] = Array.isArray(res.data)
+      ? res.data
+      : (res.data?.lineups ?? res.data?.players ?? []);
+
+    const map: Record<string, string> = {};
+
+    for (const p of players) {
+      if (!p.PlayerId || !p.PlayerName) continue;
+      const teamName = p.Participant === 1 ? homeTeam : awayTeam;
+      const ourId = matchPlayerName(p.PlayerName, teamName);
+      if (ourId) {
+        map[String(p.PlayerId)] = ourId;
+      }
+    }
+
+    return map;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    // 404 = fixture has no lineup data yet (normal for future/non-live matches)
+    if (status !== 404) {
+      console.error('[TxLineBridge] buildPlayerIdMap error:', err);
+    }
+    return {};
+  }
+}
+
+// ── 3. Event conversion ──────────────────────────────────────────────────────
+
+function describeEvent(type: string, player: string, team: string, minute: number): string {
+  const m = `${minute}'`;
+  switch (type) {
+    case 'goal':                    return `${m} GOAL! ${player} scores for ${team}!`;
+    case 'own_goal':                return `${m} Own goal by ${player} (${team})`;
+    case 'assist':                  return `${m} Assist from ${player} (${team})`;
+    case 'goalkeeper_save':         return `${m} Save by ${player} (${team})!`;
+    case 'penalty_save':            return `${m} PENALTY SAVED by ${player}!`;
+    case 'yellow_card':             return `${m} Yellow card — ${player} (${team})`;
+    case 'red_card':                return `${m} RED CARD — ${player} (${team})!`;
+    case 'penalty_won':             return `${m} Penalty won by ${player} (${team})`;
+    case 'penalty_missed':          return `${m} Penalty missed by ${player} (${team})`;
+    case 'penalty_scored':          return `${m} ${player} scores in the shootout!`;
+    case 'penalty_missed_shootout': return `${m} ${player} misses in the shootout!`;
+    case 'substitution':            return `${m} Substitution — ${player} on for ${team}`;
+    case 'sub_appearance':          return `${m} ${player} enters the pitch for ${team}`;
+    case 'corner_kick':             return `${m} Corner kick for ${team}`;
+    case 'var_review':              return `${m} VAR Review in progress`;
+    case 'extra_time':              return `${m} Extra time begins!`;
+    case 'goal_conceded':           return `${m} Goal conceded by ${player} (${team})`;
+    case 'danger_attack':           return `${m} ${team} in the DANGER zone!`;
+    default:                        return `${m} ${player} — ${type} (${team})`;
+  }
+}
+
+// Convert raw TxLINE score updates into LiveEvents.
+// seenSeqs: Set of sequence numbers already processed — updated in-place to deduplicate.
+export function convertTxLineUpdates(
+  updates: TxLineScoreUpdate[],
+  playerIdMap: Record<string, string>,
+  homeTeam: string,
+  awayTeam: string,
+  homeFlag: string,
+  awayFlag: string,
+  seenSeqs: Set<number>
+): LiveEvent[] {
+  const result: LiveEvent[] = [];
+
+  for (const update of updates) {
+    // Deduplicate by sequence number
+    if (update.seq !== undefined) {
+      if (seenSeqs.has(update.seq)) continue;
+      seenSeqs.add(update.seq);
+    }
+
+    const gameState = update.gameState;
+    const rawEvents = update.events ?? [];
+
+    // Synthesize gameState-level events (extra_time, etc.)
+    if (gameState === 'ExtraTime') {
+      result.push({
+        id: `gs-et-${update.seq ?? Date.now()}`,
+        minute: 90,
+        team: '', teamFlag: '', player: '',
+        playerId: '', type: 'extra_time', points: 2,
+        description: "Extra time begins!",
+      });
+    }
+
+    for (const raw of rawEvents) {
+      // Map to our fantasy event type
+      const fantasyType = mapEventToFantasyType(
+        {
+          type: raw.type,
+          minute: raw.minute,
+          period: raw.period,
+          participant: raw.participant,
+          playerId: String(raw.playerId ?? ''),
+          playerName: raw.playerName,
+          assistPlayerId: String(raw.assistPlayerId ?? ''),
+          assistPlayerName: raw.assistPlayerName,
+        },
+        gameState
+      );
+
+      if (!fantasyType) continue;
+
+      const isHome = raw.participant === 1;
+      const team = isHome ? homeTeam : awayTeam;
+      const teamFlag = isHome ? homeFlag : awayFlag;
+      const txPlayerId = String(raw.playerId ?? '');
+      const ourPlayerId = playerIdMap[txPlayerId] ?? '';
+      // Fall back to TxLINE name if no mapping found
+      const player = raw.playerName
+        || (ourPlayerId ? (getPlayerById(ourPlayerId)?.name ?? '') : '')
+        || 'Unknown';
+
+      const event: LiveEvent = {
+        id: `live-${update.seq ?? Date.now()}-${raw.type}-${raw.minute}-${txPlayerId}`,
+        minute: raw.minute,
+        team,
+        teamFlag,
+        player,
+        playerId: ourPlayerId,
+        type: fantasyType,
+        points: BASE_POINTS[fantasyType] ?? 0,
+        description: describeEvent(fantasyType, player, team, raw.minute),
+      };
+
+      if (raw.goalType) event.goalType = raw.goalType;
+      result.push(event);
+
+      // Synthesize a separate assist event when goal has assistPlayerId
+      if (
+        (fantasyType === 'goal' || fantasyType === 'penalty_scored') &&
+        raw.assistPlayerId
+      ) {
+        const aTxId = String(raw.assistPlayerId);
+        const aOurId = playerIdMap[aTxId] ?? '';
+        const aName = raw.assistPlayerName
+          || (aOurId ? (getPlayerById(aOurId)?.name ?? '') : '')
+          || 'Unknown';
+
+        result.push({
+          id: `live-assist-${update.seq ?? Date.now()}-${raw.minute}-${aTxId}`,
+          minute: raw.minute,
+          team,
+          teamFlag,
+          player: aName,
+          playerId: aOurId,
+          type: 'assist',
+          points: BASE_POINTS['assist'],
+          description: describeEvent('assist', aName, team, raw.minute),
+        });
+      }
+
+      // Synthesize goal_conceded for the opposing goalkeeper
+      if (fantasyType === 'goal') {
+        const oppTeam = isHome ? awayTeam : homeTeam;
+        const oppFlag = isHome ? awayFlag : homeFlag;
+        result.push({
+          id: `live-concede-${update.seq ?? Date.now()}-${raw.minute}`,
+          minute: raw.minute,
+          team: oppTeam,
+          teamFlag: oppFlag,
+          player: '',
+          playerId: '',
+          type: 'goal_conceded',
+          points: BASE_POINTS['goal_conceded'],
+          description: describeEvent('goal_conceded', 'Goalkeeper', oppTeam, raw.minute),
+        });
+      }
+    }
+  }
+
+  return result;
+}

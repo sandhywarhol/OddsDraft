@@ -1,7 +1,7 @@
 /* OddsDraft — Global Design System */
 /* Dark theme with electric green accents — football energy */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Bebas+Neue&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Bebas+Neue&family=Cinzel+Decorative:wght@700;900&display=swap');
 
 /* ============================================================
    CSS CUSTOM PROPERTIES — Design Tokens
@@ -96,6 +96,8 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 body {
@@ -113,6 +115,8 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   padding-top: 64px;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 /* ============================================================
@@ -1437,4 +1441,77 @@ a {
   pointer-events: none;
   z-index: 1;
 }
+
+.navbar__toggle {
+  display: none !important;
+}
+
+.hero-ctas {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .navbar__toggle {
+    display: inline-flex !important;
+  }
+  
+  .hero-ctas {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    gap: 12px;
+  }
+  
+  .hero-ctas > a,
+  .hero-ctas > button {
+    width: 100% !important;
+    text-align: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+}
+
+.footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footer-logo {
+  height: 48px;
+  width: auto;
+  mix-blend-mode: screen;
+}
+
+.footer-text {
+  font-size: 0.8rem;
+}
+
+@media (max-width: 768px) {
+  .footer-inner {
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    justify-content: space-between !important;
+  }
+  .footer-logo {
+    height: 20px !important;
+  }
+  .footer-text {
+    font-size: 0.58rem !important;
+    white-space: nowrap;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 

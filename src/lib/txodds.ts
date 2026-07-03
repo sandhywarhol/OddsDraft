@@ -184,15 +184,27 @@ export function parseSoccerEvents(updates: ScoreUpdate[]): SoccerEvent[] {
 }
 
 // Map TxODDS event type to fantasy event type
-export function mapEventToFantasyType(txoddsEvent: SoccerEvent): string | null {
+// All keys come directly from TxLINE dataSoccer field names (lowercased)
+export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: string): string | null {
+  const type = txoddsEvent.type.toLowerCase();
+
+  // Penalty shootout goals and misses — distinguished by gameState
+  if (type === 'goal' && gameState === 'Penalties') return 'penalty_scored';
+  if (type === 'penaltymiss' && gameState === 'Penalties') return 'penalty_missed_shootout';
+
   const map: Record<string, string> = {
-    goal: 'goal',
-    yellowcard: 'yellow_card',
-    redcard: 'red_card',
-    owngoal: 'own_goal',
-    penaltysave: 'penalty_save',
-    save: 'goalkeeper_save',
-    assist: 'assist',
+    goal:         'goal',
+    yellowcard:   'yellow_card',
+    redcard:      'red_card',
+    owngoal:      'own_goal',
+    substitution: 'substitution',
+    penaltysave:  'penalty_save',
+    save:         'goalkeeper_save',
+    assist:       'assist',
+    corner:       'corner_kick',
+    var:          'var_review',
+    penalty:      'penalty_won',     // attacker's perspective
+    penaltymiss:  'penalty_missed',
   };
-  return map[txoddsEvent.type.toLowerCase()] || null;
+  return map[type] || null;
 }

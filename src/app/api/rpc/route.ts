@@ -4,7 +4,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const response = await fetch('https://api.mainnet-beta.solana.com', {
+    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet'
+      ? 'https://api.devnet.solana.com'
+      : 'https://api.mainnet-beta.solana.com';
+
+    const response = await fetch(rpcUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

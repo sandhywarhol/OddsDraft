@@ -4,33 +4,87 @@ import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
-import { POINT_MAP } from '@/lib/fantasy-engine';
+import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
+import { calculateEventPoints, POINT_MAP } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
 import { useWallet } from '@solana/wallet-adapter-react';
+import FantasyToast, { type FantasyNotificationItem } from '@/components/FantasyToast';
+import CardPackOpener from '@/components/CardPackOpener';
+import SkillCardDisplay from '@/components/SkillCardDisplay';
+import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEvent } from '@/lib/card-collection';
+import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
+import { useTxLine } from '@/context/TxLineContext';
+import { buildPlayerIdMap, convertTxLineUpdates } from '@/lib/txline-bridge';
+import { fetchLiveScoreUpdates } from '@/lib/txline';
 
 // Demo live events that replay at interval to simulate a live match
 const LIVE_EVENTS = [
+  // === KICK OFF ===
   { id: 'e0', minute: 0, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Kick Off! The match begins!' },
-  { id: 'e1', minute: 12, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', type: 'goal', points: 10, description: 'GOAL! Mbappé fires into the top corner!' },
-  { id: 'e2', minute: 12, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', type: 'assist', points: 6, description: 'Griezmann with the brilliant through ball' },
-  { id: 'e2_1', minute: 18, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', type: 'foul', points: 0, description: 'Foul committed by Romero' },
-  { id: 'e2_2', minute: 19, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', type: 'free_kick', points: 0, description: 'France takes a dangerous free kick' },
-  { id: 'e3', minute: 23, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', type: 'goalkeeper_save', points: 1, description: 'Martínez with a crucial save!' },
-  { id: 'e3_1', minute: 24, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', type: 'corner_kick', points: 0, description: 'Corner kick awarded to France' },
-  { id: 'e4', minute: 31, team: 'France', teamFlag: '🇫🇷', player: 'Dembélé', type: 'yellow_card', points: -2, description: 'Yellow card for Dembélé' },
-  { id: 'e5', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez', type: 'goal', points: 10, description: 'GOAL! Lautaro equalizes for Argentina!' },
-  { id: 'e6', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', type: 'assist', points: 6, description: 'Messi with his magic - the assist!' },
-  { id: 'e4_5', minute: 45, team: '', teamFlag: '', player: '', type: 'half_time', points: 0, description: 'Half Time! The first half concludes!' },
-  { id: 'e4_6', minute: 46, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Second Half Kick Off! We are underway again!' },
-  { id: 'e6_1', minute: 49, team: 'Argentina', teamFlag: '🇦🇷', player: 'Di María', type: 'offside', points: 0, description: 'Di María is caught offside' },
-  { id: 'e7', minute: 52, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', type: 'goal', points: 10, description: 'GOAL! Giroud puts France back ahead!' },
-  { id: 'e7_1', minute: 54, team: '', teamFlag: '', player: '', type: 'var_review', points: 0, description: 'VAR Review ongoing for a potential foul' },
-  { id: 'e7_2', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', type: 'substitution', points: 0, description: 'Substitution: Coman comes on' },
-  { id: 'e8', minute: 67, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', type: 'goal', points: 10, description: 'GOAL! MESSI! The GOAT strikes!' },
-  { id: 'e9', minute: 79, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', type: 'goal', points: 10, description: 'Hat-trick! Mbappé with an incredible finish!' },
-  { id: 'e10', minute: 90, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', type: 'goal', points: 10, description: '90th minute! Álvarez scores in stoppage time!' },
-  { id: 'e11', minute: 90, team: '', teamFlag: '', player: '', type: 'full_time', points: 0, description: 'Full Time! The match is over!' },
+  // Starting XI
+  { id: 'xi_arg_mart',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-martinez',  type: 'starting_xi', points: 2, description: 'E. Martínez starts in goal for Argentina.' },
+  { id: 'xi_arg_rome',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',       playerId: 'arg-romero',   type: 'starting_xi', points: 2, description: 'Romero starts at centre-back for Argentina.' },
+  { id: 'xi_arg_mess',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',    type: 'starting_xi', points: 2, description: 'MESSI starts for Argentina!' },
+  { id: 'xi_arg_laut',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez',  playerId: 'arg-lautaro',  type: 'starting_xi', points: 2, description: 'Lautaro Martínez leads the attack for Argentina.' },
+  { id: 'xi_arg_alva',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez',      playerId: 'arg-alvarez',  type: 'starting_xi', points: 2, description: 'Julián Álvarez starts up front alongside Lautaro.' },
+  { id: 'xi_fra_maig',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Maignan',      playerId: 'fra-maignan',  type: 'starting_xi', points: 2, description: 'Maignan starts in goal for France.' },
+  { id: 'xi_fra_mbap',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Mbappé',       playerId: 'fra-mbappe',   type: 'starting_xi', points: 2, description: 'Mbappé captains France tonight — dangerous from the first whistle.' },
+  { id: 'xi_fra_grie',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Griezmann',    playerId: 'fra-griezmann',type: 'starting_xi', points: 2, description: 'Griezmann lines up in central midfield for France.' },
+  { id: 'xi_fra_demb',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Dembélé',      playerId: 'fra-dembele',  type: 'starting_xi', points: 2, description: 'Dembélé starts on the right wing, ready to trouble the defence.' },
+  { id: 'xi_fra_giro',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Giroud',       playerId: 'fra-giroud',   type: 'starting_xi', points: 2, description: 'Giroud leads the line — aerial strength will be key tonight.' },
+  // === FIRST HALF ===
+  { id: 'e0_d1', minute: 10, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'danger_attack', points: 0, description: 'France pressing high in the Argentine half! Mbappé is causing chaos.' },
+  { id: 'e_asst_mbap', minute: 11, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'assist', points: 6, description: 'Griezmann threads a perfect through ball into Mbappé\'s path.' },
+  { id: 'e1', minute: 12, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! Mbappé fires a powerful shot into the top corner!' },
+  { id: 'e1_concede', minute: 12, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -1, description: 'Martínez beaten at his near post — unfortunate position from the keeper.' },
+  { id: 'e1_concede_def', minute: 12, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'goal_conceded', points: -1, description: 'Romero caught out of position — Mbappé exploits the gap in behind.' },
+  { id: 'e_save_maig1', minute: 20, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goalkeeper_save', points: 1, description: 'Maignan dives low to keep out Lautaro\'s fierce shot!' },
+  { id: 'e3_1', minute: 24, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'corner_kick', points: 0, description: 'Corner kick awarded to France after a brave block.' },
+  { id: 'e4', minute: 31, team: 'France', teamFlag: '🇫🇷', player: 'Dembélé', playerId: 'fra-dembele', type: 'yellow_card', points: -2, description: 'Yellow card for Dembélé after a late, reckless challenge.' },
+  { id: 'e4_d1', minute: 36, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Argentina attacking with purpose now! Messi orchestrating from deep.' },
+  { id: 'e_asst_laut', minute: 37, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'Messi delivers a pinpoint cross right onto Lautaro\'s head.' },
+  { id: 'e5', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez', playerId: 'arg-lautaro', type: 'goal', points: 10, goalType: 'Head', description: 'GOAL! Lautaro rises highest to head it home — 1-1!' },
+  { id: 'e5_concede', minute: 38, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goal_conceded', points: -1, description: 'Maignan had no chance — Lautaro got ahead of his marker to equalise.' },
+  { id: 'e5_concede_def', minute: 38, team: 'France', teamFlag: '🇫🇷', player: 'Varane', playerId: 'fra-varane', type: 'goal_conceded', points: -1, description: 'Varane beaten in the air — Lautaro\'s header leaves him stranded at the back post.' },
+  { id: 'e_save_mart1', minute: 42, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez spreads his body brilliantly to deny Dembélé!' },
+  { id: 'poss_h1_mess', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'possession_bonus', points: 1, description: 'Argentina dominated possession in the first half — Messi controlled the tempo.' },
+  { id: 'poss_h1_macall', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister', type: 'possession_bonus', points: 1, description: 'Argentina\'s midfield dominated — Mac Allister dictated the rhythm throughout.' },
+  { id: 'e4_5', minute: 45, team: '', teamFlag: '', player: '', type: 'half_time', points: 0, description: 'Half Time! Argentina 1–1 France — an even and electric first half.' },
+  // === SECOND HALF ===
+  { id: 'e4_6', minute: 46, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Second Half Kick Off! France get us underway again.' },
+  { id: 'e6_d1', minute: 50, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', playerId: 'fra-giroud', type: 'danger_attack', points: 0, description: 'France immediately on the front foot — Giroud holding up play brilliantly in the area.' },
+  { id: 'e_asst_giro', minute: 51, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'assist', points: 6, description: 'Griezmann whips in a dangerous cross from the right — Giroud is waiting at the far post.' },
+  { id: 'e7', minute: 52, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', playerId: 'fra-giroud', type: 'goal', points: 10, goalType: 'Head', description: 'GOAL! Giroud powers a towering header into the net — France lead again!' },
+  { id: 'e7_concede', minute: 52, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -1, description: 'Martínez stranded by Griezmann\'s delivery — Giroud gets in front at the near post.' },
+  { id: 'e7_concede_def', minute: 52, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'goal_conceded', points: -1, description: 'Romero unable to win the aerial duel — Giroud gets the run on him.' },
+  { id: 'e7_1', minute: 54, team: '', teamFlag: '', player: '', type: 'var_review', points: 0, description: 'VAR reviewing a potential foul in the build-up to the goal — play stopped.' },
+  { id: 'e_save_maig2', minute: 58, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goalkeeper_save', points: 1, description: 'Maignan tips over Álvarez\'s powerful header at full stretch — outstanding!' },
+  { id: 'e7_2', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'substitution', points: 0, playerInId: 'fra-coman', playerOutId: 'fra-dembele', description: 'Substitution: Coman replaces Dembélé — Deschamps looking for fresh legs.' },
+  { id: 'e7_2_sub', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'sub_appearance', points: 1, description: 'Coman enters the pitch — immediate energy on the left flank.' },
+  { id: 'e7_d2', minute: 65, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Argentina pressing desperately now — Messi driving forward with intent!' },
+  { id: 'e_asst_mess', minute: 66, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'assist', points: 6, description: 'Álvarez lays off a perfectly weighted pass to find Messi in space.' },
+  { id: 'e8', minute: 67, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! MESSI! A curling shot into the far corner — pure genius, 2-2!' },
+  { id: 'e8_concede', minute: 67, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goal_conceded', points: -1, description: 'Maignan had no answer — Messi\'s curler was simply unstoppable.' },
+  { id: 'e8_concede_def', minute: 67, team: 'France', teamFlag: '🇫🇷', player: 'Varane', playerId: 'fra-varane', type: 'goal_conceded', points: -1, description: 'Varane caught ball-watching — Messi ghost past him before firing home.' },
+  { id: 'e8_1', minute: 72, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'penalty_won', points: 3, description: 'Mbappé is brought down in the box! The referee points to the spot immediately!' },
+  { id: 'e8_2', minute: 72, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'penalty_conceded', points: -3, description: 'Romero mistimes his challenge and brings down Mbappé — a costly foul.' },
+  { id: 'e8_3', minute: 73, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'penalty_missed', points: -3, description: 'Mbappé steps up... but blazes it over the bar! The pressure got to him.' },
+  { id: 'e_save_mart2', minute: 75, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez palms away Griezmann\'s curling effort around the post — superb!' },
+  { id: 'e8_d1', minute: 77, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'danger_attack', points: 0, description: 'France probing again — Mbappé drifting infield looking for the decisive moment.' },
+  { id: 'e_asst_mbap3', minute: 78, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'assist', points: 6, description: 'Coman bursts down the left and cuts the ball back perfectly to Mbappé.' },
+  { id: 'e9', minute: 79, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'goal', points: 10, goalType: 'Other', description: 'HAT-TRICK! Mbappé taps in from close range — his third of the game, 3-2!' },
+  { id: 'e9_concede', minute: 79, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -1, description: 'Third goal conceded for Martínez — another low cross catches the defence flat.' },
+  { id: 'e9_concede_def', minute: 79, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'goal_conceded', points: -1, description: 'Romero out of position again — the gap allows Coman\'s cutback to reach Mbappé.' },
+  { id: 'e_save_mart3', minute: 85, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez pulls off a brilliant low save to deny Coman a second!' },
+  { id: 'e9_d1', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'danger_attack', points: 0, description: 'Argentina throwing everyone forward! Sustained pressure in the final minutes.' },
+  { id: 'e_asst_alva', minute: 89, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'Messi picks out Álvarez with a defence-splitting through ball in behind.' },
+  { id: 'poss_h2_grie', minute: 89, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'possession_bonus', points: 1, description: 'France dominated possession in the second half — Griezmann pulled the strings throughout.' },
+  { id: 'poss_h2_kante', minute: 89, team: 'France', teamFlag: '🇫🇷', player: 'Kanté', playerId: 'fra-kante', type: 'possession_bonus', points: 1, description: 'Kanté covered every blade of grass — France\'s engine in midfield.' },
+  { id: 'e10', minute: 90, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'goal', points: 10, goalType: 'Shot', description: '90th minute! Álvarez drives a low shot into the bottom corner — 3-3!' },
+  { id: 'e10_concede', minute: 90, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goal_conceded', points: -1, description: 'Maignan beaten at his near post — a late equalizer for Argentina.' },
+  { id: 'e10_concede_def', minute: 90, team: 'France', teamFlag: '🇫🇷', player: 'Varane', playerId: 'fra-varane', type: 'goal_conceded', points: -1, description: 'Varane caught flat-footed in stoppage time — Álvarez finds the gap.' },
+  { id: 'e11', minute: 90, team: '', teamFlag: '', player: '', type: 'full_time', points: 0, description: 'Full Time! Argentina 3–3 France! A breathtaking match with goals at both ends.' },
 ];
 
 // Demo leaderboard
@@ -58,29 +112,59 @@ const DEMO_LEADERBOARD = [
 ];
 
 const EVENT_COLORS: Record<string, string> = {
-  goal: '#2e7d32', // rich dark green
-  assist: '#1565c0', // rich dark blue
-  goalkeeper_save: '#00838f', // rich dark cyan
-  yellow_card: '#e65100', // rich dark orange
-  red_card: '#c62828', // rich dark red
-  own_goal: '#c62828',
-  penalty_save: '#2e7d32',
-  kick_off: '#0288d1', // sky blue
-  half_time: '#5e35b1', // purple
-  full_time: '#c62828', // red
+  goal:                    '#2e7d32',
+  goal_conceded:           '#c62828',
+  own_goal:                '#c62828',
+  assist:                  '#1565c0',
+  goalkeeper_save:         '#00838f',
+  penalty_save:            '#f9a825',
+  yellow_card:             '#e65100',
+  red_card:                '#c62828',
+  kick_off:                '#0288d1',
+  half_time:               '#5e35b1',
+  full_time:               '#c62828',
+  extra_time:              '#5e35b1',
+  penalty_won:             '#2e7d32',
+  penalty_missed:          '#c62828',
+  penalty_conceded:        '#c62828',
+  penalty_scored:          '#2e7d32',
+  penalty_missed_shootout: '#c62828',
+  corner_kick:             '#00838f',
+  substitution:            '#fbc02d',
+  var_review:              '#424242',
+  danger_attack:           '#e65100',
+  starting_xi:             '#ffd700',
+  sub_appearance:          '#00acc1',
+  possession_bonus:        '#00acc1',
+  clean_sheet:             '#2e7d32',
 };
 
 const EVENT_ICONS: Record<string, string> = {
-  goal: '⚽',
-  assist: '🎯',
-  goalkeeper_save: '🧤',
-  yellow_card: '🟨',
-  red_card: '🟥',
-  own_goal: '😰',
-  penalty_save: '🙅',
-  kick_off: '📢',
-  half_time: '⏸️',
-  full_time: '🛑',
+  goal:                    '⚽',
+  goal_conceded:           '😓',
+  own_goal:                '😰',
+  assist:                  '🎯',
+  goalkeeper_save:         '🧤',
+  penalty_save:            '🧤',
+  yellow_card:             '🟨',
+  red_card:                '🟥',
+  kick_off:                '📢',
+  half_time:               '⏸️',
+  full_time:               '🛑',
+  extra_time:              '⏱️',
+  penalty_won:             '✅',
+  penalty_missed:          '❌',
+  penalty_conceded:        '⚠️',
+  penalty_scored:          '🥅',
+  penalty_missed_shootout: '❌',
+  corner_kick:             '⛳',
+  substitution:            '🔄',
+  var_review:              '📺',
+  danger_attack:           '⚡',
+  starting_xi:             '🌟',
+  sub_appearance:          '🔄',
+  possession_bonus:        '🎮',
+  clean_sheet:             '🛡️',
 };
 
 interface DialogData {
@@ -242,20 +326,44 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator2Image: '/NPC/Comentator 2 Calm.svg',
         };
       }
-    case 'goal':
+    case 'goal': {
+      // TxLINE: dataSoccer.GoalType — 'Head' | 'Shot' | 'OwnGoal' | 'Other'
+      const goalType = event.goalType as string | undefined;
+      let goalTypeDesc = '';
+      if (goalType === 'Head') goalTypeDesc = 'A thunderous header';
+      else if (goalType === 'Shot') goalTypeDesc = 'A powerful shot';
+      else goalTypeDesc = 'A clinical finish';
+
       if (step === 1) {
         return {
           speakerTitle: 'Martin',
-          text: event.description ? `"${event.description}"` : `"GOAL! ${player} finds the back of the net in the ${minute} minute with a brilliant finish to put his team in front!"`,
+          text: event.description
+            ? `"${event.description}"`
+            : `"GOAL! ${player} finds the back of the net in the ${minute} minute! ${goalTypeDesc} — and ${team} take the lead!"`,
           commentator1Image: '/NPC/Comentator 1.svg',
         };
       } else {
-        return {
-          speakerTitle: 'Alan',
-          text: `"A brilliant team move from ${team} finally breaks through the ${opponent} defense and ends with a well-deserved goal!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
+        if (goalType === 'Head') {
+          return {
+            speakerTitle: 'Alan',
+            text: `"What a delivery! ${player} attacked the ball with complete conviction — that's an aerial masterclass!"`,
+            commentator2Image: '/NPC/Comentator 2.svg',
+          };
+        } else if (goalType === 'Shot') {
+          return {
+            speakerTitle: 'Alan',
+            text: `"Pure technique from ${player}! That shot had pace, precision, and the goalkeeper stood absolutely no chance!"`,
+            commentator2Image: '/NPC/Comentator 2.svg',
+          };
+        } else {
+          return {
+            speakerTitle: 'Alan',
+            text: `"A brilliant team move from ${team} finally breaks through the ${opponent} defense and ends with a well-deserved goal!"`,
+            commentator2Image: '/NPC/Comentator 2.svg',
+          };
+        }
       }
+    }
     case 'yellow_card':
       if (step === 1) {
         return {
@@ -301,54 +409,6 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator2Image: '/NPC/Comentator 2.svg',
         };
       }
-    case 'assist':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"Sensational vision from ${player}! A perfectly weighted pass to open up the defense."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"Absolutely spot on! That kind of creativity is exactly what you need to break down a stubborn defense."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'shot_on_target':
-      return {
-        speakerTitle: 'Martin',
-        text: `"Great strike by ${player}! The goalkeeper had to be alert to keep that one out."`,
-        commentator1Image: '/NPC/Komentator 1 calm.svg',
-      };
-    case 'pass_accuracy':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"Excellent distribution by ${player}! Controlling the tempo of the game with pinpoint passing."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"Exactly right. Keeping possession and moving the ball intelligently is dictating the flow of the entire match."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'clean_sheet':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"Solid defensive display! ${team} has managed to keep a clean sheet today."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"A fantastic effort from the backline. Defending as a unit like that wins you championships."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
     case 'substitution':
       if (step === 1) {
         return {
@@ -370,66 +430,46 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
-    case 'goalkeeper_save':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"What a save by ${player}! Incredible reflexes to deny the attacker. Outstanding goalkeeping!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"I couldn't agree more. It's moments of brilliance like that from the keeper that keep the team in the game."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'penalty_save':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Alan',
-          text: `"SAVED! ${player} guesses correctly and makes a heroic penalty save! Absolutely incredible!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"What a massive psychological boost! You have to praise the keeper's composure under such intense pressure."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
-    case 'foul':
+    case 'penalty_won':
       if (step === 1) {
         return {
           speakerTitle: 'Referee',
-          text: 'FOUL',
+          text: 'PENALTY',
           refereeImage: '/NPC/Foul.svg',
           isRefereeStyle: true,
         };
-      } else if (step === 2) {
+      } else {
         return {
           speakerTitle: 'Alan',
-          text: event.description ? `"${event.description}"` : `"That's a careless foul by ${player}. The referee awards a free kick."`,
+          text: event.description ? `"${event.description}"` : `"PENALTY! The referee points to the spot! A massive opportunity for ${team} here!"`,
           commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'penalty_conceded':
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: `"That is a disastrous challenge by ${player} in the box. He leaves the referee with absolutely no choice."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       } else {
         return {
-          speakerTitle: 'Martin',
-          text: `"He needs to be careful not to pick up a silly booking early on."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          speakerTitle: 'Alan',
+          text: `"What was he thinking? You simply cannot make a tackle like that inside the area."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
         };
       }
-    case 'free_kick':
+    case 'penalty_missed':
       if (step === 1) {
         return {
           speakerTitle: 'Alan',
-          text: `"${team} wins a dangerous free kick just outside the box. This is a great scoring opportunity!"`,
+          text: `"MISSED! I don't believe it! ${player} has completely fluffed his lines!"`,
           commentator2Image: '/NPC/Comentator 2.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
-          text: `"They've clearly been practicing these set pieces on the training ground. Let's see what they can do."`,
+          text: `"He'll be having nightmares about that one. A golden chance wasted."`,
           commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
@@ -454,27 +494,6 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
-    case 'offside':
-      if (step === 1) {
-        return {
-          speakerTitle: 'Referee',
-          text: 'OFFSIDE',
-          refereeImage: '/NPC/Offside.svg',
-          isRefereeStyle: true,
-        };
-      } else if (step === 2) {
-        return {
-          speakerTitle: 'Alan',
-          text: event.description ? `"${event.description}"` : `"The linesman's flag goes up! ${player} is caught offside."`,
-          commentator2Image: '/NPC/Comentator 2.svg',
-        };
-      } else {
-        return {
-          speakerTitle: 'Martin',
-          text: `"It was a very tight call, but the high defensive line did its job perfectly."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
-        };
-      }
     case 'var_review':
       if (step === 1) {
         return {
@@ -496,6 +515,183 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           commentator1Image: '/NPC/Komentator 1 calm.svg',
         };
       }
+    case 'danger_attack':
+      // TxLINE: possessionType=Danger|HighDanger — predictive signal before a goal
+      if (step === 1) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"${team} is in a highly dangerous position! TxLINE data shows they are in the Danger zone right now — a goal could come at any moment!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"${opponent} needs to hold their defensive shape carefully. The pressure from ${team} is relentless and any lapse in concentration could be fatal!"`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
+    case 'starting_xi':
+      // TxLINE: lineups[].starter = true
+      return {
+        speakerTitle: 'Alan',
+        text: event.description
+          ? `"${event.description}"`
+          : `"${player} is confirmed in the starting eleven for ${team} today!"`,
+        commentator2Image: '/NPC/Comentator 2 Calm.svg',
+      };
+    case 'sub_appearance':
+      // TxLINE: dataSoccer.PlayerInId matches user's lineup
+      if (step === 1) {
+        return {
+          speakerTitle: 'Referee',
+          text: 'SUBSTITUTION',
+          refereeImage: '/NPC/Player subtitution.svg',
+          isRefereeStyle: true,
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: event.description
+            ? `"${event.description}"`
+            : `"${player} is now on the pitch! Fresh legs that could make all the difference for ${team} in the closing stages."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      }
+    case 'possession_bonus':
+      // TxLINE: inferred from possession stream — team dominant per half
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"${team} has been absolutely dominant in possession this half! ${player} has been the engine in midfield, controlling the tempo beautifully."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"When you control the ball like that, you control the game. ${player} deserves full credit for the work rate shown today."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      }
+    case 'clean_sheet':
+      // TxLINE: inferred from scoreSoccer.Total.Goals = 0 at full_time
+      if (step === 1) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"CLEAN SHEET! ${team} has successfully kept the opposition off the scoreboard — ${player} has been absolutely magnificent today!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"A clean sheet is the ultimate reward for a solid defensive performance. The entire backline for ${team} deserves enormous credit today."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
+    case 'assist':
+      // TxLINE: dataSoccer.assistPlayerId embedded in goal events
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"What a pass from ${player}! The vision to pick out that run was exceptional — that assist was every bit as important as the goal itself!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"Creative genius from ${player}! He saw the run nobody else spotted and delivered the perfect ball. That's the mark of a truly world-class player."`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'goalkeeper_save':
+      // TxLINE: dataSoccer.save
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"INCREDIBLE SAVE from ${player}! That looked destined for the net, but he has pulled off an absolutely stunning stop!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"What a moment from ${player}! That save alone could be worth three points for ${team}. He has single-handedly kept them in this match."`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      }
+    case 'penalty_save':
+      // TxLINE: dataSoccer.penaltysave
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: `"SAVED!! ${player} guesses correctly and palms it away! The penalty taker is absolutely devastated — what a moment for the goalkeeper!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+          refereeImage: '/NPC/ End of Game.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"A defining save that could completely change the course of this match! ${player} is the hero — ${team} are absolutely ecstatic!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'extra_time':
+      // TxLINE: gameState transitions to ExtraTime
+      if (step === 1) {
+        return {
+          speakerTitle: 'Referee',
+          text: 'EXTRA TIME',
+          refereeImage: '/NPC/Referee Kick OFF.svg',
+          isRefereeStyle: true,
+          refereePosition: 'left',
+        };
+      } else if (step === 2) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"We are going to extra time! Ninety minutes were not enough to separate these two sides — thirty more minutes to decide this contest!"`,
+          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"Both squads must dig deep now. Fatigue is a real factor, but so is the prize. One moment of quality could decide everything!"`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
+    case 'penalty_scored':
+      // TxLINE: goal event during gameState=Penalties
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: `"SCORED! ${player} steps up and sends the keeper the wrong way — nerves of steel from the ${team} player!"`,
+          commentator1Image: '/NPC/Comentator 1.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"Ice in the veins! That is how you take a penalty under the biggest pressure possible. ${team} are one step closer!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      }
+    case 'penalty_missed_shootout':
+      // TxLINE: miss during gameState=Penalties
+      if (step === 1) {
+        return {
+          speakerTitle: 'Alan',
+          text: `"MISSED! ${player} has blazed it wide — that is an absolutely cruel moment in a penalty shootout. ${team} are on the brink!"`,
+          commentator2Image: '/NPC/Comentator 2.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Martin',
+          text: `"The pressure of a penalty shootout can break the best players in the world. ${player} will need enormous support from the bench and the fans right now."`,
+          commentator1Image: '/NPC/Komentator 1 calm.svg',
+        };
+      }
     default:
       return {
         speakerTitle: 'Commentator',
@@ -511,22 +707,41 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const contestType = (searchParamsObj.contestType as string) || 'top3';
   const { publicKey } = useWallet();
   const { playSFX } = useAudio();
-  const fixture = DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0];
+  const { appMode, apiToken, guestJwt } = useTxLine();
+
+  // Always prefer WC2026 real fixtures (works in both demo and live modes)
+  const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+  const fixture = wcFixture
+    ? { ...wcFixture, status: getFixtureStatus(wcFixture), homeScore: 0, awayScore: 0 }
+    : (DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0]);
 
   const matchEvents = getDynamicEvents(fixture, LIVE_EVENTS);
 
   const [initialState] = useState(() => {
+    // Live mode: always start clean — API provides score/events/minute
+    if (appMode === 'live') {
+      return {
+        initialMin: 0,
+        initialIdx: 0,
+        initialEvents: [] as typeof matchEvents,
+        homeScore: 0,
+        awayScore: 0,
+        triggered: new Set<string>(),
+      };
+    }
+
+    // Demo mode: pre-load events up to a random minute if the match is "live"
     const isLive = fixture.status === 'live';
-    const initialMin = isLive ? Math.floor(Math.random() * 80) + 1 : 0; // Random minute between 1 and 80
-    
+    const initialMin = isLive ? Math.floor(Math.random() * 80) + 1 : 0;
+
     let initialIdx = matchEvents.findIndex(e => e.minute >= initialMin);
     if (initialIdx === -1) initialIdx = matchEvents.length;
 
     const initialEvents = matchEvents.slice(0, initialIdx).reverse();
-    
+
     let homeScore = 0;
     let awayScore = 0;
-    
+
     initialEvents.forEach(e => {
       if (e.type === 'goal' || e.type === 'own_goal') {
         if (e.team === fixture.homeTeam) homeScore++;
@@ -545,55 +760,76 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [score, setScore] = useState({ home: initialState.homeScore, away: initialState.awayScore });
   const [minute, setMinute] = useState(initialState.initialMin);
   const [leaderboard, setLeaderboard] = useState(() => {
-    let initialBoard = [...DEMO_LEADERBOARD];
-    if (publicKey) {
-      const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
-      let customUser = 'You';
-      let customAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`;
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        customUser = parsed.username || customUser;
-        customAvatar = parsed.avatar || customAvatar;
-      }
-      initialBoard = initialBoard.map((entry, index) => {
-        let prize = '-';
-        if (contestType === '5050') {
-          prize = index < 10 ? '0.18 SOL' : '-';
-        } else if (contestType === 'wta') {
-          prize = index === 0 ? '10.0 SOL' : '-';
-        } else {
-          if (index === 0) prize = '5.0 SOL';
-          else if (index === 1) prize = '3.0 SOL';
-          else if (index === 2) prize = '2.0 SOL';
+    if (appMode === 'live') {
+      // Live mode: start with only the current user at 0 pts.
+      // Real participants are loaded asynchronously via useEffect below.
+      const walletStr = publicKey?.toString() ?? '';
+      let username = 'You';
+      let avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${walletStr || 'default'}`;
+      try {
+        if (typeof window !== 'undefined' && walletStr) {
+          const stored = localStorage.getItem(`profile_${walletStr}`);
+          if (stored) {
+            const p = JSON.parse(stored);
+            username = p.username || username;
+            avatar = p.avatar || avatar;
+          }
         }
-
-        if (entry.isUser) {
-          return {
-            ...entry,
-            username: customUser,
-            wallet: `${publicKey.toString().substring(0, 4)}...${publicKey.toString().substring(publicKey.toString().length - 3)}`,
-            avatar: customAvatar,
-            prize
-          };
-        }
-        return { ...entry, prize };
-      });
-    } else {
-      initialBoard = initialBoard.map((entry, index) => {
-        let prize = '-';
-        if (contestType === '5050') {
-          prize = index < 10 ? '0.18 SOL' : '-';
-        } else if (contestType === 'wta') {
-          prize = index === 0 ? '10.0 SOL' : '-';
-        } else {
-          if (index === 0) prize = '5.0 SOL';
-          else if (index === 1) prize = '3.0 SOL';
-          else if (index === 2) prize = '2.0 SOL';
-        }
-        return { ...entry, prize };
-      });
+      } catch {}
+      return [{
+        rank: 1,
+        username,
+        wallet: walletStr ? `${walletStr.substring(0, 4)}...${walletStr.slice(-3)}` : '–',
+        avatar,
+        points: 0,
+        prize: contestType === 'wta' ? '– SOL' : '–',
+        isUser: true,
+      }];
     }
-    return initialBoard;
+
+    // Demo mode: simulated leaderboard with scaled points
+    let initialBoard = [...DEMO_LEADERBOARD];
+    const scaleFactor = initialState.initialMin > 0 ? initialState.initialMin / 90 : 0;
+
+    initialBoard = initialBoard.map((entry, index) => {
+      let prize = '-';
+      if (contestType === '5050') {
+        prize = index < 10 ? '0.18 SOL' : '-';
+      } else if (contestType === 'wta') {
+        prize = index === 0 ? '10.0 SOL' : '-';
+      } else {
+        if (index === 0) prize = '5.0 SOL';
+        else if (index === 1) prize = '3.0 SOL';
+        else if (index === 2) prize = '2.0 SOL';
+      }
+
+      const scaledPoints = parseFloat((entry.points * scaleFactor).toFixed(1));
+
+      if (entry.isUser) {
+        let customUser = 'You';
+        let customAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=default`;
+        if (publicKey) {
+          customAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`;
+          const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            customUser = parsed.username || customUser;
+            customAvatar = parsed.avatar || customAvatar;
+          }
+        }
+        return {
+          ...entry,
+          username: customUser,
+          wallet: publicKey ? `${publicKey.toString().substring(0, 4)}...${publicKey.toString().substring(publicKey.toString().length - 3)}` : entry.wallet,
+          avatar: customAvatar,
+          points: scaledPoints,
+          prize
+        };
+      }
+      return { ...entry, points: scaledPoints, prize };
+    });
+
+    return initialBoard.sort((a, b) => b.points - a.points);
   });
   const [latestEvent, setLatestEvent] = useState<(typeof matchEvents)[0] | null>(null);
   const [showPopup, setShowPopup] = useState(false);
@@ -601,6 +837,90 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [isFastForward, setIsFastForward] = useState(false);
   const eventRef = useRef<HTMLDivElement>(null);
   const triggeredEventsRef = useRef<Set<string>>(initialState.triggered);
+  const [mobileToast, setMobileToast] = useState<{ text: string; type: string } | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [activeToasts, setActiveToasts] = useState<FantasyNotificationItem[]>([]);
+  const prevRankRef = useRef<number>(2);
+  const notifiedEventsRef = useRef<Set<string>>(new Set());
+  const leaderboardRef = useRef(leaderboard);
+  const userLineupRef = useRef<any>(null);
+  const appearedPlayersRef = useRef<Set<string>>(new Set());
+  // Tracks score synchronously so the full_time handler can read the final score
+  // without depending on stale React state (score is not in the event-effect dep array)
+  const scoreRef = useRef({ home: initialState.homeScore, away: initialState.awayScore });
+  // Live mode refs — TxLINE fixture resolution and player mapping
+  const txlineFixtureIdRef = useRef<string | null>(null);
+  const playerIdMapRef = useRef<Record<string, string>>({});
+  const seenSeqsRef = useRef<Set<number>>(new Set());
+  const liveInitDoneRef = useRef(false);
+  const showPopupRef = useRef(false);
+  const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
+
+  // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
+  const equippedCardDefsRef = useRef<Record<string, SkillCard | null>>({});
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        userLineupRef.current = parsed;
+        setUserLineup(parsed);
+        // Build card-def lookup once so event handlers don't hit localStorage every tick
+        const defs: Record<string, SkillCard | null> = {};
+        for (const [pid, instId] of Object.entries(parsed.equippedCards ?? {})) {
+          defs[pid] = getCardDefByInstanceId(instId as string) ?? null;
+        }
+        equippedCardDefsRef.current = defs;
+      }
+    } catch (e) {
+      console.error('Failed to parse user lineup:', e);
+    }
+  }, [contestId]);
+
+  useEffect(() => {
+    leaderboardRef.current = leaderboard;
+  }, [leaderboard]);
+
+  // Live mode: populate leaderboard with real Supabase participants
+  useEffect(() => {
+    if (appMode !== 'live') return;
+    fetch(`/api/contest/leaderboard?fixture=${contestId}&contestType=${contestType}`)
+      .then(r => r.json())
+      .then((data: { participants?: Array<{ wallet_address: string; contest_type: string }> }) => {
+        const list = data.participants ?? [];
+        if (list.length === 0) return;
+        const walletStr = publicKey?.toString() ?? '';
+        const entries = list.map((p, i) => {
+          const w = p.wallet_address;
+          const isUser = !!walletStr && w === walletStr;
+          let username = isUser ? 'You' : `${w.substring(0, 4)}...${w.slice(-3)}`;
+          let avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${w}`;
+          if (isUser) {
+            try {
+              const stored = localStorage.getItem(`profile_${w}`);
+              if (stored) {
+                const pp = JSON.parse(stored);
+                username = pp.username || username;
+                avatar = pp.avatar || avatar;
+              }
+            } catch {}
+          }
+          return {
+            rank: i + 1,
+            username,
+            wallet: `${w.substring(0, 4)}...${w.slice(-3)}`,
+            avatar,
+            points: 0,
+            prize: '–',
+            isUser,
+          };
+        });
+        setLeaderboard(entries);
+      })
+      .catch(err => console.warn('[Leaderboard] fetch failed:', err));
+  }, [appMode, contestId, contestType, publicKey]);
+
   const [dialogStep, setDialogStep] = useState(1);
 
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verifying' | 'success'>('pending');
@@ -612,9 +932,188 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     }, 2000);
   };
 
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
+  // Keep showPopupRef in sync so live polling can check it without re-creating the interval
+  useEffect(() => {
+    showPopupRef.current = showPopup;
+  }, [showPopup]);
+
+  // ── LIVE MODE: TxLINE API polling ──────────────────────────────────────────
+  useEffect(() => {
+    if (appMode !== 'live' || !apiToken) return;
+
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      if (liveInitDoneRef.current) return;
+      liveInitDoneRef.current = true;
+
+      // contestId IS the real TxLINE FixtureId for WC2026 matches — use directly
+      txlineFixtureIdRef.current = contestId;
+      console.log('[LivePage] TxLINE fixtureId:', contestId);
+
+      const pMap = await buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt);
+      if (isMounted) {
+        playerIdMapRef.current = pMap;
+        console.log(`[LivePage] Player map built — ${Object.keys(pMap).length} players matched`);
+      }
+    };
+
+    const poll = async () => {
+      if (!txlineFixtureIdRef.current) return;
+      try {
+        const raw = await fetchLiveScoreUpdates(apiToken, txlineFixtureIdRef.current, guestJwt);
+        if (!isMounted) return;
+
+        // null = 404 (fixture not live on TxLINE yet) — show waiting state
+        if (raw === null) {
+          setTxlineStatus('waiting');
+          return;
+        }
+
+        const updates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+        if (updates.length === 0) { setTxlineStatus('waiting'); return; }
+        setTxlineStatus('live');
+
+        // Update score from latest snapshot
+        const latest = updates[updates.length - 1];
+        if (latest?.score) {
+          setScore({ home: latest.score.home ?? 0, away: latest.score.away ?? 0 });
+        }
+
+        const newEvents = convertTxLineUpdates(
+          updates,
+          playerIdMapRef.current,
+          fixture.homeTeam,
+          fixture.awayTeam,
+          fixture.homeFlag,
+          fixture.awayFlag,
+          seenSeqsRef.current
+        );
+
+        if (newEvents.length === 0) return;
+
+        // Add all events to the feed silently
+        setEvents(prev => [...newEvents.slice().reverse(), ...prev]);
+
+        // Only pop dialog for the final (most recent) event — same as demo UX
+        const trigger = newEvents[newEvents.length - 1];
+        setMinute(trigger.minute);
+
+        // SFX
+        if (trigger.type === 'goal' || trigger.type === 'own_goal') {
+          playSFX('goal');
+        } else if (trigger.type === 'full_time') {
+          playSFX('end_game');
+        } else if (['kick_off', 'half_time', 'yellow_card', 'red_card', 'corner_kick', 'substitution', 'extra_time', 'penalty_save'].includes(trigger.type)) {
+          playSFX('whistle');
+        }
+
+        // Update score from goal events
+        for (const ev of newEvents) {
+          if (ev.type === 'goal' || ev.type === 'own_goal') {
+            const isHome = ev.team === fixture.homeTeam;
+            setScore(s => ({ home: isHome ? s.home + 1 : s.home, away: !isHome ? s.away + 1 : s.away }));
+          }
+        }
+
+        // Show popup if not already open
+        if (!showPopupRef.current) {
+          setLatestEvent(trigger);
+          setDialogStep(1);
+          if (window.innerWidth >= 768) {
+            setShowPopup(true);
+          } else {
+            const txt = `${trigger.minute}' - ${trigger.player || ''} ${trigger.description || ''}`;
+            setMobileToast({ text: txt, type: trigger.type });
+            if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+            toastTimeoutRef.current = setTimeout(() => setMobileToast(null), 4000);
+          }
+        }
+
+        // Fantasy points + toasts for every event
+        for (const ev of newEvents) {
+          if (!userLineupRef.current || !ev.playerId) continue;
+          const { players, captain, confidence } = userLineupRef.current;
+          const matched = players.find((p: any) => p && p.id === ev.playerId);
+          if (!matched) continue;
+
+          let rawPts = calculateEventPoints(ev.type, matched.position);
+          const isAppearanceEv = ev.type === 'starting_xi' || ev.type === 'sub_appearance';
+          if (!isAppearanceEv && !appearedPlayersRef.current.has(ev.playerId)) {
+            rawPts += 2;
+          }
+          appearedPlayersRef.current.add(ev.playerId);
+          // Apply equipped skill card bonus before captain/confidence multipliers
+          const cardDefLive = equippedCardDefsRef.current[ev.playerId];
+          if (cardDefLive) rawPts += getCardBonusForEvent(cardDefLive, ev.type);
+          let delta = rawPts;
+          let isCap = false;
+          if (captain === ev.playerId) { delta *= 2; isCap = true; }
+          const stars = confidence?.[ev.playerId] ?? 3;
+          delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+
+          setLeaderboard(prev => {
+            const next = prev.map(entry =>
+              entry.isUser
+                ? { ...entry, points: entry.points + delta }
+                : entry // other real participants — no fake scoring
+            );
+            return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+          });
+          if (ev.playerId && delta !== 0) {
+            const pid = ev.playerId;
+            const rnd = Math.round(delta * 100) / 100;
+            setPlayerPoints(prev => ({ ...prev, [pid]: Math.round(((prev[pid] ?? 0) + rnd) * 100) / 100 }));
+            setPlayerHistory(prev => ({
+              ...prev,
+              [pid]: [...(prev[pid] ?? []), { label: ev.type.replace(/_/g, ' '), pts: rnd, minute: ev.minute }],
+            }));
+          }
+
+          if (delta !== 0 && !notifiedEventsRef.current.has(ev.id)) {
+            notifiedEventsRef.current.add(ev.id);
+            const rd = Math.round(delta * 100) / 100;
+            const val = rd > 0 ? `+${rd} pts` : `${rd} pts`;
+            const toasts: FantasyNotificationItem[] = [{
+              id: `toast-${Date.now()}-${ev.id}`,
+              type: ev.type as any,
+              title: ev.type.replace(/_/g, ' '),
+              subtitle: ev.player || 'Player Action',
+              value: val,
+            }];
+            if (isCap) {
+              const cap = Math.round((rd / 2) * 100) / 100;
+              toasts.unshift({ id: `toast-cap-${Date.now()}`, type: 'captain_bonus', title: 'Captain 2× Bonus', subtitle: ev.player, value: cap > 0 ? `+${cap} pts` : `${cap} pts` });
+            }
+            setActiveToasts(prev => [...toasts, ...prev]);
+          }
+        }
+      } catch (err) {
+        if (isMounted) setTxlineStatus('waiting');
+        console.error('[LivePage] poll error:', err);
+      }
+    };
+
+    bootstrap().then(() => poll());
+    const interval = setInterval(poll, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appMode, apiToken]);
+
+  // ── DEMO MODE: Simulate live events via minute ticker ──────────────────────
   // Simulate live events
   useEffect(() => {
-    if (!isPlaying || showPopup) return;
+    if (appMode === 'live' || !isPlaying || showPopup) return;
     
     const tickRate = isFastForward ? 2000 : 60000;
 
@@ -629,8 +1128,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     return () => clearInterval(interval);
   }, [isPlaying, showPopup, isFastForward]);
 
-    // Trigger events based on minute
+    // Trigger events based on minute (demo mode only)
     useEffect(() => {
+      if (appMode === 'live') return;
       if (showPopup) return;
       const event = matchEvents[currentEventIdx];
       if (!event || minute < event.minute) return;
@@ -644,7 +1144,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         playSFX('goal');
       } else if (event.type === 'full_time') {
         playSFX('end_game');
-      } else if (['kick_off', 'half_time', 'foul', 'yellow_card', 'red_card', 'penalty_save', 'free_kick', 'corner_kick', 'offside', 'substitution'].includes(event.type)) {
+      } else if (['kick_off', 'half_time', 'yellow_card', 'red_card', 'corner_kick', 'substitution', 'extra_time', 'penalty_save'].includes(event.type)) {
         playSFX('whistle');
       }
 
@@ -652,22 +1152,107 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       setCurrentEventIdx((idx) => idx + 1);
       setLatestEvent(event);
       setDialogStep(1);
-      setShowPopup(true);
+      if (window.innerWidth >= 768) {
+        setShowPopup(true);
+      } else {
+        const eventText = `${event.minute}' - ${event.player || ''} ${event.description || ''}`;
+        setMobileToast({ text: eventText, type: event.type });
+        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+        toastTimeoutRef.current = setTimeout(() => {
+          setMobileToast(null);
+        }, 4000);
+      }
   
-      // Update score
+      // Update score — mirror into scoreRef synchronously so full_time can read final score
       if (event.type === 'goal' || event.type === 'own_goal') {
         const isHome = event.team === fixture.homeTeam;
+        scoreRef.current = {
+          home: isHome ? scoreRef.current.home + 1 : scoreRef.current.home,
+          away: !isHome ? scoreRef.current.away + 1 : scoreRef.current.away,
+        };
         setScore((s) => ({
           home: isHome ? s.home + 1 : s.home,
           away: !isHome ? s.away + 1 : s.away,
         }));
       }
-  
-      // Shuffle leaderboard slightly
+
+      // At full_time: award clean sheet bonus to eligible lineup players
+      if (event.type === 'full_time' && userLineupRef.current) {
+        const { players: csPlayers, captain: csCaptain, confidence: csConf } = userLineupRef.current;
+        const finalScore = scoreRef.current;
+        const cleanSheetTeams: string[] = [];
+        if (finalScore.away === 0) cleanSheetTeams.push(fixture.homeTeam);
+        if (finalScore.home === 0) cleanSheetTeams.push(fixture.awayTeam);
+
+        for (const p of (csPlayers as any[])) {
+          if (!p || !cleanSheetTeams.includes(p.team)) continue;
+          let csBase = calculateEventPoints('clean_sheet', p.position);
+          // Skill card clean_sheet_bonus applied before captain/confidence
+          const cardDefCs = equippedCardDefsRef.current[p.id];
+          if (cardDefCs) csBase += getCardBonusForEvent(cardDefCs, 'clean_sheet');
+          if (csBase === 0) continue;
+          let csDelta = csCaptain === p.id ? csBase * 2 : csBase;
+          const csStars = csConf?.[p.id] ?? 3;
+          csDelta *= csStars === 5 ? 1.5 : csStars === 4 ? 1.35 : csStars === 3 ? 1.2 : csStars === 2 ? 1.1 : 1.0;
+          csDelta = Math.round(csDelta * 100) / 100;
+          setLeaderboard(prev => {
+            const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + csDelta) * 100) / 100 } : e);
+            return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+          });
+          setActiveToasts(prev => [{
+            id: `toast-cs-${Date.now()}-${p.id}`,
+            type: 'clean_sheet' as any,
+            title: 'Clean Sheet!',
+            subtitle: p.name,
+            value: `+${csDelta} pts`,
+          }, ...prev]);
+          setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + csDelta) * 100) / 100 }));
+          setPlayerHistory(prev => ({
+            ...prev,
+            [p.id]: [...(prev[p.id] ?? []), { label: 'clean sheet', pts: csDelta, minute: 90 }],
+          }));
+        }
+      }
+
+      // Determine authentic points for user
+      let delta = 0;
+      let isCap = false;
+
+      if (userLineupRef.current && event.playerId) {
+        const { players, captain, confidence } = userLineupRef.current;
+        const matchedPlayer = players.find((p: any) => p && p.id === event.playerId);
+        if (matchedPlayer) {
+          let rawPoints = calculateEventPoints(event.type, matchedPlayer.position);
+          const isAppearanceEvt = event.type === 'starting_xi' || event.type === 'sub_appearance';
+          if (!isAppearanceEvt && !appearedPlayersRef.current.has(event.playerId)) {
+            rawPoints += 2;
+          }
+          appearedPlayersRef.current.add(event.playerId);
+          // Apply equipped skill card bonus before captain/confidence multipliers
+          const cardDefDemo = equippedCardDefsRef.current[event.playerId];
+          if (cardDefDemo) rawPoints += getCardBonusForEvent(cardDefDemo, event.type);
+          delta = rawPoints;
+
+          if (captain === event.playerId) {
+            delta *= 2;
+            isCap = true;
+          }
+          const stars = confidence?.[event.playerId] ?? 3;
+          const confidenceMultiplier = stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+          delta = delta * confidenceMultiplier;
+        }
+      }
+
+      // Update leaderboard points (demo mode — bots accumulate simulated points)
       setLeaderboard((prev) => {
-        const next = [...prev];
-        next[1] = { ...next[1], points: next[1].points + Math.abs(event.points) * 0.8 };
-        return next.sort((a, b) => b.points - a.points).map((e, i) => {
+        const next = prev.map(entry => {
+          if (entry.isUser) {
+            return { ...entry, points: entry.points + delta };
+          }
+          return { ...entry, points: entry.points + Math.abs(event.points) * (Math.random() * 0.4) };
+        });
+        
+        const sorted = next.sort((a, b) => b.points - a.points).map((e, i) => {
           let prize = '-';
           if (contestType === '5050') {
             prize = i < 10 ? '0.18 SOL' : '-';
@@ -680,15 +1265,97 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           }
           return { ...e, rank: i + 1, prize };
         });
+        return sorted;
       });
-    }, [minute, currentEventIdx, events, fixture.homeTeam, showPopup]);
+      // Track per-player points and history for the lineup panel
+      if (event.playerId && delta !== 0) {
+        const pid = event.playerId!;
+        const rnd = Math.round(delta * 100) / 100;
+        setPlayerPoints(prev => ({ ...prev, [pid]: Math.round(((prev[pid] ?? 0) + rnd) * 100) / 100 }));
+        setPlayerHistory(prev => ({
+          ...prev,
+          [pid]: [...(prev[pid] ?? []), { label: event.type.replace(/_/g, ' '), pts: rnd, minute: event.minute }],
+        }));
+      }
+
+      // Fantasy Point Notification Trigger (Safe single-trigger outside leaderboard setter)
+      if (delta !== 0 && !notifiedEventsRef.current.has(event.id)) {
+        notifiedEventsRef.current.add(event.id);
+        
+        const roundedDelta = Math.round(delta * 100) / 100;
+        const valueStr = roundedDelta > 0 ? `+${roundedDelta} pts` : `${roundedDelta} pts`;
+        
+        const newToasts: FantasyNotificationItem[] = [
+          {
+            id: `toast-${Date.now()}-${event.id}`,
+            type: event.type as any,
+            title: event.type.replace(/_/g, ' '),
+            subtitle: event.player || 'Player Action',
+            value: valueStr,
+          }
+        ];
+
+        // Authentic captain bonus notification
+        if (isCap) {
+          // Captain bonus = half of total delta (since delta was doubled for captain)
+          const capBonusPts = Math.round((roundedDelta / 2) * 100) / 100;
+          newToasts.unshift({
+            id: `toast-cap-${Date.now()}`,
+            type: 'captain_bonus',
+            title: 'Captain 2× Bonus',
+            subtitle: event.player,
+            value: capBonusPts > 0 ? `+${capBonusPts} pts` : `${capBonusPts} pts`,
+          });
+        }
+
+        // Rank up simulation — use isUser instead of index
+        const nextBoard = leaderboardRef.current.map(entry => {
+          if (entry.isUser) return { ...entry, points: entry.points + delta };
+          return { ...entry };
+        });
+        const sorted = nextBoard.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+        const newUserRank = sorted.find((e) => e.isUser)?.rank ?? 2;
+        
+        if (newUserRank < prevRankRef.current) {
+          newToasts.unshift({
+            id: `toast-rank-${Date.now()}`,
+            type: 'rank_up',
+            title: 'Rank Up!',
+            subtitle: `#${prevRankRef.current} → #${newUserRank}`,
+            value: 'Rank Up',
+          });
+
+          if (newUserRank === 1) {
+            newToasts.unshift({
+              id: `toast-ach-${Date.now()}`,
+              type: 'achievement',
+              title: 'Achievement',
+              subtitle: "You're now in 1st Place!",
+              value: '🏆 1st Place',
+            });
+          }
+        }
+        prevRankRef.current = newUserRank;
+
+        setActiveToasts(prev => [...newToasts, ...prev]);
+      }
+
+    }, [minute, currentEventIdx, fixture.homeTeam, showPopup]);
 
     // Auto-advance or auto-close JRPG dialog popups
     useEffect(() => {
       if (!showPopup || !latestEvent) return;
 
       let timer: NodeJS.Timeout;
-      const multiStepEvents = ['goal', 'own_goal', 'yellow_card', 'red_card', 'assist', 'pass_accuracy', 'clean_sheet', 'substitution', 'goalkeeper_save', 'penalty_save', 'free_kick'];
+      // Only events with 2 dialog steps (valid TxLINE events)
+      const multiStepEvents = [
+        'goal', 'own_goal', 'yellow_card', 'red_card',
+        'penalty_won', 'penalty_conceded', 'penalty_missed',
+        'penalty_save', 'penalty_scored', 'penalty_missed_shootout',
+        'clean_sheet', 'substitution', 'sub_appearance',
+        'possession_bonus', 'danger_attack', 'starting_xi',
+        'assist', 'goalkeeper_save',
+      ];
 
       if (latestEvent.type === 'full_time') {
         if (dialogStep === 1) {
@@ -728,7 +1395,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         } else {
           timer = setTimeout(() => setShowPopup(false), 5000);
         }
-      } else if (latestEvent.type === 'var_review' || latestEvent.type === 'foul' || latestEvent.type === 'corner_kick' || latestEvent.type === 'offside') {
+      } else if (['var_review', 'corner_kick', 'extra_time'].includes(latestEvent.type)) {
         if (dialogStep === 1) {
           timer = setTimeout(() => setDialogStep(2), 4000);
         } else if (dialogStep === 2) {
@@ -749,16 +1416,32 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       return () => clearTimeout(timer);
     }, [showPopup, latestEvent, dialogStep]);
 
-    // Restart the match exactly 2 minutes after full time dialog finishes
+    // Card pack reward after full time
     useEffect(() => {
+      if (latestEvent?.type === 'full_time' && !showPopup) {
+        if (userLineupRef.current && !hasOpenedPack(contestId)) {
+          const packTimer = setTimeout(() => setShowCardPack(true), 800);
+          return () => clearTimeout(packTimer);
+        }
+      }
+    }, [latestEvent, showPopup, contestId]);
+
+    // Restart the demo match 2 minutes after full time (demo only — live matches don't loop)
+    useEffect(() => {
+      if (appMode === 'live') return;
       if (latestEvent?.type === 'full_time' && !showPopup) {
         const resetTimer = setTimeout(() => {
           setMinute(0);
           setCurrentEventIdx(0);
           triggeredEventsRef.current.clear();
+          notifiedEventsRef.current.clear();
+          appearedPlayersRef.current.clear();
+          scoreRef.current = { home: 0, away: 0 };
           setEvents([]);
           setScore({ home: 0, away: 0 });
-          
+          setPlayerPoints({});
+          setPlayerHistory({});
+
           let restartBoard = [...DEMO_LEADERBOARD];
           if (publicKey) {
             const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
@@ -771,23 +1454,19 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             }
             restartBoard = restartBoard.map((entry, index) => {
               let prize = '-';
-              if (contestType === '5050') {
-                prize = index < 10 ? '0.18 SOL' : '-';
-              } else if (contestType === 'wta') {
-                prize = index === 0 ? '10.0 SOL' : '-';
-              } else {
+              if (contestType === '5050') prize = index < 10 ? '0.18 SOL' : '-';
+              else if (contestType === 'wta') prize = index === 0 ? '10.0 SOL' : '-';
+              else {
                 if (index === 0) prize = '5.0 SOL';
                 else if (index === 1) prize = '3.0 SOL';
                 else if (index === 2) prize = '2.0 SOL';
               }
-      
               if (entry.isUser) {
                 return {
-                  ...entry,
-                  prize,
+                  ...entry, prize,
                   username: customUser,
-                  wallet: `${publicKey.toString().substring(0, 4)}...${publicKey.toString().substring(publicKey.toString().length - 3)}`,
-                  avatar: customAvatar
+                  wallet: `${publicKey.toString().substring(0, 4)}...${publicKey.toString().slice(-3)}`,
+                  avatar: customAvatar,
                 };
               }
               return { ...entry, prize };
@@ -795,11 +1474,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           } else {
             restartBoard = restartBoard.map((entry, index) => {
               let prize = '-';
-              if (contestType === '5050') {
-                prize = index < 10 ? '0.18 SOL' : '-';
-              } else if (contestType === 'wta') {
-                prize = index === 0 ? '10.0 SOL' : '-';
-              } else {
+              if (contestType === '5050') prize = index < 10 ? '0.18 SOL' : '-';
+              else if (contestType === 'wta') prize = index === 0 ? '10.0 SOL' : '-';
+              else {
                 if (index === 0) prize = '5.0 SOL';
                 else if (index === 1) prize = '3.0 SOL';
                 else if (index === 2) prize = '2.0 SOL';
@@ -808,12 +1485,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             });
           }
           setLeaderboard(restartBoard);
-          
           setLatestEvent(null);
-        }, 120000); // 120,000ms = 2 minutes
+        }, 120000);
         return () => clearTimeout(resetTimer);
       }
     }, [latestEvent, showPopup]);
+
+  const [showCardPack, setShowCardPack] = useState(false);
+  // Per-player accumulated fantasy points (after captain + confidence multipliers)
+  const [playerPoints, setPlayerPoints] = useState<Record<string, number>>({});
+  const [playerHistory, setPlayerHistory] = useState<Record<string, Array<{ label: string; pts: number; minute: number }>>>({});
+  // Lineup exposed as state so it can drive the player panel UI
+  const [userLineup, setUserLineup] = useState<any>(null);
 
   const userPoints = leaderboard.find((e) => e.isUser)?.points ?? 0;
   const userRank = leaderboard.find((e) => e.isUser)?.rank ?? '-';
@@ -821,6 +1504,27 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
+
+      {/* Skill Card Pack reward — appears after full time if user has a lineup */}
+      {showCardPack && (
+        <CardPackOpener
+          contestId={contestId}
+          onOpen={() => openCardPack(contestId)}
+          onClose={() => setShowCardPack(false)}
+        />
+      )}
+
+      {/* Fantasy Notification Toast Queue */}
+      {activeToasts.map((toast, idx) => (
+        <FantasyToast
+          key={toast.id}
+          notification={toast}
+          index={idx}
+          onDismiss={() => {
+            setActiveToasts((prev) => prev.filter((t) => t.id !== toast.id));
+          }}
+        />
+      ))}
 
       {/* Live Event Popup */}
       {showPopup && latestEvent && (() => {
@@ -837,6 +1541,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              userSelect: 'none',
             }}>
               {/* Referee Image */}
               <img
@@ -852,6 +1557,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   zIndex: 1020,
                   animation: (dialog as any).refereePosition === 'left' ? 'slide-in-left 400ms ease-out' : 'slide-in-right 400ms ease-out',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
               
@@ -903,6 +1609,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             alignItems: 'center',
             justifyContent: 'flex-end',
             paddingBottom: '8vh',
+            userSelect: 'none',
           }}>
             <style>{`
               @keyframes slide-in-left {
@@ -938,6 +1645,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   zIndex: 1005,
                   animation: 'slide-in-left 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
             )}
@@ -957,6 +1665,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   zIndex: 1005,
                   animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
             )}
@@ -975,6 +1684,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   zIndex: 1006,
                   animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
+                  willChange: 'filter',
                 }}
               />
             )}
@@ -988,7 +1698,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 if (type === 'full_time') maxSteps = 7;
                 else if (type === 'half_time') maxSteps = 4;
                 else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
-                else if (['var_review', 'foul', 'corner_kick', 'offside', 'substitution'].includes(type)) maxSteps = 3;
+                else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
 
                 if (dialogStep < maxSteps) {
                   setDialogStep(prev => prev + 1);
@@ -1093,40 +1803,55 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             </div>
           </div>
 
-          {/* Controls */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button
-              className={`btn btn--sm ${isPlaying ? 'btn--danger' : 'btn--primary'}`}
-              onClick={() => setIsPlaying(!isPlaying)}
-              id="toggle-simulation-btn"
-            >
-              {isPlaying ? '⏸ Pause' : '▶ Resume'}
-            </button>
-            <button
-              className={`btn btn--sm ${isFastForward ? 'btn--primary' : 'btn--ghost'}`}
-              onClick={() => setIsFastForward(!isFastForward)}
-            >
-              {isFastForward ? '⏩ Fast Forward On' : '⏩ Fast Forward Off'}
-            </button>
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() => { 
-                setEvents(initialState.initialEvents); 
-                setScore({ home: initialState.homeScore, away: initialState.awayScore }); 
-                setMinute(initialState.initialMin); 
-                setCurrentEventIdx(initialState.initialIdx); 
-                setIsPlaying(true); 
-                setVerificationStatus('pending');
-                
-                const triggered = new Set<string>();
-                initialState.initialEvents.forEach(e => triggered.add(e.id));
-                triggeredEventsRef.current = triggered;
-              }}
-              id="reset-simulation-btn"
-            >
-              ↺ Reset
-            </button>
-          </div>
+          {/* Controls — demo mode only */}
+          {appMode !== 'live' && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                className={`btn btn--sm ${isPlaying ? 'btn--danger' : 'btn--primary'}`}
+                onClick={() => setIsPlaying(!isPlaying)}
+                id="toggle-simulation-btn"
+              >
+                {isPlaying ? '⏸ Pause' : '▶ Resume'}
+              </button>
+              <button
+                className={`btn btn--sm ${isFastForward ? 'btn--primary' : 'btn--ghost'}`}
+                onClick={() => setIsFastForward(!isFastForward)}
+              >
+                {isFastForward ? '⏩ Fast Forward On' : '⏩ Fast Forward Off'}
+              </button>
+              <button
+                className="btn btn--ghost btn--sm"
+                onClick={() => {
+                  setEvents(initialState.initialEvents);
+                  setScore({ home: initialState.homeScore, away: initialState.awayScore });
+                  setMinute(initialState.initialMin);
+                  setCurrentEventIdx(initialState.initialIdx);
+                  setIsPlaying(true);
+                  setVerificationStatus('pending');
+                  const triggered = new Set<string>();
+                  initialState.initialEvents.forEach(e => triggered.add(e.id));
+                  triggeredEventsRef.current = triggered;
+                }}
+                id="reset-simulation-btn"
+              >
+                ↺ Reset
+              </button>
+            </div>
+          )}
+          {appMode === 'live' && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 16px', borderRadius: 20,
+                background: 'rgba(0,229,255,0.07)',
+                border: '1px solid rgba(0,229,255,0.25)',
+                fontSize: '0.72rem', fontWeight: 700, color: '#00e5ff', letterSpacing: '0.06em',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 6px #00e5ff', animation: 'pulse 1.5s infinite' }} />
+                LIVE — Real-time TxLINE data
+              </div>
+            </div>
+          )}
 
           {/* Main Grid */}
           <div className="grid-sidebar">
@@ -1160,17 +1885,208 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 </div>
               </div>
               
+              {/* ── Spectator banner (no lineup) ── */}
+              {!userLineup && (
+                <div className="card" style={{ marginBottom: 20, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.18)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: '1.2rem' }}>👁</span>
+                    <div>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#00e5ff', letterSpacing: '0.04em' }}>SPECTATOR MODE</div>
+                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>Watching without a lineup — no fantasy points tracked.</div>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/lineup/${fixture.fixtureId}`}
+                    className="btn btn--primary btn--sm"
+                    style={{ whiteSpace: 'nowrap', fontSize: '0.75rem' }}
+                  >
+                    Join & Build Lineup →
+                  </Link>
+                </div>
+              )}
+
+              {/* ── My Lineup — 5-card horizontal row with live pts + history ── */}
+              {userLineup && userLineup.players?.filter(Boolean).length > 0 && (() => {
+                const CARD_W = 110;
+                const CARD_H = Math.round(CARD_W * (165 / 120)); // Player Card (2).svg ratio
+                const players = (userLineup.players as any[]).filter(Boolean);
+                return (
+                  <div className="card" style={{ marginBottom: 20 }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 14, color: '#ffd700', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      My Lineup
+                      <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>real-time pts</span>
+                    </h3>
+                    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, alignItems: 'flex-start' }}>
+                      {players.map((p: any) => {
+                        const pts = playerPoints[p.id] ?? 0;
+                        const hist = playerHistory[p.id] ?? [];
+                        const isCap = userLineup.captain === p.id;
+                        const stars = userLineup.confidence?.[p.id] ?? 3;
+                        const ptColor = pts > 0 ? '#4ade80' : pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)';
+                        const nameFs = p.name.length > 15 ? '0.46rem' : p.name.length > 10 ? '0.52rem' : '0.6rem';
+                        const equippedCard = equippedCardDefsRef.current[p.id] ?? null;
+                        const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
+                        const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
+                        return (
+                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flexShrink: 0, width: CARD_W }}>
+                            {/* Player Card (2).svg — same design as lineup builder */}
+                            <div style={{
+                              width: CARD_W, height: CARD_H, flexShrink: 0, position: 'relative',
+                              backgroundImage: "url('/Player%20Card%20(2).svg')",
+                              backgroundSize: '100% 100%',
+                              boxShadow: isCap
+                                ? '0 0 14px rgba(255,215,0,0.55)'
+                                : pts !== 0 ? `0 0 8px ${ptColor}44` : '2px 2px 6px rgba(0,0,0,0.4)',
+                            }}>
+                              {/* Rating */}
+                              <div style={{
+                                position: 'absolute', top: '22.5%', right: '10.5%', width: '18%',
+                                textAlign: 'center', color: (p.rating ?? 0) >= 90 ? '#ca8a04' : (p.rating ?? 0) >= 85 ? '#15803d' : '#1e293b',
+                                fontFamily: 'Inter, sans-serif', fontSize: `${CARD_W * 0.11}px`,
+                                fontWeight: 800, lineHeight: 1, zIndex: 2,
+                              }}>
+                                {p.rating ?? '-'}
+                              </div>
+                              {/* Name */}
+                              <div style={{
+                                position: 'absolute', top: '67.2%', left: '38%', width: '52%',
+                                color: '#36220f', fontSize: nameFs, fontWeight: 700,
+                                fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
+                                overflow: 'hidden', textOverflow: 'ellipsis', zIndex: 2,
+                              }}>
+                                {p.name}
+                              </div>
+                              {/* Team flag + name */}
+                              <div style={{
+                                position: 'absolute', top: '75.5%', left: '38%', width: '52%',
+                                color: '#36220f', fontSize: '0.48rem', fontWeight: 700,
+                                fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center',
+                                gap: 3, whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 2,
+                              }}>
+                                <span>{p.teamFlag}</span>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.team}</span>
+                              </div>
+                              {/* Position badge */}
+                              <div style={{
+                                position: 'absolute', top: '85.5%', left: '42%', zIndex: 2,
+                                background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
+                                color: '#fff', border: '1px solid #36220f', borderRadius: 0,
+                                padding: '1px 3px', fontSize: '0.42rem', fontWeight: 900,
+                                fontFamily: 'Inter, sans-serif', textTransform: 'uppercase',
+                              }}>
+                                {p.position}
+                              </div>
+                              {/* Captain badge */}
+                              {isCap && (
+                                <div style={{
+                                  position: 'absolute', top: '-8%', left: '50%', transform: 'translateX(-50%)',
+                                  background: 'linear-gradient(to bottom, #d32f2f, #8b1e1e)',
+                                  border: '2px solid #fff', padding: '1px 5px',
+                                  fontWeight: 700, fontFamily: 'Inter, sans-serif',
+                                  fontSize: '0.5rem', color: '#fff',
+                                  boxShadow: '0 0 0 1px #000, 1px 2px 4px rgba(0,0,0,0.3)', zIndex: 10,
+                                }}>CAPTAIN</div>
+                              )}
+                              {/* Confidence stars overlay */}
+                              <div style={{
+                                position: 'absolute', bottom: '2%', left: 0, right: 0, textAlign: 'center',
+                                fontSize: '0.42rem', color: 'rgba(255,215,0,0.6)', zIndex: 2,
+                              }}>
+                                {'★'.repeat(stars)}
+                              </div>
+                            </div>
+
+                            {/* Equipped skill card indicator */}
+                            {equippedCard && cardRarityColor && cardRarityStars && (
+                              <div style={{
+                                width: '100%', textAlign: 'center',
+                                fontSize: '0.4rem', lineHeight: 1.3,
+                              }}>
+                                <span style={{ color: cardRarityColor, fontWeight: 800, letterSpacing: '0.03em' }}>
+                                  {cardRarityStars}
+                                </span>
+                                <span style={{ display: 'block', color: cardRarityColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {equippedCard.name}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Live total pts */}
+                            <div style={{ textAlign: 'center', lineHeight: 1 }}>
+                              <div style={{
+                                fontFamily: 'Bebas Neue, cursive', fontSize: '1.35rem',
+                                color: ptColor, textShadow: pts !== 0 ? `0 0 6px ${ptColor}88` : 'none',
+                              }}>
+                                {pts > 0 ? `+${pts.toFixed(1)}` : pts === 0 ? '0' : pts.toFixed(1)}
+                              </div>
+                              <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>PTS</div>
+                            </div>
+
+                            {/* Point history log */}
+                            {hist.length > 0 && (
+                              <div style={{
+                                width: '100%', display: 'flex', flexDirection: 'column', gap: 2,
+                                maxHeight: 90, overflowY: 'auto',
+                              }}>
+                                {hist.map((h, i) => (
+                                  <div key={i} style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '1px 4px',
+                                    background: h.pts > 0 ? 'rgba(74,222,128,0.07)' : h.pts < 0 ? 'rgba(248,113,113,0.07)' : 'transparent',
+                                    borderRadius: 3,
+                                  }}>
+                                    <span style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
+                                      {h.label}
+                                    </span>
+                                    <span style={{ fontSize: '0.44rem', fontWeight: 700, flexShrink: 0, color: h.pts > 0 ? '#4ade80' : h.pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)' }}>
+                                      {h.pts > 0 ? `+${h.pts.toFixed(1)}` : h.pts.toFixed(1)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Match Events Timeline */}
               <div className="card" style={{ marginBottom: 20 }}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, color: '#ffd700', display: 'flex', alignItems: 'center', gap: 8 }}>
                   Match Events
-                  <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>LIVE</span>
+                  {appMode === 'live' ? (
+                    <span
+                      className={txlineStatus === 'live' ? 'badge badge--live' : undefined}
+                      style={{
+                        fontSize: '0.6rem',
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        fontWeight: 700,
+                        background: txlineStatus === 'live' ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: txlineStatus === 'live' ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
+                        border: txlineStatus === 'live' ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                      }}
+                    >
+                      {txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                    </span>
+                  ) : (
+                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
+                  )}
+                  <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
+                    title="Points shown are base values for that event type. Your actual pts include captain 2× and confidence multiplier — see the lineup panel above.">
+                    ⓘ base pts
+                  </span>
                 </h3>
 
                 {events.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
-                    Waiting for match events...
+                    {appMode === 'live' && txlineStatus === 'waiting'
+                      ? 'Waiting for TxLINE live data — match may not have started yet'
+                      : 'Waiting for match events...'}
                   </div>
                 )}
 
