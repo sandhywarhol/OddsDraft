@@ -193,18 +193,36 @@ export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: stri
   if (type === 'penaltymiss' && gameState === 'Penalties') return 'penalty_missed_shootout';
 
   const map: Record<string, string> = {
-    goal:         'goal',
-    yellowcard:   'yellow_card',
-    redcard:      'red_card',
-    owngoal:      'own_goal',
-    substitution: 'substitution',
-    penaltysave:  'penalty_save',
-    save:         'goalkeeper_save',
-    assist:       'assist',
-    corner:       'corner_kick',
-    var:          'var_review',
-    penalty:      'penalty_won',     // attacker's perspective
-    penaltymiss:  'penalty_missed',
+    goal:           'goal',
+    yellowcard:     'yellow_card',
+    yellow_card:    'yellow_card',
+    redcard:        'red_card',
+    red_card:       'red_card',
+    owngoal:        'own_goal',
+    own_goal:       'own_goal',
+    substitution:   'substitution',
+    sub:            'substitution',
+    penaltysave:    'penalty_save',
+    penalty_save:   'penalty_save',
+    save:           'goalkeeper_save',
+    assist:         'assist',
+    corner:         'corner_kick',
+    corner_kick:    'corner_kick',
+    var:            'var_review',
+    var_review:     'var_review',
+    penalty:        'penalty_won',
+    penaltymiss:    'penalty_missed',
+    penalty_miss:   'penalty_missed',
+    // Match flow events — synthesized from GameState but also handle if TxLINE sends them explicitly
+    kickoff:        'kick_off',
+    kick_off:       'kick_off',
+    halftime:       'half_time',
+    half_time:      'half_time',
+    secondhalf:     'kick_off',
+    fulltime:       'full_time',
+    full_time:      'full_time',
+    startingxi:     'starting_xi',
+    starting_xi:    'starting_xi',
   };
   return map[type] || null;
 }

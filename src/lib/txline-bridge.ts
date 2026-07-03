@@ -273,6 +273,10 @@ function describeEvent(type: string, player: string, team: string, minute: numbe
     case 'extra_time':              return `${m} Extra time begins!`;
     case 'goal_conceded':           return `${m} Goal conceded by ${player} (${team})`;
     case 'danger_attack':           return `${m} ${team} in the DANGER zone!`;
+    case 'kick_off':                return `${m} Kick off!`;
+    case 'half_time':               return `${m} Half time!`;
+    case 'full_time':               return `${m} Full time!`;
+    case 'starting_xi':             return `${player} starts for ${team}`;
     default:                        return `${m} ${player} — ${type} (${team})`;
   }
 }

@@ -860,6 +860,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const playerIdMapRef = useRef<Record<string, string>>({});
   const seenSeqsRef = useRef<Set<number>>(new Set());
   const liveInitDoneRef = useRef(false);
+  const lastGameStateRef = useRef<string | null>(null); // tracks last seen TxLINE game state for synthesis
   const showPopupRef = useRef(false);
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
   const [minutesToKickoff, setMinutesToKickoff] = useState<number | null>(null);
@@ -1119,7 +1120,65 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const latest = updates[updates.length - 1];
         if (latest?.score) {
           setScore({ home: latest.score.home ?? 0, away: latest.score.away ?? 0 });
+          scoreRef.current = { home: latest.score.home ?? 0, away: latest.score.away ?? 0 };
         }
+
+        // ── Game state transition synthesis ────────────────────────────────────
+        // Detect state changes (null → FirstHalf, FirstHalf → HalfTime, etc.) and
+        // synthesize match-flow events. Also awards starting_xi fantasy points once.
+        const gs = latest?.gameState ?? null;
+        if (gs && gs !== lastGameStateRef.current) {
+          const prevGs = lastGameStateRef.current;
+          lastGameStateRef.current = gs;
+
+          const synthEvents: typeof matchEvents = [];
+          const isMatchLive = ['FirstHalf','SecondHalf','HalfTime','ExtraTime','Penalties','FullTime'].includes(gs);
+
+          // Award starting appearance bonus once per session when match is first detected live
+          if (!prevGs && isMatchLive && userLineupRef.current?.players?.length > 0) {
+            const { players, captain, confidence } = userLineupRef.current;
+            let totalBonus = 0;
+            for (const p of (players as any[])) {
+              if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+              let pts = 2;
+              const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+              pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+              if (captain === p.id) pts *= 2;
+              pts = Math.round(pts * 100) / 100;
+              totalBonus += pts;
+              appearedPlayersRef.current.add(p.id); // prevent double-counting from appearance bonus
+              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+              setPlayerHistory(prev => ({
+                ...prev,
+                [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }],
+              }));
+            }
+            if (totalBonus > 0 && isMounted) {
+              setLeaderboard(prev => {
+                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+              });
+            }
+          }
+
+          // Synthesize match-flow events for the feed
+          if (gs === 'FirstHalf' && !prevGs) {
+            synthEvents.push({ id: `synth-kickoff-${Date.now()}`, minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Kick off! The match has started.' });
+          } else if (gs === 'HalfTime') {
+            synthEvents.push({ id: `synth-ht-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half time!' });
+          } else if (gs === 'SecondHalf' && prevGs) {
+            synthEvents.push({ id: `synth-so-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' });
+          } else if (gs === 'FullTime') {
+            synthEvents.push({ id: `synth-ft-${Date.now()}`, minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' });
+          }
+
+          if (synthEvents.length > 0 && isMounted) {
+            setEvents(prev => [...synthEvents.slice().reverse(), ...prev]);
+            setMinute(synthEvents[synthEvents.length - 1].minute);
+            if (gs === 'FullTime') playSFX('end_game'); else playSFX('whistle');
+          }
+        }
+        // ── End game state synthesis ────────────────────────────────────────────
 
         const newEvents = convertTxLineUpdates(
           updates,
