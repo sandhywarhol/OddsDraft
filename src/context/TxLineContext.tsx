@@ -41,7 +41,11 @@ export const useTxLine = () => useContext(TxLineContext);
 
 export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   const [appMode, setAppMode] = useState<'demo' | 'live'>('demo');
-  const toggleAppMode = () => setAppMode(prev => prev === 'demo' ? 'live' : 'demo');
+  const toggleAppMode = () => setAppMode(prev => {
+    const next = prev === 'demo' ? 'live' : 'demo';
+    localStorage.setItem('txline_app_mode', next);
+    return next;
+  });
 
   const [apiToken, setApiToken] = useState<string | null>(null);
   const [guestJwt, setGuestJwt] = useState<string | null>(null);
@@ -54,12 +58,16 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   const wallet = useWallet();
   const { connection } = useConnection();
 
-  // On mount, restore tokens from localStorage
+  // On mount, restore tokens and mode from localStorage
   useEffect(() => {
     const savedToken = localStorage.getItem('txline_api_token');
     if (savedToken) setApiToken(savedToken);
     const savedJwt = localStorage.getItem('txline_guest_jwt');
     if (savedJwt) setGuestJwt(savedJwt);
+    // Restore live mode only if a valid token exists
+    if (savedToken && localStorage.getItem('txline_app_mode') === 'live') {
+      setAppMode('live');
+    }
   }, []);
 
   // Persist apiToken
@@ -171,7 +179,12 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const setManualApiToken = (token: string) => setApiToken(token);
+  const setManualApiToken = (token: string) => {
+    setApiToken(token);
+    localStorage.setItem('txline_api_token', token);
+    setAppMode('live');
+    localStorage.setItem('txline_app_mode', 'live');
+  };
 
   const subscribeAndActivate = async () => {
     try {
