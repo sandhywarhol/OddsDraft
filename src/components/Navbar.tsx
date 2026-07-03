@@ -86,8 +86,14 @@ export default function Navbar() {
       // useEffect above will call toggleAppMode once apiToken is set
     } catch (e: any) {
       pendingLiveRef.current = false;
-      const msg: string = e?.message ?? '';
-      const isNoSol = msg.includes('prior credit') || msg.includes('insufficient') || msg.includes('debit');
+      // Check all possible locations where the SOL error message could live
+      const haystack = [
+        e?.message,
+        e?.cause?.message,
+        e?.transactionError?.message,
+        ...(e?.logs ?? []),
+      ].filter(Boolean).join(' ');
+      const isNoSol = haystack.includes('prior credit') || haystack.includes('insufficient') || haystack.includes('debit an account');
       setModalError(isNoSol ? 'insufficient_sol' : '');
       setShowTokenModal(true);
     }
