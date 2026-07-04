@@ -2301,16 +2301,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   The match has ended. Check your final rank and claim your prize.
                 </div>
               </div>
-              <a
-                href={`/replay/${contestId}?results=1`}
-                style={{
-                  padding: '10px 20px', background: '#ffd700', border: 'none',
-                  borderRadius: 8, color: '#000', fontWeight: 800, fontSize: '0.85rem',
-                  textDecoration: 'none', whiteSpace: 'nowrap',
-                }}
-              >
-                🏆 View My Results →
-              </a>
+              <div style={{ fontSize: '0.8rem', color: '#ffd700', fontWeight: 700 }}>
+                Scroll down to see your points ↓
+              </div>
             </div>
           )}
 

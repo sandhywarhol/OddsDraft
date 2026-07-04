@@ -793,7 +793,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {hasEntered && (
               <Link
-                href={`/replay/${fixture.fixtureId}?results=1`}
+                href={`/live/${fixture.fixtureId}`}
                 className="btn btn--primary btn--full"
               >
                 🏆 My Results
