@@ -31,13 +31,20 @@ export default function ContestsPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Load which contest types the user has already entered per fixture
+    // Load which fixtures the user has entered — check both the contest entry flag AND
+    // the saved lineup (the lineup key is written even when the entry flag is missing,
+    // e.g. if localStorage was partially cleared or the session was on devnet).
     const map: Record<string, string[]> = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith('txodds_entered_contests_')) {
         const fixtureId = key.replace('txodds_entered_contests_', '');
         try { map[fixtureId] = JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { /* */ }
+      }
+      // Fallback: if a saved lineup exists for a fixture, treat it as entered
+      if (key?.startsWith('txodds_user_lineup_')) {
+        const fixtureId = key.replace('txodds_user_lineup_', '');
+        if (!map[fixtureId]) map[fixtureId] = ['top3'];
       }
     }
     setEnteredContests(map);

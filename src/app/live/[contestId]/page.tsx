@@ -927,11 +927,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verifying' | 'success'>('pending');
   const [matchCompleted, setMatchCompleted] = useState(false);
+  const [showCardPack, setShowCardPack] = useState(false);
 
   const handleVerify = () => {
     setVerificationStatus('verifying');
     setTimeout(() => {
       setVerificationStatus('success');
+      // Open card pack reward after verification succeeds — only if user has a lineup
+      // and hasn't already claimed this contest's pack.
+      if (userLineupRef.current && !hasOpenedPack(contestId)) {
+        setTimeout(() => setShowCardPack(true), 600);
+      }
     }, 2000);
   };
 
@@ -2066,7 +2072,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
     }, [latestEvent, showPopup]);
 
-  const [showCardPack, setShowCardPack] = useState(false);
   // Per-player accumulated fantasy points (after captain + confidence multipliers)
   const [playerPoints, setPlayerPoints] = useState<Record<string, number>>({});
   const [playerHistory, setPlayerHistory] = useState<Record<string, Array<{ label: string; pts: number; minute: number }>>>({});
