@@ -925,6 +925,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [dialogStep, setDialogStep] = useState(1);
 
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verifying' | 'success'>('pending');
+  const [matchCompleted, setMatchCompleted] = useState(false);
 
   const handleVerify = () => {
     setVerificationStatus('verifying');
@@ -1519,7 +1520,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       try {
         const res = await fetch('/api/scores/wc2026');
         if (!res.ok || !isMounted) return;
-        const data: Record<string, { home: number; away: number }> = await res.json();
+        const data: Record<string, { home: number; away: number; completed?: boolean }> = await res.json();
         const entry = data[contestId];
         if (entry && isMounted) {
           // Only apply if TxLINE hasn't already given us a higher score (from goal events)
@@ -1531,6 +1532,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             home: Math.max(scoreRef.current.home, entry.home),
             away: Math.max(scoreRef.current.away, entry.away),
           };
+
+          // If the authoritative scores API says the match is completed,
+          // synthesize a full-time event so the card pack and prize flow unlock.
+          // This handles TxLINE devnet always reporting Clock.Running=true.
+          if (entry.completed && isMounted && lastGameStateRef.current !== 'FullTime') {
+            lastGameStateRef.current = 'FullTime';
+            const ftMin = Math.max(90, Math.floor((lastClockSecondsRef.current ?? 90 * 60) / 60));
+            setEvents(prev => {
+              if (prev.some(e => e.type === 'full_time')) return prev;
+              return [{ id: `synth-ft-src-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ended ${entry.home}–${entry.away}.` }, ...prev];
+            });
+            setMinute(ftMin);
+            setMatchCompleted(true);
+            playSFX('end_game');
+          }
+          if (entry.completed && isMounted) setMatchCompleted(true);
         }
       } catch { /* silent */ }
     };
@@ -2113,6 +2130,35 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             );
           })()}
 
+          {/* Match completed banner — shown when authoritative source confirms match is finished */}
+          {matchCompleted && appMode === 'live' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+              background: 'linear-gradient(135deg, rgba(255,215,0,0.1), rgba(0,232,122,0.07))',
+              border: '1px solid rgba(255,215,0,0.35)',
+              borderRadius: 10, padding: '14px 20px', marginBottom: 20,
+            }}>
+              <div>
+                <div style={{ fontWeight: 800, color: '#ffd700', fontSize: '0.9rem', marginBottom: 2 }}>
+                  🏁 Match Finished — Final Score: {score.home}–{score.away}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
+                  The match has ended. Check your final rank and claim your prize.
+                </div>
+              </div>
+              <a
+                href={`/replay/${contestId}?results=1`}
+                style={{
+                  padding: '10px 20px', background: '#ffd700', border: 'none',
+                  borderRadius: 8, color: '#000', fontWeight: 800, fontSize: '0.85rem',
+                  textDecoration: 'none', whiteSpace: 'nowrap',
+                }}
+              >
+                🏆 View My Results →
+              </a>
+            </div>
+          )}
+
           {/* Controls — demo mode only */}
           {appMode !== 'live' && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -2577,17 +2623,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   <button
                     className={`btn btn--full ${verificationStatus === 'success' ? 'btn--ghost' : 'btn--primary'}`}
                     onClick={handleVerify}
-                    disabled={minute < 90 && verificationStatus !== 'success'}
+                    disabled={!matchCompleted && minute < 90 && verificationStatus !== 'success'}
                     style={{
                       padding: '10px 16px',
                       fontSize: '0.85rem',
-                      opacity: minute >= 90 || verificationStatus === 'success' ? 1 : 0.6,
-                      cursor: minute >= 90 || verificationStatus === 'success' ? 'pointer' : 'not-allowed'
+                      opacity: matchCompleted || minute >= 90 || verificationStatus === 'success' ? 1 : 0.6,
+                      cursor: matchCompleted || minute >= 90 || verificationStatus === 'success' ? 'pointer' : 'not-allowed'
                     }}
                   >
-                    {verificationStatus === 'success' 
-                      ? '✓ Verified' 
-                      : (minute >= 90 ? 'Run Verification' : 'Wait for Full Time')}
+                    {verificationStatus === 'success'
+                      ? '✓ Verified'
+                      : (matchCompleted || minute >= 90 ? 'Run Verification' : 'Wait for Full Time')}
                   </button>
                 )}
               </div>
