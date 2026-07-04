@@ -142,16 +142,34 @@ export async function GET(req: NextRequest) {
     pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
   }
 
-  // Goals + cards from keyEvents — ESPN sometimes puts goals here when scoringPlays is empty
+  // Goals + cards from keyEvents — ESPN sometimes puts goals here when scoringPlays is empty,
+  // and extra-time goals are often only here (not in scoringPlays).
   for (const play of (detail.keyEvents ?? detail.keyPlays ?? [])) {
     const typeText = (play.type?.text ?? '').toLowerCase();
     const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
-    // Include goals (any type containing 'goal') and cards; skip subs and generic events
-    if (!typeText.includes('goal') && !typeText.includes('card')) continue;
+    // Include: explicit goal/card types, or any event tagged as a scoring play
+    const isGoalEvent = typeText.includes('goal') || play.scoringPlay === true || play.isScoringPlay === true;
+    const isCardEvent = typeText.includes('card');
+    if (!isGoalEvent && !isCardEvent) continue;
     const text: string = play.text ?? '';
     const assistMatch = text.match(/\(([^)]+)\)/);
     const player = play.participants?.[0]?.athlete?.displayName
       ?? text.replace(/\s*\([^)]*\)/, '').trim();
+    if (!player) continue;
+    pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
+  }
+
+  // Also check detail.scoringPlays more broadly in case some goals are only in a sub-array
+  for (const play of (detail.plays ?? [])) {
+    if (!play.scoringPlay && !play.isScoringPlay) continue;
+    const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
+    const text: string = play.text ?? play.athletesInvolved?.[0]?.displayName ?? '';
+    if (!text) continue;
+    const assistMatch = text.match(/\(([^)]+)\)/);
+    const player = play.participants?.[0]?.athlete?.displayName
+      ?? play.athletesInvolved?.[0]?.displayName
+      ?? text.replace(/\s*\([^)]*\)/, '').trim();
+    if (!player) continue;
     pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
   }
 

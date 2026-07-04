@@ -10,7 +10,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useEffect, useState } from 'react';
 import type { MatchResult } from '@/app/api/match/result/route';
 
-type FixtureScore = { home: number; away: number };
+type FixtureScore = { home: number; away: number; completed?: boolean };
 
 export default function ContestsPage() {
   const { appMode, liveFixtures, allFixtures } = useTxLine();
@@ -107,8 +107,12 @@ export default function ContestsPage() {
     // It takes priority over TxLINE liveFixtures so TxLINE devnet bugs
     // (Clock.Running stuck true, late GameState updates) can't override a match
     // that has clearly run past its time window.
+    // ESPN marks a match completed=true once the final whistle is confirmed.
+    // This is the most reliable finished signal — overrides time window + TxLINE quirks.
+    const espnCompleted = !isDemo && !!finishedScores[fid]?.completed;
     const status: 'upcoming' | 'live' | 'finished' =
-      (timeStatus === 'finished') ? 'finished' :           // wall-clock expired → always finished
+      (espnCompleted) ? 'finished' :                       // ESPN confirmed finished → highest priority
+      (timeStatus === 'finished') ? 'finished' :           // wall-clock window expired → always finished
       (!isDemo && apiIsFinished) ? 'finished' :            // TxLINE clock ≥90 min stopped
       (!isDemo && apiLiveMatch) ? 'live' :                 // TxLINE says live
       timeStatus;                                          // upcoming (or live within window)

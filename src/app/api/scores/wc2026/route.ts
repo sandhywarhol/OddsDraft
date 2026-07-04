@@ -55,6 +55,7 @@ async function fetchESPNDay(dateStr: string, isRecent = false): Promise<any[]> {
 export interface FixtureScore {
   home: number;
   away: number;
+  completed?: boolean;
 }
 
 // GET /api/scores/wc2026
@@ -109,7 +110,7 @@ export async function GET() {
     );
 
     if (fixture) {
-      results[fixture.fixtureId] = { home: homeScore, away: awayScore };
+      results[fixture.fixtureId] = { home: homeScore, away: awayScore, completed: !!isCompleted };
     }
   }
 

@@ -167,6 +167,90 @@ const EVENT_ICONS: Record<string, string> = {
   clean_sheet:             '🛡️',
 };
 
+// NPC commentary lines shown in the event feed (commentator, referee, player reactions)
+const NPC_COMMENTARY: Record<string, Array<{ npc: string; line: string }>> = {
+  goal: [
+    { npc: '🎙️ Commentator', line: "GOOOAL! The net is rippling! What a strike!" },
+    { npc: '🎙️ Commentator', line: "Absolute scenes! That's a goal of the tournament contender!" },
+    { npc: '🎙️ Commentator', line: "Clinical finish! The keeper had no chance!" },
+    { npc: '🎙️ Commentator', line: "They're going absolutely wild in the stands!" },
+    { npc: '🎙️ Commentator', line: "A moment of pure brilliance! The crowd erupts!" },
+  ],
+  own_goal: [
+    { npc: '😬 Commentator', line: "Oh no! The defender has put it into his own net!" },
+    { npc: '😬 Commentator', line: "Cruel luck — an own goal at the worst possible time." },
+    { npc: '😬 Commentator', line: "That deflection has completely wrong-footed the goalkeeper." },
+  ],
+  yellow_card: [
+    { npc: '🟨 Referee', line: "Yellow card! I'm booking him for that challenge." },
+    { npc: '🟨 Referee', line: "That's a caution. One more and he walks!" },
+    { npc: '🎙️ Commentator', line: "The referee reaches for his pocket. Yellow card shown." },
+  ],
+  red_card: [
+    { npc: '🟥 Referee', line: "RED CARD! He's off! Down to ten men!" },
+    { npc: '🟥 Referee', line: "That's a straight red. No argument from the referee there." },
+    { npc: '🎙️ Commentator', line: "And he's sent off! This changes everything." },
+  ],
+  kick_off: [
+    { npc: '🎙️ Commentator', line: "And we are underway! The World Cup continues!" },
+    { npc: '🎙️ Commentator', line: "Here we go! Both teams ready for battle." },
+    { npc: '🎙️ Commentator', line: "The referee blows the whistle — let's play football!" },
+  ],
+  half_time: [
+    { npc: '🎙️ Commentator', line: "There's the whistle! Teams head to the dressing rooms." },
+    { npc: '🎙️ Commentator', line: "Half time! The managers will have plenty to say." },
+    { npc: '🎙️ Commentator', line: "Fifteen minutes for the tacticians to make adjustments." },
+  ],
+  full_time: [
+    { npc: '🏁 Referee', line: "Full time! That's it! Match over!" },
+    { npc: '🎙️ Commentator', line: "And that is all she wrote! What a match this has been!" },
+    { npc: '🎙️ Commentator', line: "The final whistle! History has been made here today." },
+  ],
+  extra_time: [
+    { npc: '🎙️ Commentator', line: "Extra time! Thirty more minutes to find a winner!" },
+    { npc: '🏁 Referee', line: "We're going to extra time. Both teams must dig deep." },
+  ],
+  substitution: [
+    { npc: '🎙️ Commentator', line: "Tactical switch! Fresh legs coming on." },
+    { npc: '🎙️ Commentator', line: "The manager makes his move. Can the substitute change the game?" },
+  ],
+  var_review: [
+    { npc: '📺 VAR Official', line: "Hold on — VAR is checking this. Please wait." },
+    { npc: '🏁 Referee', line: "I've been asked to review the incident on the pitchside monitor." },
+    { npc: '🎙️ Commentator', line: "VAR! The technology is being consulted. Tense wait..." },
+  ],
+  penalty_won: [
+    { npc: '🏁 Referee', line: "Penalty! That is a clear foul inside the box!" },
+    { npc: '🎙️ Commentator', line: "Penalty kick awarded! The spot kick could be decisive." },
+  ],
+  penalty_missed: [
+    { npc: '😱 Commentator', line: "He's missed! The goalkeeper saves it! Unbelievable!" },
+    { npc: '😱 Commentator', line: "Over the bar! What a miss from the penalty spot!" },
+  ],
+  penalty_scored: [
+    { npc: '🎙️ Commentator', line: "PENALTY GOAL! Coolness personified from the spot!" },
+    { npc: '🎙️ Commentator', line: "He sends the goalkeeper the wrong way. 1-0 from twelve yards!" },
+  ],
+  goalkeeper_save: [
+    { npc: '🎙️ Commentator', line: "Incredible save! The goalkeeper is on fire today!" },
+    { npc: '🎙️ Commentator', line: "He's denied them again! What reflexes from the goalkeeper!" },
+  ],
+  corner_kick: [
+    { npc: '🎙️ Commentator', line: "Corner! Who's going to attack it in the box?" },
+    { npc: '🎙️ Commentator', line: "A corner kick — danger for the defending side!" },
+  ],
+  danger_attack: [
+    { npc: '🎙️ Commentator', line: "They're on the attack! Dangerous position here..." },
+    { npc: '🎙️ Commentator', line: "Pressure building! The defense needs to hold firm." },
+  ],
+};
+
+function getNpcComment(eventType: string, seed: number): { npc: string; line: string } | null {
+  const lines = NPC_COMMENTARY[eventType];
+  if (!lines?.length) return null;
+  return lines[seed % lines.length];
+}
+
 interface DialogData {
   speakerTitle: string;
   text: string;
@@ -1279,9 +1363,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               }
             } else if (approxMin >= 85 && lastGameStateRef.current !== 'FullTime') {
               lastGameStateRef.current = 'FullTime';
+              const ftMin = approxMin; // Use actual elapsed minute — handles ET (105', 120', etc.)
               if (isMounted) {
-                setEvents(prev => [{ id: `synth-ft-clk-${Date.now()}`, minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' }, ...prev]);
-                setMinute(90);
+                setEvents(prev => [{ id: `synth-ft-clk-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ends at ${ftMin}'.` }, ...prev]);
+                setMinute(ftMin);
                 playSFX('end_game');
               }
             }
@@ -1343,7 +1428,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           } else if (gs === 'SecondHalf' && prevGs) {
             synthEvents.push({ id: `synth-so-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' });
           } else if (gs === 'FullTime') {
-            synthEvents.push({ id: `synth-ft-${Date.now()}`, minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' });
+            const ftMin = Math.max(90, Math.floor((lastClockSecondsRef.current ?? 90 * 60) / 60));
+            synthEvents.push({ id: `synth-ft-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ends at ${ftMin}'.` });
           }
 
           if (synthEvents.length > 0 && isMounted) {
@@ -1856,6 +1942,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setPlayerHistory({});
 
           let restartBoard = [...DEMO_LEADERBOARD];
+          const rN = restartBoard.length;
           if (publicKey) {
             const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
             let customUser = 'You';
@@ -1866,14 +1953,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               customAvatar = parsed.avatar || customAvatar;
             }
             restartBoard = restartBoard.map((entry, index) => {
-              let prize = '-';
-              if (contestType === '5050') prize = index < 10 ? '0.18 SOL' : '-';
-              else if (contestType === 'wta') prize = index === 0 ? '10.0 SOL' : '-';
-              else {
-                if (index === 0) prize = '5.0 SOL';
-                else if (index === 1) prize = '3.0 SOL';
-                else if (index === 2) prize = '2.0 SOL';
-              }
+              const p = getPrizeForRank(index + 1, contestType, rN);
+              const prize = p > 0 ? `${p.toFixed(2)} SOL` : '-';
               if (entry.isUser) {
                 return {
                   ...entry, prize,
@@ -1886,15 +1967,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             });
           } else {
             restartBoard = restartBoard.map((entry, index) => {
-              let prize = '-';
-              if (contestType === '5050') prize = index < 10 ? '0.18 SOL' : '-';
-              else if (contestType === 'wta') prize = index === 0 ? '10.0 SOL' : '-';
-              else {
-                if (index === 0) prize = '5.0 SOL';
-                else if (index === 1) prize = '3.0 SOL';
-                else if (index === 2) prize = '2.0 SOL';
-              }
-              return { ...entry, prize };
+              const p = getPrizeForRank(index + 1, contestType, rN);
+              return { ...entry, prize: p > 0 ? `${p.toFixed(2)} SOL` : '-' };
             });
           }
           setLeaderboard(restartBoard);
@@ -2447,44 +2521,64 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 )}
 
                 <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
-                  {events.map((event) => (
-                    <div
-                      key={event.id}
-                      style={{
-                        display: 'flex',
-                        gap: 12,
-                        alignItems: 'flex-start',
-                        padding: '12px 14px',
-                        background: 'var(--bg-elevated)',
-                        borderRadius: 'var(--radius-md)',
-                        borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
-                        animation: 'score-pop 300ms ease',
-                      }}
-                    >
-                      <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{EVENT_ICONS[event.type]}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>
-                            {event.player || (event.type === 'kick_off' ? 'KICK OFF' : event.type === 'half_time' ? 'HALF TIME' : 'FULL TIME')}
-                          </span>
-                          <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                            {event.minute}&apos;
-                          </span>
+                  {events.map((event, evIdx) => {
+                    const npcComment = getNpcComment(event.type, evIdx);
+                    return (
+                      <div key={event.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 12,
+                            alignItems: 'flex-start',
+                            padding: '12px 14px',
+                            background: 'var(--bg-elevated)',
+                            borderRadius: npcComment ? 'var(--radius-md) var(--radius-md) 0 0' : 'var(--radius-md)',
+                            borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
+                            animation: 'score-pop 300ms ease',
+                          }}
+                        >
+                          <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{EVENT_ICONS[event.type]}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>
+                                {event.player || (event.type === 'kick_off' ? 'KICK OFF' : event.type === 'half_time' ? 'HALF TIME' : event.type === 'full_time' ? 'FULL TIME' : event.type.replace(/_/g, ' ').toUpperCase())}
+                              </span>
+                              <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                                {event.minute}&apos;
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              {event.team ? `${event.teamFlag} ${event.team}` : event.description}
+                            </div>
+                          </div>
+                          <div style={{
+                            fontFamily: 'Bebas Neue, cursive',
+                            fontSize: '1.1rem',
+                            color: event.points >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
+                            flexShrink: 0,
+                          }}>
+                            {event.points !== 0 ? `${event.points >= 0 ? '+' : ''}${event.points}` : '0'}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {event.team ? `${event.teamFlag} ${event.team}` : event.description}
-                        </div>
+                        {npcComment && (
+                          <div style={{
+                            padding: '6px 14px 8px 40px',
+                            background: 'rgba(255,255,255,0.02)',
+                            borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
+                            borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+                            borderTop: '1px solid rgba(255,255,255,0.04)',
+                          }}>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              {npcComment.npc}
+                            </span>
+                            <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.55)', fontStyle: 'italic', marginTop: 2 }}>
+                              &ldquo;{npcComment.line}&rdquo;
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div style={{
-                        fontFamily: 'Bebas Neue, cursive',
-                        fontSize: '1.1rem',
-                        color: event.points >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
-                        flexShrink: 0,
-                      }}>
-                        {event.points !== 0 ? `${event.points >= 0 ? '+' : ''}${event.points}` : '0'}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
