@@ -1816,9 +1816,9 @@ a {
    LIVE MATCH PLAYER CARDS & CONTAINER
    ============================================================ */
 :root {
-  --live-card-w: 110px;
-  --live-card-h: 151px;
-  --live-card-scale: 1;
+  --live-card-w: 130px;
+  --live-card-h: 179px;
+  --live-card-scale: 1.18;
   --live-stats-gap: 24px;
 }
 
@@ -1828,6 +1828,7 @@ a {
   overflow-x: auto;
   padding-bottom: 8px;
   align-items: flex-start;
+  justify-content: center;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -1858,6 +1859,7 @@ a {
   .live-lineup-row {
     gap: 8px;
     padding-bottom: 6px;
+    justify-content: flex-start;
   }
 
   /* Compress cards padding on mobile screen */

@@ -1003,7 +1003,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         return txoddsStatusToGameState(rawStr) ?? rawStr;
       })(),
       // Only extract score if it contains actual numeric data — Score:{} is truthy but empty
-      // and would reset to 0-0 on every poll, overwriting the ESPN-backed score
+      // and would reset to 0-0 on every poll, overwriting the authoritative score
       score: (() => {
         if (u.score && typeof u.score.home === 'number') return u.score;
         if (u.Score) {
@@ -1163,7 +1163,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
         // ── Match event history (display only) ────────────────────────────────
         // TxLINE is the primary data source for points (handled by convertTxLineUpdates).
-        // ESPN via /api/match/result supplements the EVENT DISPLAY FEED only —
+        // /api/match/result supplements the EVENT DISPLAY FEED only —
         // goals and cards that TxLINE devnet may not send. No points are awarded here.
         // Triggers whenever kickoff time is in the past (not limited to specific game states
         // because TxLINE devnet always reports GameState:"scheduled" even during live play).
@@ -1176,7 +1176,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             if (res.ok && isMounted) {
               const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
               const espnEvents = resultData.events ?? [];
-              console.log(`[LivePage] ESPN match detail — ${espnEvents.length} events (display supplement, no points)`);
+              console.log(`[LivePage] Match event history — ${espnEvents.length} events loaded for display`);
 
               if (espnEvents.length > 0 && isMounted) {
                 const historyEvents: typeof matchEvents = [];
@@ -1185,7 +1185,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   const min = parseInt(ev.minute) || 0;
                   const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
                   const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
-                  const evId = `espn-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
+                  const evId = `hist-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
                   const desc =
                     evType === 'goal'       ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
                     evType === 'own_goal'   ? `Own goal — ${ev.player}` :
@@ -1197,7 +1197,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
                 if (historyEvents.length > 0 && isMounted) {
                   setEvents(prev => {
-                    // Dedup: skip ESPN events whose type+minute already exist in TxLINE feed
+                    // Dedup: skip events whose type+minute already exist in TxLINE feed
                     // (within ±1 min tolerance to account for clock rounding)
                     const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
                     const fresh = historyEvents.filter(e =>
@@ -1212,7 +1212,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               }
             }
           } catch (e) {
-            console.warn('[LivePage] Failed to load ESPN match detail:', e);
+            console.warn('[LivePage] Failed to load match event history:', e);
           }
         }
       }
@@ -1506,7 +1506,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, apiToken]);
 
-  // ── LIVE MODE: Score from internal scoreboard (ESPN-backed, server-side) ──────
+  // ── LIVE MODE: Score from internal scoreboard (server-side) ──────────────────
   // TxLINE devnet returns Score:{} (empty) so we always poll our own /api/scores/wc2026
   // endpoint as the source of truth for the score display, regardless of txlineStatus.
   // TxLINE events (goals) can still increment score on top of this baseline.
@@ -2424,7 +2424,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         <div style={{ fontSize: '2rem', marginBottom: 8 }}>📡</div>
                         <div>Waiting for live data — checking TxLINE every 10s</div>
                         <div style={{ fontSize: '0.75rem', marginTop: 4, color: 'rgba(255,255,255,0.25)' }}>
-                          Score updates via ESPN are shown above while we wait
+                          Score updates from live data are shown above while we wait
                         </div>
                       </>
                     ) : (

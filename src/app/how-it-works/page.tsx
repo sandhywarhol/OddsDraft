@@ -32,10 +32,10 @@ export default function HowItWorksPage() {
                 </p>
                 <ul style={{ color: '#94a3b8', paddingLeft: 0, marginBottom: 0, lineHeight: 2, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>GK:</strong> Goalkeeper</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>CB:</strong> Center Back</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>MF:</strong> Midfielder</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>SW:</strong> Sweeper</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>CF:</strong> Center Forward</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>DEF:</strong> Defender</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>MID:</strong> Midfielder</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>MID:</strong> Midfielder</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>ATT:</strong> Attacker</li>
                 </ul>
               </div>
             </div>

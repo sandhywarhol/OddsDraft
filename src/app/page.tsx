@@ -709,8 +709,8 @@ function LiveTicker() {
 }
 function StatsSection() {
   const stats = [
-    { value: '32', label: 'Teams', icon: '🌍' },
-    { value: '64', label: 'Matches', icon: '⚽' },
+    { value: '48', label: 'Teams', icon: '🌍' },
+    { value: '104', label: 'Matches', icon: '⚽' },
     { value: '0.1', label: 'SOL Entry', icon: '💰' },
     { value: '100%', label: 'On-Chain Prizes', icon: '🔗' },
   ];
@@ -765,7 +765,7 @@ function HowItWorksSection() {
     {
       step: '05',
       title: 'Watch Live & Earn Points',
-      desc: 'Goals +10, Assists +6, Saves +1, Cards -2. Watch your points update live!',
+      desc: 'Goals +10, Assists +6, Shot on Target +2, Saves +1, Cards -2, Own Goal -4. Watch your points update live!',
       icon: '📊',
       color: '#ff4d6d',
     },

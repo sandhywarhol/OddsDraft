@@ -107,22 +107,21 @@ export default function ContestsPage() {
     // It takes priority over TxLINE liveFixtures so TxLINE devnet bugs
     // (Clock.Running stuck true, late GameState updates) can't override a match
     // that has clearly run past its time window.
-    // ESPN marks a match completed=true once the final whistle is confirmed.
+    // Sports data source marks completed=true once final whistle is confirmed.
     // This is the most reliable finished signal — overrides time window + TxLINE quirks.
-    const espnCompleted = !isDemo && !!finishedScores[fid]?.completed;
+    const sourceCompleted = !isDemo && !!finishedScores[fid]?.completed;
     const status: 'upcoming' | 'live' | 'finished' =
-      (espnCompleted) ? 'finished' :                       // ESPN confirmed finished → highest priority
+      (sourceCompleted) ? 'finished' :                     // sports data confirmed finished → highest priority
       (timeStatus === 'finished') ? 'finished' :           // wall-clock window expired → always finished
       (!isDemo && apiIsFinished) ? 'finished' :            // TxLINE clock ≥90 min stopped
       (!isDemo && apiLiveMatch) ? 'live' :                 // TxLINE says live
       timeStatus;                                          // upcoming (or live within window)
 
-    // Scores: use ESPN data for both live and finished states.
-    // TxLINE devnet returns Score:{} (empty) so we never rely on it for score display.
+    // Scores: TxLINE devnet returns Score:{} (empty) so we supplement with match data API.
     let homeScore: number | undefined;
     let awayScore: number | undefined;
     if (!isDemo && finishedScores[f.fixtureId]) {
-      // ESPN-backed scores — covers regular time, ET, and penalty shootout goals
+      // Authoritative scores — covers regular time, ET, and penalty shootout goals
       homeScore = finishedScores[f.fixtureId].home;
       awayScore = finishedScores[f.fixtureId].away;
     } else if (!isDemo && apiLiveMatch) {

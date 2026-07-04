@@ -169,7 +169,7 @@ export default function Navbar() {
               boxShadow: `0 0 4px ${tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
               animation: isSubscribing ? 'pulse 1s infinite' : 'none',
             }} />
-            {isSubscribing ? '...' : tokenError ? (errorMsg || 'ERROR') : appMode === 'live' ? 'LIVE' : 'DEMO'}
+            {isSubscribing ? '...' : tokenError ? (errorMsg || 'ERROR') : appMode === 'live' ? 'LIVE · Devnet' : 'DEMO · Devnet'}
           </button>
 
           {mounted ? (
