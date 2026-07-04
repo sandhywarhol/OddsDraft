@@ -910,7 +910,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                           flex: '1 1 0px',
                           maxWidth: 220,
                           aspectRatio: '120/165',
-                          backgroundImage: player ? "url('/Player%20Card%20(2).svg')" : 'none',
+                          backgroundImage: player
+                            ? ((player.rating ?? 0) >= 90
+                              ? "url('/card/High%20Score%20Player%20Card.svg')"
+                              : "url('/card/Normal%20Player%20Card.svg')")
+                            : 'none',
                           backgroundSize: '100% 100%',
                           backgroundRepeat: 'no-repeat',
                           backgroundPosition: 'center',

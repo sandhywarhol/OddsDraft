@@ -2668,10 +2668,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         return (
                           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
-                            {/* Player Card (2).svg — same design as lineup builder */}
+                            {/* Player card — High Score variant when pts > 10 */}
                             <div style={{
                               width: cw, height: ch, flexShrink: 0, position: 'relative',
-                              backgroundImage: "url('/Player%20Card%20(2).svg')",
+                              backgroundImage: pts > 10
+                                ? "url('/card/High%20Score%20Player%20Card.svg')"
+                                : "url('/card/Normal%20Player%20Card.svg')",
                               backgroundSize: '100% 100%', overflow: 'visible',
                               boxShadow: isCap
                                 ? '0 0 14px rgba(255,215,0,0.55)'
