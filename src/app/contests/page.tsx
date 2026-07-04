@@ -103,22 +103,28 @@ export default function ContestsPage() {
     const apiClockRunning: boolean = apiAllMatch?.Clock?.Running === true || apiAllMatch?.clock?.running === true;
     // If clock stopped and ≥90 min elapsed → match is over regardless of GameState field
     const apiIsFinished = !apiClockRunning && apiClockSeconds !== null && apiClockSeconds >= 90 * 60;
+    // timeStatus is wall-clock based and always reliable.
+    // It takes priority over TxLINE liveFixtures so TxLINE devnet bugs
+    // (Clock.Running stuck true, late GameState updates) can't override a match
+    // that has clearly run past its time window.
     const status: 'upcoming' | 'live' | 'finished' =
-      (!isDemo && apiIsFinished) ? 'finished' :
-      (!isDemo && apiLiveMatch) ? 'live' :
-      timeStatus;
+      (timeStatus === 'finished') ? 'finished' :           // wall-clock expired → always finished
+      (!isDemo && apiIsFinished) ? 'finished' :            // TxLINE clock ≥90 min stopped
+      (!isDemo && apiLiveMatch) ? 'live' :                 // TxLINE says live
+      timeStatus;                                          // upcoming (or live within window)
 
-    // Scores from live API match if available (live mode only)
+    // Scores: use ESPN data for both live and finished states.
+    // TxLINE devnet returns Score:{} (empty) so we never rely on it for score display.
     let homeScore: number | undefined;
     let awayScore: number | undefined;
-    if (!isDemo && apiLiveMatch) {
-      homeScore = apiLiveMatch.score?.home ?? apiLiveMatch.Score?.Home ?? apiLiveMatch.HomeScore;
-      awayScore = apiLiveMatch.score?.away ?? apiLiveMatch.Score?.Away ?? apiLiveMatch.AwayScore;
-    }
-    // For finished matches, overlay real final scores fetched from TxLINE batch endpoint
-    if (!isDemo && status === 'finished' && finishedScores[f.fixtureId]) {
+    if (!isDemo && finishedScores[f.fixtureId]) {
+      // ESPN-backed scores — covers regular time, ET, and penalty shootout goals
       homeScore = finishedScores[f.fixtureId].home;
       awayScore = finishedScores[f.fixtureId].away;
+    } else if (!isDemo && apiLiveMatch) {
+      // Fallback: TxLINE live data (empty on devnet but correct on prod)
+      homeScore = apiLiveMatch.score?.home ?? apiLiveMatch.Score?.Home ?? apiLiveMatch.HomeScore;
+      awayScore = apiLiveMatch.score?.away ?? apiLiveMatch.Score?.Away ?? apiLiveMatch.AwayScore;
     }
 
     return {

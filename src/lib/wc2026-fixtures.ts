@@ -183,8 +183,9 @@ export function getTodaysFixtureIds(): string[] {
 export function getFixtureStatus(f: WCFixture): 'upcoming' | 'live' | 'finished' {
   const kickoff = new Date(f.kickoffAt).getTime();
   const now = Date.now();
-  // Group stage: 2.5h window. Knockout: 3.5h to cover ET + penalties.
-  const windowMs = f.stage === 'group' ? 2.5 * 60 * 60 * 1000 : 3.5 * 60 * 60 * 1000;
+  // Group stage: 3h (90 min play + halftime + generous buffer).
+  // Knockout: 4.5h to cover 90 min + 30 min ET + 30 min penalties + halftimes + breaks.
+  const windowMs = f.stage === 'group' ? 3 * 60 * 60 * 1000 : 4.5 * 60 * 60 * 1000;
   if (now >= kickoff && now <= kickoff + windowMs) return 'live';
   if (now > kickoff + windowMs) return 'finished';
   return 'upcoming';
