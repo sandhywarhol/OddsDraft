@@ -40,6 +40,15 @@ const getPositionColor = (label: string) => {
   if (label.includes('FWD')) return '#b91c1c'; // Red
   return '#36220f';
 };
+const getShortLabel = (label: string) => {
+  if (label.includes('GK')) return 'GK';
+  if (label.includes('DEF (CB')) return 'DEF';
+  if (label.includes('MID')) return 'MID';
+  if (label.includes('FLEX')) return 'FLEX';
+  if (label.includes('FWD')) return 'FWD';
+  return label;
+};
+
 
 const TEAM_FLAG_CODES: Record<string, string> = {
   'Brazil': 'br', 'Argentina': 'ar', 'France': 'fr', 'England': 'gb-eng',
@@ -180,9 +189,6 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   };
 
   useEffect(() => {
-    if (window.innerWidth < 768) {
-      return;
-    }
     const hasSeenTutorial = localStorage.getItem('hasSeenLineupTutorial');
     if (!hasSeenTutorial) {
       setTutorialStep(1);
@@ -204,6 +210,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         prevEl.style.pointerEvents = '';
         prevEl.style.boxShadow = '';
         prevEl.style.maxWidth = '';
+        prevEl.style.width = '';
       }
     }
 
@@ -236,12 +243,22 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 setWrapperTransform('none');
                 setIsTransitioning(false);
                 
+                const isMobile = window.innerWidth <= 768;
+                if (isMobile && targetId !== 'submit-button' && targetId !== 'lineup-header') {
+                  element.style.width = '90vw';
+                }
+                
                 const rect = element.getBoundingClientRect();
                 const viewportWidth = window.innerWidth;
                 const currentCenterX = rect.left + rect.width / 2;
                 
-                const targetCenterX = nextData?.position === 'left' ? viewportWidth * 0.78 : viewportWidth * 0.22;
-                let shift = targetCenterX - currentCenterX;
+                let shift = 0;
+                if (isMobile) {
+                  shift = (viewportWidth / 2) - currentCenterX;
+                } else {
+                  const targetCenterX = nextData?.position === 'left' ? viewportWidth * 0.78 : viewportWidth * 0.22;
+                  shift = targetCenterX - currentCenterX;
+                }
                 
                 const padding = 24;
                 if (rect.left + shift < padding) shift = padding - rect.left;
@@ -260,17 +277,34 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 void element.offsetWidth; // Force reflow
                 
                 let translateY = -50;
-                if (targetId === 'submit-button') {
-                  translateY = -230;
-                } else if (targetId === 'confidence-panel') {
-                  translateY = -120;
-                } else if (targetId === 'lineup-grid' && nextStep === 4) {
-                  translateY = -140;
-                } else if (targetId === 'lineup-grid' && nextStep === 2) {
-                  translateY = -35;
+                if (isMobile) {
+                  if (targetId === 'submit-button') {
+                    translateY = -560;
+                  } else if (targetId === 'confidence-panel') {
+                    translateY = -340;
+                  } else if (targetId === 'recruitment-terminal') {
+                    translateY = -420;
+                  } else if (targetId === 'lineup-grid' && nextStep === 4) {
+                    translateY = -300;
+                  } else if (targetId === 'lineup-grid' && nextStep === 2) {
+                    translateY = -220;
+                  } else if (targetId === 'lineup-header') {
+                    translateY = -150;
+                  }
+                } else {
+                  if (targetId === 'submit-button') {
+                    translateY = -230;
+                  } else if (targetId === 'confidence-panel') {
+                    translateY = -120;
+                  } else if (targetId === 'lineup-grid' && nextStep === 4) {
+                    translateY = -140;
+                  } else if (targetId === 'lineup-grid' && nextStep === 2) {
+                    translateY = -35;
+                  }
                 }
                 
-                element.style.transform = `translate(${shift}px, ${translateY}px) scale(1.02)`;
+                const scaleVal = isMobile ? (targetId !== 'submit-button' && targetId !== 'lineup-header' ? 1 : 0.88) : 1.02;
+                element.style.transform = `translate(${shift}px, ${translateY}px) scale(${scaleVal})`;
                 element.style.boxShadow = '0 0 0 9999px rgba(0,0,0,0.85), 0 0 40px rgba(255,255,255,0.2)';
                 
                 setZoomedElementId(targetId);
@@ -608,6 +642,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     );
   }
 
+  const shouldBlurLineupBg = tutorialStep === 1;
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '100px', background: 'transparent', overflowX: 'hidden' }}>
       <Navbar />
@@ -637,7 +672,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             position: 'fixed',
             inset: 0,
             backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            backdropFilter: 'blur(8px)',
+            backdropFilter: shouldBlurLineupBg ? 'blur(8px)' : 'none',
             zIndex: 9990, 
             pointerEvents: 'none',
             opacity: isTransitioning ? 0 : 1,
@@ -649,87 +684,67 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         {tutorialStep > 0 && tutorialData && (
           <div 
             onClick={handleNextTutorialStep}
+            className="npc-dialog-overlay"
             style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'transparent',
-            zIndex: 999999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-          }}>
+              backgroundColor: 'transparent',
+              zIndex: 999999,
+              backdropFilter: shouldBlurLineupBg ? 'blur(5px)' : 'none',
+              WebkitBackdropFilter: shouldBlurLineupBg ? 'blur(5px)' : 'none',
+            }}
+          >
             {/* NPC Character Image (Female - Left) */}
-            <img
-              src="/NPC/NPC Guide Female.svg"
-              alt="Guide"
-              style={{
-                position: 'absolute',
-                bottom: '-25vh',
-                left: tutorialData?.shiftEdge ? '-18%' : '2%',
-                height: '105vh',
-                objectFit: 'contain',
-                zIndex: 10005,
-                transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, left 0.4s ease-out',
-                opacity: tutorialData?.position === 'left' ? 1 : 0,
-                transform: tutorialData?.position === 'left' ? 'translateX(0)' : 'translateX(-50px)',
-                pointerEvents: 'none',
-                filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-              }}
-            />
+            {tutorialData?.position === 'left' && (
+              <img
+                src="/NPC/NPC Guide Female.svg"
+                alt="Guide"
+                className="npc-commentator1-img"
+                style={{
+                  bottom: '-25vh',
+                  left: tutorialData?.shiftEdge ? '-18%' : '2%',
+                  height: '105vh',
+                  zIndex: 10005,
+                  transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, left 0.4s ease-out',
+                  opacity: 1,
+                  transform: 'translateX(0)',
+                }}
+              />
+            )}
 
             {/* NPC Character Image (Male - Right) */}
-            <img
-              src="/NPC/NPC Guide Male.svg"
-              alt="Guide"
-              style={{
-                position: 'absolute',
-                bottom: '-25vh',
-                right: tutorialData?.shiftEdge ? '-18%' : '2%',
-                height: '105vh',
-                objectFit: 'contain',
-                zIndex: 10005,
-                transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, right 0.4s ease-out',
-                opacity: tutorialData?.position === 'right' ? 1 : 0,
-                transform: tutorialData?.position === 'right' ? 'translateX(0)' : 'translateX(50px)',
-                pointerEvents: 'none',
-                filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-              }}
-            />
+            {tutorialData?.position === 'right' && (
+              <img
+                src="/NPC/NPC Guide Male.svg"
+                alt="Guide"
+                className="npc-commentator2-img"
+                style={{
+                  bottom: '-25vh',
+                  right: tutorialData?.shiftEdge ? '-18%' : '2%',
+                  height: '105vh',
+                  zIndex: 10005,
+                  transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, right 0.4s ease-out',
+                  opacity: 1,
+                  transform: 'translateX(0)',
+                }}
+              />
+            )}
 
             {/* Dialog Bubble */}
             <div 
+              className="npc-jrpg-dialog-box"
               style={{
-                width: '94%',
-                maxWidth: '920px',
-                background: '#fcf8eb',
-                border: '5px solid #1a1008',
-                borderRadius: '0px',
-                padding: '36px 48px',
-                boxShadow: '10px 10px 0px #1a1008',
                 position: 'absolute',
-                bottom: '5vh',
+                bottom: '12vh',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 zIndex: 1000010,
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                animation: 'dialog-glow 3s infinite',
               }}
             >
-              <div style={{
-                display: 'inline-block',
-                background: '#1a1008',
-                color: '#fcf8eb',
-                padding: '4px 16px',
-                fontWeight: 900,
-                fontSize: '1rem',
-                letterSpacing: '0.1em',
-                marginBottom: '16px',
-                alignSelf: 'flex-start',
-                textTransform: 'uppercase',
-              }}>
+              <div 
+                className="npc-jrpg-speaker-tag"
+                style={{
+                  alignSelf: 'flex-start',
+                }}
+              >
                 {tutorialData.speakerTitle}
               </div>
               
@@ -739,21 +754,15 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 alignItems: 'flex-start',
                 gap: '16px',
               }}>
-                <div style={{
-                  fontSize: '1.45rem',
-                  lineHeight: 1.5,
-                  color: '#1a1008',
-                  fontWeight: 700,
-                  fontFamily: 'Inter, sans-serif',
-                }}>
+                <div className="npc-jrpg-dialog-text">
                   {tutorialData.text}
                 </div>
               </div>
               
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 12 }}>
+              <div className="npc-jrpg-dialog-footer">
                 <div style={{ 
                   color: 'rgba(26,16,8,0.5)', 
-                  fontSize: '0.9rem', 
+                  fontSize: '0.7rem', 
                   fontWeight: 800, 
                   textTransform: 'uppercase',
                   animation: 'blink-text 1.5s infinite',
@@ -1051,8 +1060,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                 color: '#ffffff',
                                 border: '1.5px solid #36220f',
                                 borderRadius: '0px',
-                                padding: '1px 4px',
-                                fontSize: 'clamp(0.48rem, 1vw, 0.6rem)',
+                                padding: '1px 3px',
+                                fontSize: 'clamp(0.38rem, 0.95vw, 0.52rem)',
                                 fontWeight: 900,
                                 fontFamily: 'Inter, sans-serif',
                                 fontStyle: 'normal',
@@ -1061,7 +1070,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                 lineHeight: 1,
                                 whiteSpace: 'nowrap',
                               }}>
-                                {slotConfig.label}
+                                {getShortLabel(slotConfig.label)}
                               </span>
                             </div>
 

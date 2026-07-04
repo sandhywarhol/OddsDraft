@@ -1172,78 +1172,58 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           console.log('[LivePage] Snapshot: no events and no game state (match not started yet)');
         }
 
-        // ── Goal history for late joiners ─────────────────────────────────────
-        // TxLINE devnet never sends real Incidents, so load scoring history from
-        // /api/match/result (ESPN-backed, server-side only). This runs once per
-        // session for any live/half-time/full-time state regardless of snapshot events.
-        if (isMatchLive && !matchResultLoadedRef.current) {
+        // ── Match event history (display only) ────────────────────────────────
+        // TxLINE is the primary data source for points (handled by convertTxLineUpdates).
+        // ESPN via /api/match/result supplements the EVENT DISPLAY FEED only —
+        // goals and cards that TxLINE devnet may not send. No points are awarded here.
+        // Triggers whenever kickoff time is in the past (not limited to specific game states
+        // because TxLINE devnet always reports GameState:"scheduled" even during live play).
+        const kickoffMs = fixture.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
+        const matchHasStarted = kickoffMs > 0 && Date.now() >= kickoffMs;
+        if (matchHasStarted && !matchResultLoadedRef.current) {
           matchResultLoadedRef.current = true;
           try {
             const res = await fetch(`/api/match/result?fixtureId=${contestId}`);
             if (res.ok && isMounted) {
               const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
               const espnEvents = resultData.events ?? [];
-              console.log(`[LivePage] Match result — ${espnEvents.length} historical events`);
+              console.log(`[LivePage] ESPN match detail — ${espnEvents.length} events (display supplement, no points)`);
 
               if (espnEvents.length > 0 && isMounted) {
                 const historyEvents: typeof matchEvents = [];
-                const pidMap = playerIdMapRef.current;
 
                 for (const ev of espnEvents) {
                   const min = parseInt(ev.minute) || 0;
                   const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
                   const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
-
-                  // Fuzzy-match ESPN player name against TxLINE names in the player map
-                  let playerId = '';
-                  for (const [txlineName, fantasyId] of Object.entries(pidMap)) {
-                    if (matchPlayerName(ev.player, txlineName)) { playerId = fantasyId; break; }
-                  }
-
-                  const evId = `hist-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
+                  const evId = `espn-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
                   const desc =
                     evType === 'goal'       ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
                     evType === 'own_goal'   ? `Own goal — ${ev.player}` :
                     evType === 'yellow_card'? `Yellow card — ${ev.player}` :
                     evType === 'red_card'   ? `Red card — ${ev.player}` :
                     `${evType} — ${ev.player}`;
-
-                  historyEvents.push({ id: evId, minute: min, team: ev.team, teamFlag, player: ev.player, playerId, type: evType, points: 0, description: desc });
-
-                  // Award fantasy points once for matched lineup players
-                  if (playerId && userLineupRef.current?.players?.length > 0) {
-                    const { players, captain, confidence } = userLineupRef.current;
-                    const matched = players.find((p: any) => p?.id === playerId);
-                    if (matched) {
-                      const wasAppeared = appearedPlayersRef.current.has(playerId);
-                      let rawPts = calculateEventPoints(evType, (matched as any).position);
-                      if (!wasAppeared) { rawPts += 2; appearedPlayersRef.current.add(playerId); }
-                      const cardDef = equippedCardDefsRef.current[playerId];
-                      if (cardDef) rawPts += getCardBonusForEvent(cardDef, evType);
-                      let delta = rawPts;
-                      if (captain === playerId) delta *= 2;
-                      const stars = (confidence as Record<string, number>)?.[playerId] ?? 3;
-                      delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-                      delta = Math.round(delta * 100) / 100;
-                      setPlayerPoints(prev => ({ ...prev, [playerId]: Math.round(((prev[playerId] ?? 0) + delta) * 100) / 100 }));
-                      setPlayerHistory(prev => ({ ...prev, [playerId]: [...(prev[playerId] ?? []), { label: evType, pts: delta, minute: min }] }));
-                    }
-                  }
+                  historyEvents.push({ id: evId, minute: min, team: ev.team, teamFlag, player: ev.player, playerId: '', type: evType, points: 0, description: desc });
                 }
 
                 if (historyEvents.length > 0 && isMounted) {
                   setEvents(prev => {
-                    const existingIds = new Set(prev.map(e => e.id));
-                    const fresh = historyEvents.filter(e => !existingIds.has(e.id));
+                    // Dedup: skip ESPN events whose type+minute already exist in TxLINE feed
+                    // (within ±1 min tolerance to account for clock rounding)
+                    const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
+                    const fresh = historyEvents.filter(e =>
+                      !existingKeys.has(`${e.type}-${e.minute}`) &&
+                      !existingKeys.has(`${e.type}-${e.minute - 1}`) &&
+                      !existingKeys.has(`${e.type}-${e.minute + 1}`)
+                    );
                     if (fresh.length === 0) return prev;
-                    // historyEvents sorted ascending → reverse to newest-first before prepending
                     return [...fresh.slice().reverse(), ...prev];
                   });
                 }
               }
             }
           } catch (e) {
-            console.warn('[LivePage] Failed to load match result history:', e);
+            console.warn('[LivePage] Failed to load ESPN match detail:', e);
           }
         }
       }

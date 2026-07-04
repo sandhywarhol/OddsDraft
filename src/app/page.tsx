@@ -63,6 +63,7 @@ export default function HomePage() {
         prevEl.style.background = '';
         prevEl.style.pointerEvents = '';
         prevEl.style.boxShadow = '';
+        prevEl.style.width = '';
       }
     }
 
@@ -95,12 +96,22 @@ export default function HomePage() {
                 setWrapperTransform('none');
                 setIsTransitioning(false);
                 
+                const isMobile = window.innerWidth <= 768;
+                if (isMobile && targetId.startsWith('step-0')) {
+                  element.style.width = '90vw';
+                }
+                
                 const rect = element.getBoundingClientRect();
                 const viewportWidth = window.innerWidth;
                 const currentCenterX = rect.left + rect.width / 2;
                 
-                const targetCenterX = nextData?.position === 'left' ? viewportWidth * 0.70 : viewportWidth * 0.30;
-                let shift = targetCenterX - currentCenterX;
+                let shift = 0;
+                if (isMobile) {
+                  shift = (viewportWidth / 2) - currentCenterX;
+                } else {
+                  const targetCenterX = nextData?.position === 'left' ? viewportWidth * 0.70 : viewportWidth * 0.30;
+                  shift = targetCenterX - currentCenterX;
+                }
                 
                 const padding = 24;
                 if (rect.left + shift < padding) shift = padding - rect.left;
@@ -119,7 +130,9 @@ export default function HomePage() {
                 
                 void element.offsetWidth;
                 
-                element.style.transform = `translateX(${shift}px) scale(1.05)`;
+                const scaleVal = isMobile ? (targetId.startsWith('step-0') ? 1 : 0.88) : 1.05;
+                const translateYVal = isMobile ? -170 : 0;
+                element.style.transform = `translate(${shift}px, ${translateYVal}px) scale(${scaleVal})`;
                 element.style.boxShadow = '0 0 0 9999px rgba(0,0,0,0.85), 0 0 40px rgba(255,255,255,0.2)';
                 
                 setZoomedElementId(targetId);
@@ -142,6 +155,7 @@ export default function HomePage() {
   };
 
   const tutorialData = getTutorialData(tutorialStep);
+  const shouldBlurHomeBg = [1, 2, 15].includes(tutorialStep);
   return (
     <div style={{ minHeight: '100vh', background: 'transparent', overflowX: 'hidden' }}>
       <Navbar />
@@ -199,7 +213,7 @@ export default function HomePage() {
           position: 'fixed',
           inset: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.2)',
-          backdropFilter: 'blur(8px)',
+          backdropFilter: shouldBlurHomeBg ? 'blur(8px)' : 'none',
           zIndex: 9990, 
           pointerEvents: 'none',
         }} />
@@ -209,92 +223,69 @@ export default function HomePage() {
       {tutorialStep > 0 && tutorialData && (
         <div 
           onClick={handleNextTutorialStep}
+          className="npc-dialog-overlay"
           style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'transparent',
-          zIndex: 999999, // Super high z-index to sit above spotlight shadow
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        }}>
+            backgroundColor: 'transparent',
+            zIndex: 999999, // Super high z-index to sit above spotlight shadow
+            backdropFilter: shouldBlurHomeBg ? 'blur(5px)' : 'none',
+            WebkitBackdropFilter: shouldBlurHomeBg ? 'blur(5px)' : 'none',
+          }}
+        >
           {/* NPC Character Image (Female - Left) */}
-          <img
-            src="/NPC/NPC Guide Female.svg"
-            alt="Guide"
-            style={{
-              position: 'absolute',
-              bottom: '-25vh',
-              left: tutorialData?.shiftEdge ? '-10%' : '2%',
-              height: '105vh',
-              objectFit: 'contain',
-              zIndex: 10005,
-              transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, left 0.4s ease-out',
-              opacity: tutorialData?.position === 'left' ? 1 : 0,
-              transform: tutorialData?.position === 'left' ? 'translateX(0)' : 'translateX(-50px)',
-              pointerEvents: 'none',
-              filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-            }}
-          />
+          {tutorialData?.position === 'left' && (
+            <img
+              src="/NPC/NPC Guide Female.svg"
+              alt="Guide"
+              className="npc-commentator1-img"
+              style={{
+                bottom: '-25vh',
+                left: tutorialData?.shiftEdge ? '-10%' : '2%',
+                height: '105vh',
+                zIndex: 10005,
+                transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, left 0.4s ease-out',
+                opacity: 1,
+                transform: 'translateX(0)',
+              }}
+            />
+          )}
 
           {/* NPC Character Image (Male - Right) */}
-          <img
-            src="/NPC/NPC Guide Male.svg"
-            alt="Guide"
-            style={{
-              position: 'absolute',
-              bottom: '-25vh',
-              right: tutorialData?.shiftEdge ? '-10%' : '2%',
-              height: '105vh',
-              objectFit: 'contain',
-              zIndex: 10005,
-              transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, right 0.4s ease-out',
-              opacity: tutorialData?.position === 'right' ? 1 : 0,
-              transform: tutorialData?.position === 'right' ? 'translateX(0)' : 'translateX(50px)',
-              pointerEvents: 'none',
-              filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-            }}
-          />
+          {tutorialData?.position === 'right' && (
+            <img
+              src="/NPC/NPC Guide Male.svg"
+              alt="Guide"
+              className="npc-commentator2-img"
+              style={{
+                bottom: '-25vh',
+                right: tutorialData?.shiftEdge ? '-10%' : '2%',
+                height: '105vh',
+                zIndex: 10005,
+                transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, right 0.4s ease-out',
+                opacity: 1,
+                transform: 'translateX(0)',
+              }}
+            />
+          )}
 
           {/* Dialog Bubble */}
           <div 
+            className="npc-jrpg-dialog-box"
             style={{
-              width: '94%',
-              maxWidth: '920px',
-              background: '#fcf8eb',
-              border: '5px solid #1a1008',
-              borderRadius: '0px',
-              padding: '36px 48px',
-              boxShadow: '10px 10px 0px #1a1008',
               position: 'absolute',
-              bottom: '5vh',
+              bottom: '12vh',
               left: tutorialData.position === 'left' ? '30%' : 'auto',
               right: tutorialData.position === 'left' ? 'auto' : '30%',
               zIndex: 1000010,
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              animation: 'score-pop 300ms ease-out, dialog-glow 2s infinite',
             }}
           >
             {/* Speaker Tag */}
-            <div style={{
-              position: 'absolute',
-              top: '-22px',
-              left: '32px',
-              background: '#1a1008',
-              color: '#ffffff',
-              padding: '6px 24px',
-              fontSize: '1rem',
-              fontWeight: 800,
-              fontFamily: 'Inter, sans-serif',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              border: '2px solid #1a1008',
-              boxShadow: '4px 4px 0px rgba(0,0,0,1)',
-            }}>
+            <div 
+              className="npc-jrpg-speaker-tag"
+              style={{
+                border: '2px solid #1a1008',
+                boxShadow: '4px 4px 0px rgba(0,0,0,1)',
+              }}
+            >
               {tutorialData.speakerTitle}
             </div>
 
@@ -304,24 +295,18 @@ export default function HomePage() {
               alignItems: 'flex-start',
               gap: '16px',
             }}>
-              <div style={{
-                fontSize: '1.45rem',
-                lineHeight: 1.5,
-                color: '#1a1008',
-                fontWeight: 700,
-                fontFamily: 'Inter, sans-serif',
-              }}>
+              <div className="npc-jrpg-dialog-text">
                 {tutorialData.text}
               </div>
             </div>
             
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+            <div className="npc-jrpg-dialog-footer">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   if (zoomedElementId) {
                     const el = document.getElementById(zoomedElementId);
-                    if (el) { el.style.position=''; el.style.zIndex=''; el.style.transition=''; el.style.transform=''; el.style.background=''; el.style.pointerEvents=''; el.style.boxShadow=''; }
+                    if (el) { el.style.position=''; el.style.zIndex=''; el.style.transition=''; el.style.transform=''; el.style.background=''; el.style.pointerEvents=''; el.style.boxShadow=''; el.style.width=''; }
                   }
                   localStorage.setItem('hasSeenOddsDraftTutorial', 'true');
                   setTutorialStep(0);
@@ -333,9 +318,9 @@ export default function HomePage() {
                   background: 'transparent',
                   border: '2px solid rgba(26,16,8,0.25)',
                   color: 'rgba(26,16,8,0.55)',
-                  padding: '6px 16px',
+                  padding: '4px 10px',
                   borderRadius: 4,
-                  fontSize: '0.8rem',
+                  fontSize: '0.68rem',
                   fontWeight: 700,
                   cursor: 'pointer',
                   textTransform: 'uppercase',
@@ -349,7 +334,7 @@ export default function HomePage() {
               </button>
               <div style={{
                 color: 'rgba(26,16,8,0.5)',
-                fontSize: '0.9rem',
+                fontSize: '0.7rem',
                 fontWeight: 800,
                 textTransform: 'uppercase',
                 animation: 'blink-text 1.5s infinite',

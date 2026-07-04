@@ -1124,141 +1124,67 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         
         if (dialog.isRefereeStyle) {
           return (
-            <div style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.65)',
-              backdropFilter: 'blur(5px)',
-              zIndex: 1000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              userSelect: 'none',
-            }}>
+            <div className="npc-dialog-overlay" onClick={() => setShowPopup(false)}>
               {/* Referee Image */}
               <img
                 src={dialog.refereeImage}
                 alt="Referee"
-                style={{
-                  position: 'absolute',
-                  bottom: '-30vh',
-                  right: (dialog as any).refereePosition === 'left' ? 'auto' : '2%',
-                  left: (dialog as any).refereePosition === 'left' ? '2%' : 'auto',
-                  height: '125vh',
-                  objectFit: 'contain',
-                  zIndex: 1020,
-                  animation: (dialog as any).refereePosition === 'left' ? 'slide-in-left 400ms ease-out' : 'slide-in-right 400ms ease-out',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-referee-img-style referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}
               />
               
               {/* Giant Yellow Explosion Speech Bubble */}
-              <div 
-                onClick={() => setShowPopup(false)}
-                style={{
-                  position: 'absolute',
-                  bottom: '35vh',
-                  left: (dialog as any).refereePosition === 'left' ? 'auto' : '15%',
-                  right: (dialog as any).refereePosition === 'left' ? '15%' : 'auto',
-                  zIndex: 1010,
-                  cursor: 'pointer',
-                  animation: 'score-pop 500ms cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                }}
-              >
-                <div style={{
-                  background: '#ffee00',
-                  color: '#000000',
-                  border: '8px solid #000000',
-                  padding: '32px 64px',
-                  fontSize: 'clamp(3rem, 6vw, 5.5rem)',
-                  fontWeight: 900,
-                  fontFamily: 'Impact, Arial Black, sans-serif',
-                  textTransform: 'uppercase',
-                  boxShadow: '12px 12px 0px #000000',
-                  transform: 'skewX(-6deg) rotate(-4deg)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                }}>
-                  {dialog.text}
-                  <span style={{ color: '#ff0000', fontSize: '1.2em' }}>!!</span>
+              <div className={`npc-referee-bubble-wrapper referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}>
+                <div className="npc-referee-bubble-container">
+                  {/* Background Starburst SVG */}
+                  <svg viewBox="0 0 500 300" width="100%" height="100%" preserveAspectRatio="none" className="npc-referee-bubble-bg">
+                    <polygon points="250,10 280,70 340,30 350,90 410,60 400,120 470,110 440,160 490,190 430,210 460,260 400,250 390,290 330,260 300,295 270,240 220,285 200,230 140,270 140,210 70,225 100,175 40,140 105,115 70,65 130,85 140,25 190,75 220,15" fill="black" transform="translate(8, 8)" />
+                    <polygon points="250,10 280,70 340,30 350,90 410,60 400,120 470,110 440,160 490,190 430,210 460,260 400,250 390,290 330,260 300,295 270,240 220,285 200,230 140,270 140,210 70,225 100,175 40,140 105,115 70,65 130,85 140,25 190,75 220,15" fill="#ffee00" stroke="black" strokeWidth="8" strokeLinejoin="miter" />
+                  </svg>
+                  <div className="npc-referee-bubble-text">
+                    {dialog.text}
+                    <span style={{ color: '#ff0000', fontSize: '1.2em', WebkitTextStroke: '2px #000000', textShadow: '3px 3px 0px #000000' }}>!</span>
+                  </div>
                 </div>
               </div>
             </div>
           );
         }
 
-        return (
-          <div style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(5px)',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            paddingBottom: '8vh',
-            userSelect: 'none',
-          }}>
-            <style>{`
-              @keyframes slide-in-left {
-                from { transform: translateX(-150px); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-              }
-              @keyframes slide-in-right {
-                from { transform: translateX(150px); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-              }
-              @keyframes bounce-horizontal {
-                from { transform: translateX(0); }
-                to { transform: translateX(6px); }
-              }
-              @keyframes dialog-glow {
-                0% { box-shadow: 0 0 15px rgba(251, 240, 185, 0.2); }
-                50% { box-shadow: 0 0 25px rgba(251, 240, 185, 0.45); }
-                100% { box-shadow: 0 0 15px rgba(251, 240, 185, 0.2); }
-              }
-            `}</style>
+        const hasDual = !!(dialog.commentator1Image && (dialog.refereeImage || dialog.commentator2Image));
 
+        return (
+          <div 
+            className="npc-dialog-overlay"
+            onClick={() => {
+              const type = latestEvent.type;
+              let maxSteps = 2; // Default for most multi-step events
+              if (type === 'full_time') maxSteps = 7;
+              else if (type === 'half_time') maxSteps = 4;
+              else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
+              else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
+
+              if (dialogStep < maxSteps) {
+                setDialogStep(prev => prev + 1);
+              } else {
+                setShowPopup(false);
+              }
+            }}
+          >
             {/* Left character: Commentator 1 */}
             {dialog.commentator1Image && (
               <img
                 src={dialog.commentator1Image}
                 alt="Commentator 1"
-                style={{
-                  position: 'absolute',
-                  bottom: '-25vh',
-                  left: '4%',
-                  height: '120vh',
-                  objectFit: 'contain',
-                  zIndex: 1005,
-                  animation: 'slide-in-left 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-commentator1-img${hasDual ? ' dual-active' : ''}`}
               />
             )}
-
 
             {/* Right character: Commentator 2 */}
             {dialog.commentator2Image && (
               <img
                 src={dialog.commentator2Image}
                 alt="Commentator 2"
-                style={{
-                  position: 'absolute',
-                  bottom: '-25vh',
-                  right: '4%',
-                  height: '120vh',
-                  objectFit: 'contain',
-                  zIndex: 1005,
-                  animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-commentator2-img${hasDual ? ' dual-active' : ''}`}
               />
             )}
 
@@ -1267,91 +1193,24 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               <img
                 src={dialog.refereeImage}
                 alt="Referee"
-                style={{
-                  position: 'absolute',
-                  bottom: '-30vh',
-                  right: '1%',
-                  height: '125vh',
-                  objectFit: 'contain',
-                  zIndex: 1006,
-                  animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-referee-img${hasDual ? ' dual-active' : ''}`}
               />
             )}
 
             {/* JRPG Dialog Box */}
-            <div 
-              onClick={(e) => {
-                e.stopPropagation();
-                const type = latestEvent.type;
-                let maxSteps = 2; // Default for most multi-step events
-                if (type === 'full_time') maxSteps = 7;
-                else if (type === 'half_time') maxSteps = 4;
-                else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
-                else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
-
-                if (dialogStep < maxSteps) {
-                  setDialogStep(prev => prev + 1);
-                } else {
-                  setShowPopup(false);
-                }
-              }}
-              style={{
-                width: '94%',
-                maxWidth: '920px',
-                background: '#fcf8eb',
-                border: '5px solid #1a1008',
-                borderRadius: '0px',
-                padding: '36px 48px',
-                boxShadow: '10px 10px 0px #1a1008',
-                position: 'relative',
-                cursor: 'pointer',
-                zIndex: 1010,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                animation: 'score-pop 300ms ease-out, dialog-glow 2s infinite',
-              }}
-            >
+            <div className="npc-jrpg-dialog-box">
               {/* Speaker Tag */}
-              <div style={{
-                position: 'absolute',
-                top: '-22px',
-                left: '32px',
-                background: '#1a1008',
-                color: '#ffffff',
-                padding: '6px 24px',
-                fontSize: '1rem',
-                fontWeight: 800,
-                fontFamily: 'Inter, sans-serif',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                boxShadow: '2px 2px 0px #ebdac0',
-              }}>
+              <div className="npc-jrpg-speaker-tag">
                 {dialog.speakerTitle}
               </div>
 
               {/* Dialog Text */}
-              <div style={{
-                color: '#1a1008',
-                fontSize: 'clamp(1.15rem, 2.6vw, 1.6rem)',
-                fontWeight: 700,
-                fontFamily: 'Inter, -apple-system, sans-serif',
-                lineHeight: 1.6,
-                paddingRight: '36px',
-              }}>
+              <div className="npc-jrpg-dialog-text">
                 {dialog.text}
               </div>
 
               {/* Next/Close Action Arrow */}
-              <div style={{
-                position: 'absolute',
-                bottom: '16px',
-                right: '20px',
-                animation: 'bounce-horizontal 0.8s infinite alternate',
-              }}>
+              <div className="npc-jrpg-arrow">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="12" cy="12" r="12" fill="#1a1008" />
                   <path d="M10 7L15 12L10 17" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />

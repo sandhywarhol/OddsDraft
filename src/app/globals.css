@@ -1212,6 +1212,10 @@ h1, h2, h3, h4, h5, h6 {
   
   .grid-two { grid-template-columns: 1fr; }
   .grid-sidebar { grid-template-columns: 1fr; }
+  .grid-sidebar > * {
+    min-width: 0;
+    width: 100%;
+  }
   
   .navbar__nav { display: none; }
   
@@ -1494,24 +1498,379 @@ a {
   font-size: 0.8rem;
 }
 
-@media (max-width: 768px) {
-  .footer-inner {
-    flex-wrap: nowrap !important;
-    gap: 8px !important;
-    justify-content: space-between !important;
-  }
-  .footer-logo {
-    height: 20px !important;
-  }
-  .footer-text {
-    font-size: 0.58rem !important;
-    white-space: nowrap;
-  }
-}
-
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ============================================================
+   NPC DIALOGUE SYSTEM (LOBBY / MATCH REPLAY)
+   ============================================================ */
+
+/* Dialogue Overlay */
+.npc-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(5px);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 8vh;
+  user-select: none;
+}
+
+/* Referee Image Style */
+.npc-referee-img-style {
+  position: absolute;
+  bottom: -30vh;
+  height: 125vh;
+  object-fit: contain;
+  z-index: 1005;
+  filter: drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white);
+  will-change: filter;
+}
+.npc-referee-img-style.referee-right {
+  right: 2%;
+  animation: slide-in-right 400ms ease-out;
+}
+.npc-referee-img-style.referee-left {
+  left: 2%;
+  animation: slide-in-left 400ms ease-out;
+}
+
+/* Yellow Starburst Speech Bubble */
+.npc-referee-bubble-wrapper {
+  position: absolute;
+  bottom: 35vh;
+  z-index: 1020;
+  cursor: pointer;
+  animation: score-pop 500ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.npc-referee-bubble-wrapper.referee-right {
+  left: 15%;
+}
+.npc-referee-bubble-wrapper.referee-left {
+  right: 15%;
+}
+
+.npc-referee-bubble-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 80px;
+}
+
+.npc-referee-bubble-bg {
+  position: absolute;
+  inset: -15px -30px;
+  z-index: -1;
+  overflow: visible;
+}
+
+.npc-referee-bubble-text {
+  color: #000000;
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  font-weight: 900;
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: skewX(-6deg) rotate(-4deg);
+}
+
+/* Commentator 1 Image */
+.npc-commentator1-img {
+  position: absolute;
+  bottom: -25vh;
+  left: 4%;
+  height: 120vh;
+  object-fit: contain;
+  z-index: 1005;
+  animation: slide-in-left 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  filter: drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white);
+  will-change: filter;
+}
+
+/* Commentator 2 Image */
+.npc-commentator2-img {
+  position: absolute;
+  bottom: -25vh;
+  right: 4%;
+  height: 120vh;
+  object-fit: contain;
+  z-index: 1005;
+  animation: slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  filter: drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white);
+  will-change: filter;
+}
+
+/* Referee Image (Normal style dialog) */
+.npc-referee-img {
+  position: absolute;
+  bottom: -30vh;
+  right: 1%;
+  height: 125vh;
+  object-fit: contain;
+  z-index: 1006;
+  animation: slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  filter: drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white);
+  will-change: filter;
+}
+
+/* JRPG Dialogue Box */
+.npc-jrpg-dialog-box {
+  width: 94%;
+  max-width: 920px;
+  background: #fcf8eb;
+  border: 5px solid #1a1008;
+  border-radius: 0px;
+  padding: 36px 48px;
+  box-shadow: 10px 10px 0px #1a1008;
+  position: relative;
+  cursor: pointer;
+  z-index: 1010;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: score-pop 300ms ease-out, dialog-glow 2s infinite;
+}
+
+.npc-jrpg-dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+/* Speaker Tag Badge */
+.npc-jrpg-speaker-tag {
+  position: absolute;
+  top: -22px;
+  left: 32px;
+  background: #1a1008;
+  color: #ffffff;
+  padding: 6px 24px;
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 2px 2px 0px #ebdac0;
+}
+
+/* Dialogue Text Content */
+.npc-jrpg-dialog-text {
+  color: #1a1008;
+  font-size: clamp(1.15rem, 2.6vw, 1.6rem);
+  font-weight: 700;
+  font-family: 'Inter', -apple-system, sans-serif;
+  line-height: 1.6;
+  padding-right: 36px;
+}
+
+/* Action Arrow Icon */
+.npc-jrpg-arrow {
+  position: absolute;
+  bottom: 16px;
+  right: 20px;
+  animation: bounce-horizontal 0.8s infinite alternate;
+}
+
+/* Mobile specific styling for NPC Commentary Dialogues */
+@media (max-width: 768px) {
+  /* Center dialogue box vertically */
+  .npc-dialog-overlay {
+    justify-content: flex-end !important;
+    padding-bottom: 14vh !important;
+  }
+
+  /* Single character center rendering */
+  .npc-commentator1-img:not(.dual-active),
+  .npc-commentator2-img:not(.dual-active),
+  .npc-referee-img:not(.dual-active),
+  .npc-referee-img-style {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    bottom: -2vh !important;
+    height: 78vh !important;
+    max-height: 80% !important;
+    z-index: 1005 !important;
+    animation: slide-in-bottom-center 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  }
+
+  /* Dual characters rendering (Commentator 1 on left, Referee/Commentator 2 on right) */
+  .npc-commentator1-img.dual-active {
+    left: -15% !important;
+    right: auto !important;
+    transform: none !important;
+    bottom: -5vh !important;
+    height: 70vh !important;
+    z-index: 1005 !important;
+    animation: slide-in-left-mobile 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  }
+
+  .npc-commentator2-img.dual-active,
+  .npc-referee-img.dual-active {
+    right: -15% !important;
+    left: auto !important;
+    transform: none !important;
+    bottom: -5vh !important;
+    height: 70vh !important;
+    z-index: 1005 !important;
+    animation: slide-in-right-mobile 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  }
+
+  /* Yellow starburst bubble positioning and sizing */
+  .npc-referee-bubble-wrapper {
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, 0) !important;
+    bottom: auto !important;
+    top: 50vh !important;
+    width: 90% !important;
+    max-width: 360px !important;
+    display: flex !important;
+    justify-content: center !important;
+    z-index: 1030 !important;
+  }
+
+  .npc-referee-bubble-container {
+    padding: 36px 32px !important;
+    width: 100% !important;
+  }
+
+  .npc-referee-bubble-bg {
+    inset: -12px -10px !important;
+  }
+
+  .npc-referee-bubble-text {
+    font-size: 2.2rem !important;
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* JRPG Dialogue Box positioning and sizing */
+  .npc-jrpg-dialog-box {
+    position: absolute !important;
+    width: 90% !important;
+    padding: 28px 24px 20px !important;
+    margin-top: 0 !important;
+    border-width: 4px !important;
+    box-shadow: 6px 6px 0px #1a1008 !important;
+    z-index: 1030 !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    bottom: 18vh !important;
+  }
+
+  .npc-jrpg-speaker-tag {
+    top: -18px !important;
+    left: 16px !important;
+    font-size: 0.8rem !important;
+    padding: 4px 16px !important;
+  }
+
+  .npc-jrpg-dialog-text {
+    font-size: 1.05rem !important;
+    line-height: 1.5 !important;
+    padding-right: 20px !important;
+  }
+
+  .npc-jrpg-arrow {
+    bottom: 10px !important;
+    right: 12px !important;
+  }
+
+  .npc-jrpg-dialog-footer {
+    flex-direction: column-reverse !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin-top: 16px !important;
+  }
+}
+
+/* Animations for Mobile centering and dual slide-ins */
+@keyframes slide-in-bottom-center {
+  from { transform: translate(-50%, 150px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+@keyframes slide-in-left-mobile {
+  from { transform: translateX(-100px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-right-mobile {
+  from { transform: translateX(100px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ============================================================
+   LIVE MATCH PLAYER CARDS & CONTAINER
+   ============================================================ */
+:root {
+  --live-card-w: 110px;
+  --live-card-h: 151px;
+  --live-card-scale: 1;
+  --live-stats-gap: 24px;
+}
+
+.live-lineup-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  align-items: flex-start;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Custom JRPG scrollbar for the lineup row */
+.live-lineup-row::-webkit-scrollbar {
+  height: 6px;
+}
+.live-lineup-row::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+}
+.live-lineup-row::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 3px;
+}
+.live-lineup-row::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --live-card-w: 78px;
+    --live-card-h: 107px;
+    --live-card-scale: 0.73;
+    --live-stats-gap: 12px;
+  }
+  
+  .live-lineup-row {
+    gap: 8px;
+    padding-bottom: 6px;
+  }
+
+  /* Compress cards padding on mobile screen */
+  .card {
+    padding: 12px 14px !important;
+  }
+
+  /* Shrink buttons for mobile game viewing */
+  .btn--sm {
+    padding: 6px 12px !important;
+    font-size: 0.75rem !important;
+  }
+}
+
 
 

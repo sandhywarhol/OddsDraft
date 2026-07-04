@@ -90,12 +90,16 @@ export async function GET(req: NextRequest) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
   if (!fixture) return NextResponse.json({ events: [] });
 
-  // Find the matching event from the scoreboard for the fixture's date
+  // Search ±1 day around kickoff — ESPN indexes matches by local kickoff date which
+  // can differ from UTC date when the match falls near midnight in either direction.
   const kickoff = new Date(fixture.kickoffAt);
-  const dateStr = fmtUTC(kickoff);
-  const dayEvents = await fetchDayEvents(dateStr);
+  const datesToTry = [-1, 0, 1].map(delta => {
+    const d = new Date(kickoff.getTime() + delta * 86_400_000);
+    return fmtUTC(d);
+  });
+  const allDayEvents = (await Promise.all(datesToTry.map(fetchDayEvents))).flat();
 
-  const event = dayEvents.find(ev => {
+  const findMatch = (evList: any[]) => evList.find(ev => {
     const comp = ev.competitions?.[0];
     if (!comp) return false;
     const home = comp.competitors?.find((c: any) => c.homeAway === 'home');
@@ -105,6 +109,8 @@ export async function GET(req: NextRequest) {
     return teamsMatch(fixture.homeTeam, h) && teamsMatch(fixture.awayTeam, a);
   });
 
+  const event = findMatch(allDayEvents);
+
   if (!event?.id) return NextResponse.json({ events: [] });
 
   // Fetch full match detail using the internal reference
@@ -112,36 +118,41 @@ export async function GET(req: NextRequest) {
   if (!detail) return NextResponse.json({ events: [] });
 
   const events: MatchEvent[] = [];
+  // Track minute+type keys to avoid duplicating the same event from multiple ESPN arrays
+  const seenKeys = new Set<string>();
 
-  // Goals and scoring plays
+  const pushEvent = (ev: MatchEvent) => {
+    const key = `${ev.type}-${ev.minute}-${ev.player.slice(0,6)}`;
+    if (seenKeys.has(key)) return;
+    seenKeys.add(key);
+    events.push(ev);
+  };
+
+  const resolveTeam = (teamName: string) =>
+    teamsMatch(fixture.homeTeam, teamName) ? fixture.homeTeam
+    : teamsMatch(fixture.awayTeam, teamName) ? fixture.awayTeam
+    : teamName;
+
+  // Goals from scoringPlays (standard field)
   for (const play of (detail.scoringPlays ?? [])) {
     const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
     const text: string = play.text ?? '';
     const assistMatch = text.match(/\(([^)]+)\)/);
     const player = text.replace(/\s*\([^)]*\)/, '').trim();
-    const teamName: string = play.team?.displayName ?? play.team?.name ?? '';
-    // Map scoreboard team name back to our fixture team name
-    const team = teamsMatch(fixture.homeTeam, teamName) ? fixture.homeTeam
-      : teamsMatch(fixture.awayTeam, teamName) ? fixture.awayTeam
-      : teamName;
-    events.push({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team });
+    pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
   }
 
-  // Cards from key events
+  // Goals + cards from keyEvents — ESPN sometimes puts goals here when scoringPlays is empty
   for (const play of (detail.keyEvents ?? detail.keyPlays ?? [])) {
-    const typeText = play.type?.text ?? '';
-    if (!typeText.toLowerCase().includes('card')) continue;
-    const type = eventType(typeText);
-    const teamName: string = play.team?.displayName ?? play.team?.name ?? '';
-    const team = teamsMatch(fixture.homeTeam, teamName) ? fixture.homeTeam
-      : teamsMatch(fixture.awayTeam, teamName) ? fixture.awayTeam
-      : teamName;
-    events.push({
-      minute: play.clock?.displayValue ?? '?',
-      type,
-      player: play.participants?.[0]?.athlete?.displayName ?? play.text ?? '',
-      team,
-    });
+    const typeText = (play.type?.text ?? '').toLowerCase();
+    const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
+    // Include goals (any type containing 'goal') and cards; skip subs and generic events
+    if (!typeText.includes('goal') && !typeText.includes('card')) continue;
+    const text: string = play.text ?? '';
+    const assistMatch = text.match(/\(([^)]+)\)/);
+    const player = play.participants?.[0]?.athlete?.displayName
+      ?? text.replace(/\s*\([^)]*\)/, '').trim();
+    pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
   }
 
   events.sort((a, b) => (parseInt(a.minute) || 0) - (parseInt(b.minute) || 0));
