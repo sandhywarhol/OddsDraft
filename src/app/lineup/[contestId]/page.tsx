@@ -896,9 +896,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                     const slotConfig = SLOTS[i];
                     const isActive = activeSlot === i;
                     const scoreTop  = '16%';
-                    const nameTop   = '65%';
+                    const nameTop   = '67%';
                     const nationTop = '76%';
-                    const posTop    = '88%';
+                    const posTop    = '86%';
 
                     return (
                       <div 
@@ -945,7 +945,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               name={player.name}
                               team={player.team}
                               variant="fill"
-                              style={{ top: '19%', bottom: '44%', left: '8%', right: '8%', zIndex: 1 }}
+                              style={{ top: '25%', bottom: '38%', left: '8%', right: '8%', zIndex: 1 }}
                             />
                             {/* Score / Rating */}
                             <div style={{

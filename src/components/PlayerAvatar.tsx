@@ -51,7 +51,7 @@ export default function PlayerAvatar({
 
   if (variant === 'fill') {
     return (
-      <div className={className} style={{ position: 'absolute', inset: 0, overflow: 'hidden', ...style }}>
+      <div className={className} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, overflow: 'hidden', ...style }}>
         {showPhoto ? null : (
           <div style={{
             position: 'absolute', inset: 0,
