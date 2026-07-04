@@ -2666,6 +2666,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const equippedCard = equippedCardDefsRef.current[p.id] ?? null;
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
+                        const isHighScoreCard = pts > 10;
+                        // Per-card positioning: Normal vs High Score
+                        const lScoreTop  = isHighScoreCard ? '16%' : '16%';
+                        const lNameTop   = isHighScoreCard ? '62%' : '59%';
+                        const lNationTop = isHighScoreCard ? '70%' : '67%';
+                        const lPosTop    = isHighScoreCard ? '77%' : '77%';
                         return (
                           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
                             {/* Player card — High Score variant when pts > 10 */}
@@ -2689,16 +2695,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               />
                               {/* Rating */}
                               <div style={{
-                                position: 'absolute', top: '17%', right: '10.5%', width: '18%',
+                                position: 'absolute', top: lScoreTop, right: '10.5%', width: '18%',
                                 textAlign: 'center', color: (p.rating ?? 0) >= 90 ? '#ca8a04' : (p.rating ?? 0) >= 85 ? '#15803d' : '#1e293b',
-                                fontFamily: 'Inter, sans-serif', fontSize: `calc(${cw} * 0.11)`,
+                                fontFamily: 'Inter, sans-serif', fontSize: `calc(${cw} * 0.09)`,
                                 fontWeight: 800, lineHeight: 1, zIndex: 2,
                               }}>
                                 {p.rating ?? '-'}
                               </div>
                               {/* Name */}
                               <div style={{
-                                position: 'absolute', top: '59%', left: '38%', width: '52%',
+                                position: 'absolute', top: lNameTop, left: '43%', width: '50%',
                                 color: '#36220f', fontSize: nameFs, fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
                                 overflow: 'hidden', textOverflow: 'ellipsis', zIndex: 2,
@@ -2707,7 +2713,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               </div>
                               {/* Team flag + name */}
                               <div style={{
-                                position: 'absolute', top: '67%', left: '38%', width: '52%',
+                                position: 'absolute', top: lNationTop, left: '43%', width: '50%',
                                 color: '#36220f', fontSize: `calc(0.48rem * ${cs})`, fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center',
                                 gap: 3, whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 2,
@@ -2717,7 +2723,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               </div>
                               {/* Position badge */}
                               <div style={{
-                                position: 'absolute', top: '76%', left: '42%', zIndex: 2,
+                                position: 'absolute', top: lPosTop, left: '43%', zIndex: 2,
                                 background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
                                 color: '#fff', border: '1px solid #36220f', borderRadius: 0,
                                 padding: '1px 3px', fontSize: `calc(0.42rem * ${cs})`, fontWeight: 900,

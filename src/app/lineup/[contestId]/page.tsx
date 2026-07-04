@@ -895,7 +895,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   {lineup.map((player, i) => {
                     const slotConfig = SLOTS[i];
                     const isActive = activeSlot === i;
-                    
+                    const isHighScore = (player?.rating ?? 0) >= 90;
+                    // Per-card positioning: Normal vs High Score
+                    const scoreTop  = isHighScore ? '16%' : '16%';
+                    const nameTop   = isHighScore ? '62%' : '59%';
+                    const nationTop = isHighScore ? '70%' : '67%';
+                    const posTop    = isHighScore ? '77%' : '77%';
+
                     return (
                       <div 
                         key={i}
@@ -947,10 +953,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               variant="fill"
                               style={{ top: '7%', bottom: '44%', left: '5%', right: '5%', zIndex: 1 }}
                             />
-                            {/* Score / Rating inside the designated 'スコア' shield */}
+                            {/* Score / Rating */}
                             <div style={{
                               position: 'absolute',
-                              top: '17%',
+                              top: scoreTop,
                               right: '10.5%',
                               width: '18%',
                               textAlign: 'center',
@@ -959,7 +965,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                 : (player.rating && player.rating >= 85 ? '#15803d' : '#1e293b'), // Green / Charcoal (no red/brown)
                               fontFamily: 'Inter, sans-serif',
                               fontStyle: 'normal',
-                              fontSize: 'clamp(0.9rem, 2.2vw, 1.4rem)',
+                              fontSize: 'clamp(0.7rem, 1.8vw, 1.1rem)',
                               fontWeight: 800,
                               lineHeight: 1,
                               zIndex: 2,
@@ -973,8 +979,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             {/* Nama Pemain (Nama) row */}
                             <div style={{
                               position: 'absolute',
-                              top: '59%',
-                              left: '38%',
+                              top: nameTop,
+                              left: '43%',
                               width: '52%',
                               textAlign: 'left',
                               color: '#36220f',
@@ -997,8 +1003,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             {/* Negara (Flag & Name) (国籍) row */}
                             <div style={{
                               position: 'absolute',
-                              top: '67%',
-                              left: '38%',
+                              top: nationTop,
+                              left: '43%',
                               width: '52%',
                               textAlign: 'left',
                               color: '#36220f',
@@ -1054,7 +1060,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             {/* Posisi (ポジション) row */}
                             <div style={{
                               position: 'absolute',
-                              top: '76%',
+                              top: posTop,
                               left: '42%',
                               width: '54%',
                               zIndex: 2,
