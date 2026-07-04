@@ -396,14 +396,25 @@ export function convertTxLineUpdates(
 
       if (!fantasyType) continue;
 
-      const isHome = raw.participant === 1;
-      const team = isHome ? homeTeam : awayTeam;
-      const teamFlag = isHome ? homeFlag : awayFlag;
       const txPlayerId = String(raw.playerId ?? '');
       const ourPlayerId = playerIdMap[txPlayerId] ?? '';
+      const playerInfo = ourPlayerId ? getPlayerById(ourPlayerId) : null;
+
+      // Determine team: TxLINE often omits Participant on goal/card events.
+      // Fall back to player's known team from our database.
+      const isHome = (() => {
+        if (raw.participant === 1) return true;
+        if (raw.participant === 2) return false;
+        if (playerInfo?.team === homeTeam) return true;
+        if (playerInfo?.team === awayTeam) return false;
+        return true; // last-resort default
+      })();
+      const team = isHome ? homeTeam : awayTeam;
+      const teamFlag = isHome ? homeFlag : awayFlag;
+
       // Fall back to TxLINE name if no mapping found
       const player = raw.playerName
-        || (ourPlayerId ? (getPlayerById(ourPlayerId)?.name ?? '') : '')
+        || (playerInfo?.name ?? '')
         || 'Unknown';
 
       const event: LiveEvent = {
