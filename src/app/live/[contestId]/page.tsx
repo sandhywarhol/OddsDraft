@@ -1010,11 +1010,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (!rawStr) return undefined;
         return txoddsStatusToGameState(rawStr) ?? rawStr;
       })(),
-      score: u.score ?? (u.Score
-        ? { home: u.Score.Home ?? u.Score.home ?? 0, away: u.Score.Away ?? u.Score.away ?? 0 }
-        : u.ScoreSoccer
-          ? { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 }
-          : undefined),
+      // Only extract score if it contains actual numeric data — Score:{} is truthy but empty
+      // and would reset to 0-0 on every poll, overwriting the ESPN-backed score
+      score: (() => {
+        if (u.score && typeof u.score.home === 'number') return u.score;
+        if (u.Score) {
+          const h = u.Score.Home ?? u.Score.home;
+          const a = u.Score.Away ?? u.Score.away;
+          if (typeof h === 'number') return { home: h, away: typeof a === 'number' ? a : 0 };
+        }
+        if (u.ScoreSoccer) return { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 };
+        return undefined;
+      })(),
       // TxLINE uses Events[]; TxODDS legacy uses Incidents[] with IncidentType/Team fields
       events: (u.events ?? u.Events ?? u.Incidents ?? u.incidents ?? []).map((e: any) => ({
         type:              (e.type ?? e.Type ?? e.IncidentType ?? e.incidentType ?? '').toLowerCase(),
@@ -1405,32 +1412,40 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, apiToken]);
 
-  // ── LIVE MODE: ESPN score fallback when TxLINE has no data ───────────────────
-  // Uses ESPN public scoreboard API (no auth) to show live score while waiting for TxLINE events.
+  // ── LIVE MODE: Score from internal scoreboard (ESPN-backed, server-side) ──────
+  // TxLINE devnet returns Score:{} (empty) so we always poll our own /api/scores/wc2026
+  // endpoint as the source of truth for the score display, regardless of txlineStatus.
+  // TxLINE events (goals) can still increment score on top of this baseline.
   useEffect(() => {
-    if (appMode !== 'live' || txlineStatus === 'live') return;
+    if (appMode !== 'live') return;
     if (!fixture.homeTeam) return;
 
     let isMounted = true;
-    const pollEspn = async () => {
+    const pollScore = async () => {
       try {
-        // Use /api/scores/wc2026 which already matches team names → fixture IDs
         const res = await fetch('/api/scores/wc2026');
         if (!res.ok || !isMounted) return;
         const data: Record<string, { home: number; away: number }> = await res.json();
         const entry = data[contestId];
         if (entry && isMounted) {
-          setScore({ home: entry.home, away: entry.away });
-          scoreRef.current = { home: entry.home, away: entry.away };
+          // Only apply if TxLINE hasn't already given us a higher score (from goal events)
+          setScore(prev => ({
+            home: Math.max(prev.home, entry.home),
+            away: Math.max(prev.away, entry.away),
+          }));
+          scoreRef.current = {
+            home: Math.max(scoreRef.current.home, entry.home),
+            away: Math.max(scoreRef.current.away, entry.away),
+          };
         }
       } catch { /* silent */ }
     };
 
-    pollEspn();
-    const interval = setInterval(pollEspn, 60000); // ESPN scoreboard caches 5 min, poll every 60s
+    pollScore();
+    const interval = setInterval(pollScore, 30000); // poll every 30s for fresher scores
     return () => { isMounted = false; clearInterval(interval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, txlineStatus, contestId]);
+  }, [appMode, contestId]);
 
   // ── DEMO MODE: Simulate live events via minute ticker ──────────────────────
   // Simulate live events
