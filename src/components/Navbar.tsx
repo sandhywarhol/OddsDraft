@@ -169,7 +169,7 @@ export default function Navbar() {
               boxShadow: `0 0 4px ${tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
               animation: isSubscribing ? 'pulse 1s infinite' : 'none',
             }} />
-            {isSubscribing ? '...' : tokenError ? (errorMsg || 'ERROR') : appMode === 'live' ? 'LIVE · Devnet' : 'DEMO · Devnet'}
+            {isSubscribing ? '...' : tokenError ? (errorMsg || 'ERROR') : appMode === 'live' ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
           </button>
 
           {mounted ? (
@@ -227,10 +227,12 @@ export default function Navbar() {
           {walletToast.balance < 0.105 && (
             <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', paddingLeft: 2 }}>
               You need at least 0.1 SOL to play.{' '}
-              <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
-                style={{ color: '#ffaa00', fontWeight: 700, textDecoration: 'underline' }}>
-                Get Devnet SOL →
-              </a>
+              {process.env.NEXT_PUBLIC_SOLANA_NETWORK !== 'mainnet-beta' && (
+                <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
+                  style={{ color: '#ffaa00', fontWeight: 700, textDecoration: 'underline' }}>
+                  Get Devnet SOL →
+                </a>
+              )}
             </div>
           )}
         </div>
