@@ -58,14 +58,22 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   const wallet = useWallet();
   const { connection } = useConnection();
 
-  // On mount, restore tokens and mode from localStorage
+  // On mount, restore tokens from localStorage — fall back to env var if empty.
+  // NEXT_PUBLIC_TXODDS_API_TOKEN is set in Vercel env so users don't need to
+  // subscribe again after deployment.
   useEffect(() => {
-    const savedToken = localStorage.getItem('txline_api_token');
-    if (savedToken) setApiToken(savedToken);
+    const envToken = process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
+    const savedToken = localStorage.getItem('txline_api_token') || envToken || null;
+    if (savedToken) {
+      setApiToken(savedToken);
+      // Persist to localStorage so subsequent reads are instant
+      localStorage.setItem('txline_api_token', savedToken);
+    }
     const savedJwt = localStorage.getItem('txline_guest_jwt');
     if (savedJwt) setGuestJwt(savedJwt);
-    // Restore live mode only if a valid token exists
-    if (savedToken && localStorage.getItem('txline_app_mode') === 'live') {
+    // Auto-switch to live mode when a token is available (env token = always live)
+    const savedMode = localStorage.getItem('txline_app_mode');
+    if (savedToken && (savedMode === 'live' || envToken)) {
       setAppMode('live');
     }
   }, []);
