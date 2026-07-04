@@ -117,6 +117,33 @@ export default function HowItWorksPage() {
               </div>
             </div>
 
+            {/* Data Architecture */}
+            <div className="ro-window" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #1e3a5f 0%, #0f2340 100%)' }}>
+                <span>5 // Data Architecture</span>
+                <span>⚙️</span>
+              </div>
+              <div className="ro-window__body" style={{ padding: 24 }}>
+                <p style={{ color: '#cbd5e1', marginBottom: 20, lineHeight: 1.6 }}>
+                  OddsDraft uses a hybrid data model to give you the most accurate fantasy experience:
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: 'rgba(0,229,255,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(0,229,255,0.15)' }}>
+                    <strong style={{ color: '#00e5ff', display: 'block', marginBottom: 6 }}>TxODDS / TxLINE — Primary Source</strong>
+                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Real-time match clock, game state, and player events are pulled from TxLINE feeds. These are the authoritative source for fantasy point calculation and leaderboard scoring.</span>
+                  </div>
+                  <div style={{ background: 'rgba(255,215,0,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(255,215,0,0.15)' }}>
+                    <strong style={{ color: '#ffd700', display: 'block', marginBottom: 6 }}>Enriched Match Data — Display Layer</strong>
+                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Match schedules, team rosters, and completed match event histories are sourced via server-side APIs — never exposed to the browser directly — to present richer context in the match event feed.</span>
+                  </div>
+                  <div style={{ background: 'rgba(0,232,122,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(0,232,122,0.15)' }}>
+                    <strong style={{ color: '#00e87a', display: 'block', marginBottom: 6 }}>Solana — Settlement Layer</strong>
+                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Entry fees are held on Solana Devnet. Final rankings and prize outcomes are computed on-chain so results are transparent and verifiable by any participant.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div style={{ textAlign: 'center', marginTop: 24 }}>
               <Link href="/contests" className="btn btn--primary btn--lg" style={{ background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)', color: '#1a1a1a', border: '1px solid rgba(255,255,255,0.4)', boxShadow: '0 4px 15px rgba(255, 215, 0, 0.2)', fontWeight: 800 }}>
                 View Match Schedule

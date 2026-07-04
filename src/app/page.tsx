@@ -436,7 +436,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 11:
       return {
         speakerTitle: 'Guide',
-        text: `"Third, all prize distributions are fully on-chain. Transparent, trustless, and immediate!"`,
+        text: `"Third, prize distributions are recorded on Solana. Transparent, verifiable, and automated at match end!"`,
         image: '/NPC/NPC Guide Female.svg',
         position: 'left',
         targetId: 'feature-2',
@@ -863,7 +863,7 @@ function FeaturesSection() {
     },
     {
       title: 'On-Chain Prize Distribution',
-      desc: 'Prizes auto-distributed via Solana. Transparent, trustless, immediate.',
+      desc: 'Prize outcomes recorded on Solana. Transparent, automated, and verifiable at match end.',
       icon: '🔗',
       color: '#00e87a',
       tag: 'SYS_SOL'
