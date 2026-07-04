@@ -148,9 +148,9 @@ export async function resolveTxLineFixtureId(
 
 // ── 2. Player ID mapping ─────────────────────────────────────────────────────
 
-// Try to match a TxLINE player name to one of our internal player IDs.
+// Try to match a player name (TxLINE or ESPN) to one of our internal player IDs.
 // Strategy: exact match → last-name match → substring match.
-function matchPlayerName(txlineName: string, teamName: string): string | null {
+export function matchPlayerName(txlineName: string, teamName: string): string | null {
   const normTx = norm(txlineName);
   const candidates = WORLD_CUP_PLAYERS.filter(
     p => norm(p.team) === norm(teamName) || norm(p.team).includes(norm(teamName)) || norm(teamName).includes(norm(p.team))

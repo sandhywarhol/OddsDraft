@@ -15,7 +15,7 @@ import SkillCardDisplay from '@/components/SkillCardDisplay';
 import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEvent } from '@/lib/card-collection';
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
-import { buildPlayerIdMap, convertTxLineUpdates } from '@/lib/txline-bridge';
+import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
 import { fetchLiveScoreUpdates, fetchScoreSnapshot } from '@/lib/txline';
 
 // Demo live events that replay at interval to simulate a live match
@@ -860,7 +860,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const playerIdMapRef = useRef<Record<string, string>>({});
   const seenSeqsRef = useRef<Set<number>>(new Set());
   const liveInitDoneRef = useRef(false);
-  const lastGameStateRef = useRef<string | null>(null); // tracks last seen TxLINE game state for synthesis
+  const lastGameStateRef = useRef<string | null>(null);
+  const lastClockRunningRef = useRef<boolean | null>(null);
+  const lastClockSecondsRef = useRef<number | null>(null);
+  const matchResultLoadedRef = useRef(false);
   const showPopupRef = useRef(false);
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
   const [minutesToKickoff, setMinutesToKickoff] = useState<number | null>(null);
@@ -1035,6 +1038,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         assistPlayerName:  e.assistPlayerName ?? e.AssistPlayerName,
         goalType:          e.goalType ?? e.GoalType,
       })),
+      clockRunning: u.Clock?.Running ?? u.clock?.running,
+      clockSeconds: u.Clock?.Seconds ?? u.Clock?.seconds ?? u.clock?.seconds,
     });
 
     const bootstrap = async () => {
@@ -1166,6 +1171,81 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         } else {
           console.log('[LivePage] Snapshot: no events and no game state (match not started yet)');
         }
+
+        // ── Goal history for late joiners ─────────────────────────────────────
+        // TxLINE devnet never sends real Incidents, so load scoring history from
+        // /api/match/result (ESPN-backed, server-side only). This runs once per
+        // session for any live/half-time/full-time state regardless of snapshot events.
+        if (isMatchLive && !matchResultLoadedRef.current) {
+          matchResultLoadedRef.current = true;
+          try {
+            const res = await fetch(`/api/match/result?fixtureId=${contestId}`);
+            if (res.ok && isMounted) {
+              const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
+              const espnEvents = resultData.events ?? [];
+              console.log(`[LivePage] Match result — ${espnEvents.length} historical events`);
+
+              if (espnEvents.length > 0 && isMounted) {
+                const historyEvents: typeof matchEvents = [];
+                const pidMap = playerIdMapRef.current;
+
+                for (const ev of espnEvents) {
+                  const min = parseInt(ev.minute) || 0;
+                  const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
+                  const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
+
+                  // Fuzzy-match ESPN player name against TxLINE names in the player map
+                  let playerId = '';
+                  for (const [txlineName, fantasyId] of Object.entries(pidMap)) {
+                    if (matchPlayerName(ev.player, txlineName)) { playerId = fantasyId; break; }
+                  }
+
+                  const evId = `hist-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
+                  const desc =
+                    evType === 'goal'       ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
+                    evType === 'own_goal'   ? `Own goal — ${ev.player}` :
+                    evType === 'yellow_card'? `Yellow card — ${ev.player}` :
+                    evType === 'red_card'   ? `Red card — ${ev.player}` :
+                    `${evType} — ${ev.player}`;
+
+                  historyEvents.push({ id: evId, minute: min, team: ev.team, teamFlag, player: ev.player, playerId, type: evType, points: 0, description: desc });
+
+                  // Award fantasy points once for matched lineup players
+                  if (playerId && userLineupRef.current?.players?.length > 0) {
+                    const { players, captain, confidence } = userLineupRef.current;
+                    const matched = players.find((p: any) => p?.id === playerId);
+                    if (matched) {
+                      const wasAppeared = appearedPlayersRef.current.has(playerId);
+                      let rawPts = calculateEventPoints(evType, (matched as any).position);
+                      if (!wasAppeared) { rawPts += 2; appearedPlayersRef.current.add(playerId); }
+                      const cardDef = equippedCardDefsRef.current[playerId];
+                      if (cardDef) rawPts += getCardBonusForEvent(cardDef, evType);
+                      let delta = rawPts;
+                      if (captain === playerId) delta *= 2;
+                      const stars = (confidence as Record<string, number>)?.[playerId] ?? 3;
+                      delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+                      delta = Math.round(delta * 100) / 100;
+                      setPlayerPoints(prev => ({ ...prev, [playerId]: Math.round(((prev[playerId] ?? 0) + delta) * 100) / 100 }));
+                      setPlayerHistory(prev => ({ ...prev, [playerId]: [...(prev[playerId] ?? []), { label: evType, pts: delta, minute: min }] }));
+                    }
+                  }
+                }
+
+                if (historyEvents.length > 0 && isMounted) {
+                  setEvents(prev => {
+                    const existingIds = new Set(prev.map(e => e.id));
+                    const fresh = historyEvents.filter(e => !existingIds.has(e.id));
+                    if (fresh.length === 0) return prev;
+                    // historyEvents sorted ascending → reverse to newest-first before prepending
+                    return [...fresh.slice().reverse(), ...prev];
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[LivePage] Failed to load match result history:', e);
+          }
+        }
       }
     };
 
@@ -1204,6 +1284,49 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setScore({ home: latest.score.home ?? 0, away: latest.score.away ?? 0 });
           scoreRef.current = { home: latest.score.home ?? 0, away: latest.score.away ?? 0 };
         }
+
+        // ── Clock tracking — update live minute display from TxLINE Clock.Seconds ──
+        const pollClockRunning: boolean | undefined = latest?.clockRunning;
+        const pollClockSeconds: number | undefined = latest?.clockSeconds;
+        if (typeof pollClockSeconds === 'number' && pollClockSeconds > 0) {
+          setLiveClockMinute(Math.floor(pollClockSeconds / 60));
+        }
+
+        // Detect Clock.Running transitions true→false (half/full-time) and false→true (2nd half)
+        // as a fallback when TxLINE GameState is always "scheduled" (devnet quirk).
+        if (typeof pollClockRunning === 'boolean' && pollClockRunning !== lastClockRunningRef.current) {
+          const prevRunning = lastClockRunningRef.current;
+          lastClockRunningRef.current = pollClockRunning;
+          const approxMin = Math.floor((lastClockSecondsRef.current ?? 0) / 60);
+
+          if (!pollClockRunning && prevRunning === true) {
+            // Clock just stopped
+            if (approxMin >= 40 && approxMin < 65 && lastGameStateRef.current !== 'HalfTime') {
+              lastGameStateRef.current = 'HalfTime';
+              if (isMounted) {
+                setEvents(prev => [{ id: `synth-ht-clk-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half time!' }, ...prev]);
+                setMinute(45);
+                playSFX('whistle');
+              }
+            } else if (approxMin >= 85 && lastGameStateRef.current !== 'FullTime') {
+              lastGameStateRef.current = 'FullTime';
+              if (isMounted) {
+                setEvents(prev => [{ id: `synth-ft-clk-${Date.now()}`, minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' }, ...prev]);
+                setMinute(90);
+                playSFX('end_game');
+              }
+            }
+          } else if (pollClockRunning === true && prevRunning === false && lastGameStateRef.current === 'HalfTime') {
+            // Clock restarted after half-time → second half
+            lastGameStateRef.current = 'SecondHalf';
+            if (isMounted) {
+              setEvents(prev => [{ id: `synth-sh-clk-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' }, ...prev]);
+              setMinute(45);
+              playSFX('whistle');
+            }
+          }
+        }
+        if (typeof pollClockSeconds === 'number') lastClockSecondsRef.current = pollClockSeconds;
 
         // ── Game state transition synthesis ────────────────────────────────────
         // Detect state changes (null → FirstHalf, FirstHalf → HalfTime, etc.) and
