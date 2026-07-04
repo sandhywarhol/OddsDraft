@@ -18,10 +18,9 @@ const TXL_TOKEN_MINT = new PublicKey(
     : 'Zhw9TVKp68a1QrftncMSd6ELXKDtpVMNuMGr1jNwdeL'
 );
 
-// Browser calls go through our proxy to avoid CORS; server-side calls go direct
-const TXLINE_API_BASE = typeof window !== 'undefined'
-  ? '/api/txline'
-  : IS_DEVNET ? 'https://txline-dev.txodds.com' : 'https://txline.txodds.com';
+// TxLINE sets access-control-allow-origin: * so browser can call directly.
+// Direct calls bypass Vercel's serverless IPs which TxLINE blocks with 403.
+const TXLINE_API_BASE = IS_DEVNET ? 'https://txline-dev.txodds.com' : 'https://txline.txodds.com';
 
 // Free tier ID differs per network: devnet=1, mainnet=12
 export const SERVICE_LEVEL_ID = IS_DEVNET ? 1 : 12;
