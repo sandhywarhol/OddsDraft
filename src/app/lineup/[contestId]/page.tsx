@@ -896,9 +896,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                     const slotConfig = SLOTS[i];
                     const isActive = activeSlot === i;
                     const scoreTop  = '16%';
-                    const nameTop   = '59%';
-                    const nationTop = '67%';
-                    const posTop    = '77%';
+                    const nameTop   = '63%';
+                    const nationTop = '71%';
+                    const posTop    = '81%';
 
                     return (
                       <div 
@@ -945,21 +945,21 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               name={player.name}
                               team={player.team}
                               variant="fill"
-                              style={{ top: '7%', bottom: '44%', left: '5%', right: '5%', zIndex: 1 }}
+                              style={{ top: '11%', bottom: '48%', left: '8%', right: '8%', zIndex: 1 }}
                             />
                             {/* Score / Rating */}
                             <div style={{
                               position: 'absolute',
                               top: scoreTop,
-                              right: '10.5%',
+                              right: '14%',
                               width: '18%',
                               textAlign: 'center',
                               color: player.rating && player.rating >= 90
-                                ? '#ca8a04' // JRPG Gold
-                                : (player.rating && player.rating >= 85 ? '#15803d' : '#1e293b'), // Green / Charcoal (no red/brown)
+                                ? '#ca8a04'
+                                : (player.rating && player.rating >= 85 ? '#15803d' : '#1e293b'),
                               fontFamily: 'Inter, sans-serif',
                               fontStyle: 'normal',
-                              fontSize: 'clamp(0.7rem, 1.8vw, 1.1rem)',
+                              fontSize: 'clamp(0.6rem, 1.5vw, 0.95rem)',
                               fontWeight: 800,
                               lineHeight: 1,
                               zIndex: 2,
