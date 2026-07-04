@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
 
     const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet'
       ? 'https://api.devnet.solana.com'
-      : 'https://api.mainnet-beta.solana.com';
+      : (process.env.SERVER_SOLANA_RPC ?? 'https://solana-rpc.publicnode.com');
 
     const response = await fetch(rpcUrl, {
       method: 'POST',

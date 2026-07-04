@@ -481,8 +481,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             tx.feePayer = publicKey;
 
             const sig = await sendTransaction(tx, connection, {
-              skipPreflight: attempt > 1, // skip preflight on retries — devnet RPC can be flaky
+              skipPreflight: true,
               preflightCommitment: 'confirmed',
+              maxRetries: 3,
             });
             await connection.confirmTransaction(
               { signature: sig, blockhash, lastValidBlockHeight },

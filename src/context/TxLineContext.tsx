@@ -136,7 +136,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
         setLiveFixtures(live);
         setFixturesAvailable(true);
       } catch (error: any) {
-        if (error.response?.status === 401) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
           console.log('[TxLINE] Auth expired, refreshing guest JWT...');
           setGuestJwt(null);
           localStorage.removeItem('txline_guest_jwt');
