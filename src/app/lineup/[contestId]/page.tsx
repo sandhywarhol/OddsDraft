@@ -895,12 +895,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   {lineup.map((player, i) => {
                     const slotConfig = SLOTS[i];
                     const isActive = activeSlot === i;
-                    const isHighScore = (player?.rating ?? 0) >= 90;
-                    // Per-card positioning: Normal vs High Score
-                    const scoreTop  = isHighScore ? '16%' : '16%';
-                    const nameTop   = isHighScore ? '62%' : '59%';
-                    const nationTop = isHighScore ? '70%' : '67%';
-                    const posTop    = isHighScore ? '77%' : '77%';
+                    const scoreTop  = '16%';
+                    const nameTop   = '59%';
+                    const nationTop = '67%';
+                    const posTop    = '77%';
 
                     return (
                       <div 
@@ -916,11 +914,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                           flex: '1 1 0px',
                           maxWidth: 220,
                           aspectRatio: '120/165',
-                          backgroundImage: player
-                            ? ((player.rating ?? 0) >= 90
-                              ? "url('/card/High%20Score%20Player%20Card.svg')"
-                              : "url('/card/Normal%20Player%20Card.svg')")
-                            : 'none',
+                          backgroundImage: player ? "url('/card/Player%20Card%20(3).svg')" : 'none',
                           backgroundSize: '100% 100%',
                           backgroundRepeat: 'no-repeat',
                           backgroundPosition: 'center',

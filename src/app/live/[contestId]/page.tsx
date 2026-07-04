@@ -2666,20 +2666,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const equippedCard = equippedCardDefsRef.current[p.id] ?? null;
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
-                        const isHighScoreCard = pts > 10;
-                        // Per-card positioning: Normal vs High Score
-                        const lScoreTop  = isHighScoreCard ? '16%' : '16%';
-                        const lNameTop   = isHighScoreCard ? '62%' : '59%';
-                        const lNationTop = isHighScoreCard ? '70%' : '67%';
-                        const lPosTop    = isHighScoreCard ? '77%' : '77%';
+                        const lScoreTop  = '16%';
+                        const lNameTop   = '59%';
+                        const lNationTop = '67%';
+                        const lPosTop    = '77%';
                         return (
                           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
                             {/* Player card — High Score variant when pts > 10 */}
                             <div style={{
                               width: cw, height: ch, flexShrink: 0, position: 'relative',
-                              backgroundImage: pts > 10
-                                ? "url('/card/High%20Score%20Player%20Card.svg')"
-                                : "url('/card/Normal%20Player%20Card.svg')",
+                              backgroundImage: "url('/card/Player%20Card%20(3).svg')",
                               backgroundSize: '100% 100%', overflow: 'visible',
                               boxShadow: isCap
                                 ? '0 0 14px rgba(255,215,0,0.55)'
