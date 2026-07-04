@@ -967,7 +967,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           participantCount: n,
           leaderboard: board
             .filter(e => e.wallet && e.wallet !== 'YOUR WALLET')
-            .map(e => ({ walletAddress: e.wallet, rank: e.rank, points: e.points })),
+            .map(e => ({
+              // Use full public key for user entry — leaderboard stores truncated display string
+              walletAddress: e.isUser ? walletAddr : e.wallet,
+              rank: e.rank,
+              points: e.points,
+            })),
         }),
       });
     } catch {
@@ -1703,10 +1708,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   useEffect(() => {
     if (!matchCompleted || appMode !== 'live') return;
     if (retroComputedRef.current) return;
-    const currentUserPts = leaderboardRef.current.find(e => e.isUser)?.points ?? 0;
-    if (currentUserPts > 0) return; // TxLINE worked — skip fallback
     if (!userLineupRef.current) return;
     retroComputedRef.current = true;
+
+    // Whether TxLINE already supplied some user points (goals, cards etc.)
+    // If yes: skip goal attribution (avoid double-count) but still award
+    // starting_xi and goal_conceded for players TxLINE didn't cover.
+    const txlineHadEvents = (leaderboardRef.current.find(e => e.isUser)?.points ?? 0) > 0;
 
     const computeRetro = async () => {
       try {
@@ -1745,12 +1753,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }] }));
         }
 
-        // Goal / card events from ESPN result
+        // Goal / card events from ESPN result — only when TxLINE had no events
+        // (avoids double-counting goals TxLINE already awarded)
         for (const ev of espnEvents) {
+          if (txlineHadEvents) break;
           const min = parseInt(ev.minute) || 0;
           const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
 
-          const matched = (players as any[]).find(p => p && nameMatch(ev.player, p.name));
+          // Match player name AND team to prevent Cape Verde scorer matching Argentine player
+          const matched = (players as any[]).find(p => p && nameMatch(ev.player, p.name) && p.team === ev.team);
           if (matched) {
             let rawPts = calculateEventPoints(evType, matched.position);
             const cardDef = equippedCardDefsRef.current[matched.id];
@@ -1787,9 +1798,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           }
         }
 
-        // Goal conceded penalties from final score
+        // Goal conceded penalties — always run even when TxLINE had events,
+        // but skip players who already have a goal_conceded entry in their history
+        // (meaning TxLINE already covered it for them).
         for (const p of (players as any[])) {
           if (!p?.id) continue;
+          const alreadyHasGC = (playerHistory[p.id] ?? []).some(h => h.label.startsWith('goal conceded'));
+          if (alreadyHasGC) continue;
           const isHome = p.team === fixture.homeTeam;
           const goalsAgainst = isHome ? scoreRef.current.away : scoreRef.current.home;
           if (goalsAgainst <= 0) continue;
@@ -1809,12 +1824,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           }
         }
 
-        // Clean sheet bonus
+        // Clean sheet bonus — dedup against TxLINE history
         const cleanSheetTeams: string[] = [];
         if (scoreRef.current.away === 0) cleanSheetTeams.push(fixture.homeTeam);
         if (scoreRef.current.home === 0) cleanSheetTeams.push(fixture.awayTeam);
         for (const p of (players as any[])) {
           if (!p?.id || !cleanSheetTeams.includes(p.team)) continue;
+          const alreadyHasCS = (playerHistory[p.id] ?? []).some(h => h.label === 'clean sheet');
+          if (alreadyHasCS) continue;
           let csBase = calculateEventPoints('clean_sheet', p.position);
           const cardDef = equippedCardDefsRef.current[p.id];
           if (cardDef) csBase += getCardBonusForEvent(cardDef, 'clean_sheet');
@@ -2972,9 +2989,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   )}
 
                   {claimStatus === 'no_prize' && (
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
-                      Your rank does not qualify for a prize in this contest. Better luck next time!
-                    </p>
+                    <div>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+                        Your rank does not qualify for a SOL prize in this contest.
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', margin: 0 }}>
+                        🎴 Card pack reward is separate — it is awarded to all participants who ran verification regardless of rank.
+                      </p>
+                    </div>
                   )}
 
                   {claimStatus === 'ready' && (() => {
