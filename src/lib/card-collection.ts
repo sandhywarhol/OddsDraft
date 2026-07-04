@@ -11,6 +11,63 @@ import {
   LINEUP_POS_TO_CARD_POS,
 } from './skill-cards';
 
+// ── Combine system ────────────────────────────────────────────────────────────
+// 2 copies of the same card (same cardId) → 1 card of the next rarity,
+// same position, randomly selected from that position's pool.
+
+export interface CombineResult {
+  success: boolean;
+  resultCard: SkillCard | null;
+  resultInstance: OwnedCard | null;
+  error?: string;
+}
+
+export function canCombine(cardId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const col = getCollection();
+  const copies = col.cards.filter(c => c.cardId === cardId);
+  const card = SKILL_CARDS.find(c => c.id === cardId);
+  if (!card) return false;
+  const currentRarityIdx = RARITY_ORDER.indexOf(card.rarity);
+  return copies.length >= 2 && currentRarityIdx < RARITY_ORDER.length - 1;
+}
+
+export function combineCards(cardId: string): CombineResult {
+  const col = getCollection();
+  const copies = col.cards.filter(c => c.cardId === cardId);
+  const card = SKILL_CARDS.find(c => c.id === cardId);
+
+  if (!card) return { success: false, resultCard: null, resultInstance: null, error: 'Card definition not found.' };
+  if (copies.length < 2) return { success: false, resultCard: null, resultInstance: null, error: 'Need 2 copies to combine.' };
+
+  const currentRarityIdx = RARITY_ORDER.indexOf(card.rarity);
+  if (currentRarityIdx >= RARITY_ORDER.length - 1) {
+    return { success: false, resultCard: null, resultInstance: null, error: 'Already at maximum rarity (SSSR).' };
+  }
+
+  // Consume 2 copies (take first two by instanceId)
+  const toRemove = copies.slice(0, 2).map(c => c.instanceId);
+  col.cards = col.cards.filter(c => !toRemove.includes(c.instanceId));
+
+  // Pick result card: next rarity, same position
+  const nextRarity: Rarity = RARITY_ORDER[currentRarityIdx + 1];
+  const pool = SKILL_CARDS.filter(c => c.rarity === nextRarity && c.position === card.position);
+  const resultCard = pool.length > 0
+    ? pool[Math.floor(Math.random() * pool.length)]
+    : SKILL_CARDS.filter(c => c.rarity === nextRarity)[0]; // fallback: any card of next rarity
+
+  const resultInstance: OwnedCard = {
+    instanceId: `combine-${cardId}-${Date.now()}`,
+    cardId: resultCard.id,
+    obtainedAt: new Date().toISOString(),
+  };
+
+  col.cards.unshift(resultInstance);
+  saveCollection(col);
+
+  return { success: true, resultCard, resultInstance };
+}
+
 export interface OwnedCard {
   instanceId: string;
   cardId: string;

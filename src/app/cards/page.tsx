@@ -9,6 +9,8 @@ import {
   equipCard,
   unequipCard,
   getEquippedCardInstance,
+  combineCards,
+  canCombine,
   type OwnedCard,
 } from '@/lib/card-collection';
 import {
@@ -381,6 +383,199 @@ function EquipModal({
   );
 }
 
+// CombineModal — shows 2 copies of a card + combine action → reveals next-rarity result
+function CombineModal({
+  card,
+  onClose,
+  onSuccess,
+}: {
+  card: SkillCard;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [phase, setPhase] = useState<'confirm' | 'combining' | 'done'>('confirm');
+  const [resultCard, setResultCard] = useState<SkillCard | null>(null);
+
+  const currentRarityIdx = RARITY_ORDER.indexOf(card.rarity);
+  const nextRarity: Rarity = RARITY_ORDER[currentRarityIdx + 1];
+  const rarityColor = RARITY_COLOR[card.rarity];
+  const nextRarityColor = RARITY_COLOR[nextRarity];
+
+  const handleCombine = () => {
+    setPhase('combining');
+    setTimeout(() => {
+      const res = combineCards(card.id);
+      if (res.success && res.resultCard) {
+        setResultCard(res.resultCard);
+        setPhase('done');
+      } else {
+        setPhase('confirm');
+      }
+    }, 1800);
+  };
+
+  return (
+    <div
+      onClick={phase === 'done' ? undefined : onClose}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.92)',
+        backdropFilter: 'blur(12px)',
+        zIndex: 9100,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 560, textAlign: 'center' }}>
+
+        {/* Header */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd700', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>
+            Card Combine
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#fff' }}>
+            {phase === 'done' && resultCard ? `${resultCard.name} Obtained!` : `Combine 2× ${card.name}`}
+          </div>
+          {phase === 'done' && resultCard && (
+            <div style={{ fontSize: 13, marginTop: 6, fontWeight: 700, color: nextRarityColor, textTransform: 'uppercase', letterSpacing: 2 }}>
+              {RARITY_STARS[resultCard.rarity]} {resultCard.rarity} — {resultCard.position}
+            </div>
+          )}
+        </div>
+
+        {/* Combine animation area */}
+        {phase !== 'done' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 32 }}>
+            {/* Source card ×2 */}
+            {[0, 1].map(i => (
+              <div key={i} style={{
+                width: 120, height: 170, borderRadius: 10,
+                background: `linear-gradient(135deg, ${rarityColor}22, rgba(0,0,0,0.6))`,
+                border: `2px solid ${rarityColor}66`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+                opacity: phase === 'combining' ? 0.4 : 1,
+                transition: 'opacity 0.6s ease',
+                boxShadow: `0 0 16px ${rarityColor}44`,
+              }}>
+                <div style={{ fontSize: 28 }}>🃏</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: rarityColor, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {card.rarity}
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', textAlign: 'center', padding: '0 8px' }}>
+                  {card.name}
+                </div>
+                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{card.position}</div>
+              </div>
+            ))}
+
+            {/* Arrow */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{
+                fontSize: phase === 'combining' ? '2rem' : '1.5rem',
+                transition: 'font-size 0.3s',
+                animation: phase === 'combining' ? 'pulse 0.6s ease infinite' : undefined,
+              }}>
+                {phase === 'combining' ? '✨' : '→'}
+              </div>
+              {phase === 'combining' && (
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Combining…</div>
+              )}
+            </div>
+
+            {/* Result slot */}
+            <div style={{
+              width: 120, height: 170, borderRadius: 10,
+              background: phase === 'combining'
+                ? `linear-gradient(135deg, ${nextRarityColor}33, rgba(0,0,0,0.6))`
+                : 'rgba(255,255,255,0.04)',
+              border: `2px dashed ${phase === 'combining' ? nextRarityColor : 'rgba(255,255,255,0.15)'}`,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+              transition: 'all 0.6s ease',
+              boxShadow: phase === 'combining' ? `0 0 24px ${nextRarityColor}55` : 'none',
+              animation: phase === 'combining' ? 'pulse 0.8s ease infinite' : undefined,
+            }}>
+              {phase === 'combining' ? (
+                <>
+                  <div style={{ fontSize: 28 }}>✨</div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: nextRarityColor, textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {nextRarity}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 28, opacity: 0.3 }}>?</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Result</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: nextRarityColor, textTransform: 'uppercase' }}>{nextRarity}</div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Result reveal */}
+        {phase === 'done' && resultCard && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 32 }}>
+            <SkillCardDisplay card={resultCard} width={200} />
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', maxWidth: 320 }}>
+              {resultCard.effectText}
+            </div>
+          </div>
+        )}
+
+        {/* Info text */}
+        {phase === 'confirm' && (
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 24, lineHeight: 1.6 }}>
+            Combining 2 copies of <strong style={{ color: rarityColor }}>{card.name}</strong> will produce
+            1 random <strong style={{ color: nextRarityColor }}>{nextRarity}</strong> {card.position} card.
+            The 2 source cards will be consumed.
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          {phase === 'confirm' && (
+            <>
+              <button onClick={onClose} style={{
+                padding: '12px 24px', background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10,
+                color: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              }}>
+                Cancel
+              </button>
+              <button onClick={handleCombine} style={{
+                padding: '12px 28px',
+                background: `linear-gradient(135deg, ${rarityColor}, ${nextRarityColor})`,
+                border: 'none', borderRadius: 10,
+                color: '#000', fontWeight: 900, fontSize: 13, cursor: 'pointer',
+                letterSpacing: 0.5,
+              }}>
+                ⚗️ Combine Cards
+              </button>
+            </>
+          )}
+          {phase === 'done' && (
+            <button onClick={() => { onSuccess(); onClose(); }} style={{
+              padding: '12px 32px',
+              background: nextRarityColor,
+              border: 'none', borderRadius: 10,
+              color: '#000', fontWeight: 900, fontSize: 13, cursor: 'pointer',
+            }}>
+              Add to Collection →
+            </button>
+          )}
+        </div>
+
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.06); }
+          }
+        `}</style>
+      </div>
+    </div>
+  );
+}
+
 export default function CardsPage() {
   const [allCards, setAllCards] = useState<{ instance: OwnedCard; card: SkillCard }[]>([]);
   const [filterPos, setFilterPos] = useState<FilterPos>('all');
@@ -388,6 +583,7 @@ export default function CardsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [equipTarget, setEquipTarget] = useState<{ instance: OwnedCard; card: SkillCard } | null>(null);
   const [viewTarget, setViewTarget] = useState<{ instance: OwnedCard; card: SkillCard } | null>(null);
+  const [combineTarget, setCombineTarget] = useState<SkillCard | null>(null);
   const [shimmerIds, setShimmerIds] = useState<Set<string>>(new Set());
 
   const handleCardClick = (instance: OwnedCard, card: SkillCard) => {
@@ -424,6 +620,12 @@ export default function CardsPage() {
     rarityCount[card.rarity] = (rarityCount[card.rarity] ?? 0) + 1;
   });
   const rareCount = allCards.filter(({ card }) => RARITY_ORDER.indexOf(card.rarity) >= 4).length;
+
+  // Count copies per cardId to identify combinable duplicates
+  const cardIdCount: Record<string, number> = {};
+  allCards.forEach(({ instance }) => {
+    cardIdCount[instance.cardId] = (cardIdCount[instance.cardId] ?? 0) + 1;
+  });
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
@@ -621,6 +823,8 @@ export default function CardsPage() {
             `}</style>
             {filtered.map(({ instance, card }) => {
               const isShimmering = shimmerIds.has(instance.instanceId);
+              const copyCount = cardIdCount[instance.cardId] ?? 1;
+              const isCombineable = copyCount >= 2 && canCombine(instance.cardId);
               return (
                 <div
                   key={instance.instanceId}
@@ -644,6 +848,35 @@ export default function CardsPage() {
                           background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%)',
                           animation: 'card-shine 0.38s ease-out forwards',
                         }} />
+                      </div>
+                    )}
+                    {/* Combine badge */}
+                    {isCombineable && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setCombineTarget(card); }}
+                        style={{
+                          position: 'absolute', bottom: 8, left: '50%',
+                          transform: 'translateX(-50%)',
+                          background: `linear-gradient(135deg, ${RARITY_COLOR[card.rarity]}, ${RARITY_COLOR[RARITY_ORDER[RARITY_ORDER.indexOf(card.rarity) + 1] ?? card.rarity]})`,
+                          border: 'none', borderRadius: 20,
+                          color: '#000', fontWeight: 900, fontSize: 9,
+                          padding: '4px 10px', cursor: 'pointer',
+                          letterSpacing: 0.5, whiteSpace: 'nowrap',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                        }}
+                      >
+                        ⚗️ COMBINE ×{copyCount}
+                      </button>
+                    )}
+                    {/* Duplicate count badge (when > 1 but not yet combineable) */}
+                    {copyCount > 1 && !isCombineable && (
+                      <div style={{
+                        position: 'absolute', top: 6, right: 6,
+                        background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: 10, padding: '2px 7px',
+                        fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 700,
+                      }}>
+                        ×{copyCount}
                       </div>
                     )}
                   </div>
@@ -673,6 +906,15 @@ export default function CardsPage() {
           card={equipTarget.card}
           instance={equipTarget.instance}
           onClose={() => { setEquipTarget(null); reload(); }}
+        />
+      )}
+
+      {/* Combine modal */}
+      {combineTarget && (
+        <CombineModal
+          card={combineTarget}
+          onClose={() => setCombineTarget(null)}
+          onSuccess={() => { setCombineTarget(null); reload(); }}
         />
       )}
     </div>
