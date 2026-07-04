@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, use } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
@@ -699,6 +700,8 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
 
 export default function ReplayPage({ params }: { params: Promise<{ contestId: string }> }) {
   const { contestId } = use(params);
+  const searchParams = useSearchParams();
+  const isResultsMode = searchParams.get('results') === '1';
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt } = useTxLine();
 
@@ -730,7 +733,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const [leaderboard, setLeaderboard] = useState(DEMO_LEADERBOARD);
   const [latestEvent, setLatestEvent] = useState<any>(null);
   const [showPopup, setShowPopup] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(!isResultsMode);
   const [isFastForward, setIsFastForward] = useState(true);
   const eventRef = useRef<HTMLDivElement>(null);
   const triggeredEventsRef = useRef<Set<string>>(new Set());
@@ -741,16 +744,49 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const leaderboardRef = useRef(leaderboard);
   const userLineupRef = useRef<any>(null);
 
+  // Prize claim / card pack state
+  const [hasClaimed, setHasClaimed] = useState(false);
+  const [showCardPack, setShowCardPack] = useState(false);
+  const [cardRevealed, setCardRevealed] = useState(false);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(`txodds_user_lineup_${contestId}`);
       if (stored) {
         userLineupRef.current = JSON.parse(stored);
       }
+      // Check if already claimed
+      const claimed = localStorage.getItem(`txodds_claimed_${contestId}`);
+      if (claimed) setHasClaimed(true);
     } catch (e) {
       console.error('Failed to parse user lineup:', e);
     }
   }, [contestId]);
+
+  // Results mode: immediately skip to final state
+  useEffect(() => {
+    if (!isResultsMode) return;
+    const queue = eventsQueueRef.current;
+    if (queue.length === 0) return;
+
+    // Compute final score from all events
+    let h = 0; let a = 0;
+    queue.forEach(ev => {
+      if (ev.type === 'goal' || ev.type === 'own_goal') {
+        if (ev.team === fixture.homeTeam) h++; else a++;
+      }
+    });
+
+    // Reverse so newest event is at top (matches replay display order)
+    setEvents([...queue].reverse());
+    setCurrentEventIdx(queue.length);
+    setScore({ home: h, away: a });
+    const ftEvent = queue.find(ev => ev.type === 'full_time');
+    setMinute(ftEvent?.minute ?? 90);
+    queue.forEach(ev => triggeredEventsRef.current.add(ev.id));
+    setIsPlaying(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isResultsMode]);
 
   useEffect(() => {
     leaderboardRef.current = leaderboard;
@@ -1057,6 +1093,25 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
   const userPoints = leaderboard.find((e) => e.isUser)?.points ?? 0;
   const userRank = leaderboard.find((e) => e.isUser)?.rank ?? '-';
+
+  // Prize / claim helpers
+  const allEventsPlayed = currentEventIdx >= eventsQueueRef.current.length && eventsQueueRef.current.length > 0;
+  const matchIsOver = isResultsMode || allEventsPlayed;
+  const userLineup = userLineupRef.current;
+  const contestType: string = userLineup?.contestType ?? 'top3';
+  const participantCount = userLineup ? 10 : 0; // demo: 10 participants
+  const rankNum = typeof userRank === 'number' ? userRank : 2;
+  const prizePool = participantCount * 0.1;
+  const userPrizeSol =
+    contestType === 'wta'   ? (rankNum === 1 ? prizePool : 0) :
+    contestType === '5050'  ? (rankNum <= Math.floor(participantCount / 2) ? prizePool / Math.floor(participantCount / 2) : 0) :
+    rankNum === 1 ? prizePool * 0.5 : rankNum === 2 ? prizePool * 0.3 : rankNum === 3 ? prizePool * 0.2 : 0;
+
+  const handleClaim = () => {
+    try { localStorage.setItem(`txodds_claimed_${contestId}`, '1'); } catch { /* */ }
+    setHasClaimed(true);
+    setShowCardPack(true);
+  };
 
   // ── Loading screen while fetching API events ────────────────────────────────
   if (apiLoading) {
@@ -1574,28 +1629,166 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   {/* Prize pool breakdown */}
                   <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)' }}>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                      Prize Pool: 10.0 SOL
+                      Prize Pool: {prizePool.toFixed(2)} SOL
                     </div>
-                    {[
-                      { place: '1st', prize: '5.0 SOL', pct: '50%', color: '#FFD700' },
-                      { place: '2nd', prize: '3.0 SOL', pct: '30%', color: '#C0C0C0' },
-                      { place: '3rd', prize: '2.0 SOL', pct: '20%', color: '#CD7F32' },
-                    ].map((p) => (
-                      <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700 }}>{p.place}</span>
+                    {contestType === 'wta' ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#FFD700', fontWeight: 700 }}>1st</span>
                         <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
-                          <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
+                          <div style={{ width: '100%', height: '100%', background: '#FFD700', borderRadius: 999 }} />
                         </div>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{prizePool.toFixed(2)} SOL</span>
                       </div>
-                    ))}
+                    ) : contestType === '5050' ? (
+                      <div style={{ fontSize: '0.8rem', color: '#10b981' }}>Top 50% share {prizePool.toFixed(2)} SOL equally</div>
+                    ) : (
+                      [
+                        { place: '1st', prize: `${(prizePool * 0.5).toFixed(2)} SOL`, pct: '50%', color: '#FFD700' },
+                        { place: '2nd', prize: `${(prizePool * 0.3).toFixed(2)} SOL`, pct: '30%', color: '#C0C0C0' },
+                        { place: '3rd', prize: `${(prizePool * 0.2).toFixed(2)} SOL`, pct: '20%', color: '#CD7F32' },
+                      ].map((p) => (
+                        <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700 }}>{p.place}</span>
+                          <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
+                            <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
+
+                  {/* ── Claim Prize panel — visible once match is over ── */}
+                  {matchIsOver && userLineup && (
+                    <div style={{ marginTop: 20, padding: 16, borderRadius: 8, border: `1px solid ${userPrizeSol > 0 ? 'rgba(255,215,0,0.35)' : 'rgba(255,255,255,0.08)'}`, background: userPrizeSol > 0 ? 'rgba(255,215,0,0.06)' : 'rgba(0,0,0,0.25)' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                        Your Result
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                        <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2.5rem', lineHeight: 1, color: userPrizeSol > 0 ? '#ffd700' : 'var(--text-muted)' }}>
+                          #{rankNum}
+                        </div>
+                        <div>
+                          <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.4rem', color: userPrizeSol > 0 ? '#ffd700' : 'var(--text-primary)', lineHeight: 1 }}>
+                            {userPrizeSol > 0 ? `${userPrizeSol.toFixed(4)} SOL` : 'No prize'}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                            {userPoints.toFixed(1)} pts · {userPrizeSol > 0 ? 'You won!' : 'Better luck next match'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {userPrizeSol > 0 && !hasClaimed && (
+                        <button className="btn btn--primary btn--full" onClick={handleClaim} style={{ fontWeight: 800, fontSize: '0.95rem' }}>
+                          🏆 Claim Prize + Open Card Pack
+                        </button>
+                      )}
+                      {userPrizeSol > 0 && hasClaimed && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ textAlign: 'center', color: '#00e87a', fontWeight: 700, fontSize: '0.85rem', padding: '8px 0' }}>
+                            ✅ Prize claimed!
+                          </div>
+                          <button className="btn btn--ghost btn--full" onClick={() => setShowCardPack(true)} style={{ fontSize: '0.85rem' }}>
+                            🃏 Open Card Pack
+                          </button>
+                        </div>
+                      )}
+                      {userPrizeSol === 0 && (
+                        <button className="btn btn--ghost btn--full" onClick={() => setShowCardPack(true)} style={{ fontSize: '0.85rem' }}>
+                          🃏 Open Participation Pack
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         </div>
       </main>
+
+      {/* ── Card Pack Modal ── */}
+      {showCardPack && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, padding: 24 }}
+          onClick={() => { if (cardRevealed) setShowCardPack(false); }}
+        >
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            {userPrizeSol > 0 ? 'Prize Card Pack' : 'Participation Pack'}
+          </div>
+
+          {/* Card */}
+          <div
+            style={{
+              width: 220, height: 320, borderRadius: 16, cursor: cardRevealed ? 'default' : 'pointer',
+              perspective: 600,
+            }}
+            onClick={e => { e.stopPropagation(); if (!cardRevealed) setCardRevealed(true); }}
+          >
+            <div style={{
+              width: '100%', height: '100%', borderRadius: 16,
+              transition: 'transform 0.7s cubic-bezier(.4,2,.6,1)',
+              transformStyle: 'preserve-3d',
+              transform: cardRevealed ? 'rotateY(180deg)' : 'rotateY(0deg)',
+              position: 'relative',
+            }}>
+              {/* Back face */}
+              <div style={{
+                position: 'absolute', inset: 0, backfaceVisibility: 'hidden', borderRadius: 16,
+                background: 'linear-gradient(135deg, #1a1a2e, #16213e, #0f3460)',
+                border: '2px solid rgba(255,215,0,0.4)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                boxShadow: '0 0 40px rgba(255,215,0,0.15)',
+              }}>
+                <div style={{ fontSize: '4rem' }}>🃏</div>
+                <div style={{ color: '#ffd700', fontWeight: 800, fontSize: '0.9rem', textAlign: 'center', padding: '0 16px' }}>
+                  Tap to reveal your card
+                </div>
+                <div style={{ width: 40, height: 2, background: 'rgba(255,215,0,0.4)', borderRadius: 1 }} />
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>OddsDraft</div>
+              </div>
+
+              {/* Front face */}
+              <div style={{
+                position: 'absolute', inset: 0, backfaceVisibility: 'hidden', borderRadius: 16,
+                transform: 'rotateY(180deg)',
+                background: userPrizeSol > 0
+                  ? 'linear-gradient(135deg, #7c3aed, #4f46e5, #0ea5e9)'
+                  : 'linear-gradient(135deg, #065f46, #0f766e)',
+                border: `2px solid ${userPrizeSol > 0 ? 'rgba(139,92,246,0.8)' : 'rgba(16,185,129,0.6)'}`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
+                padding: 20,
+                boxShadow: `0 0 40px ${userPrizeSol > 0 ? 'rgba(139,92,246,0.4)' : 'rgba(16,185,129,0.3)'}`,
+              }}>
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                    {userPrizeSol > 0 ? 'Rare' : 'Common'}
+                  </span>
+                  <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)' }}>OddsDraft</span>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '4.5rem', lineHeight: 1 }}>{userPrizeSol > 0 ? '⚡' : '⚽'}</div>
+                  <div style={{ color: '#fff', fontWeight: 800, fontSize: '1rem', marginTop: 10 }}>
+                    {userPrizeSol > 0 ? 'Momentum Surge' : 'Steady Hands'}
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', marginTop: 4 }}>
+                    {userPrizeSol > 0 ? '+15% pts on next goal event' : 'Reduce yellow card penalty 50%'}
+                  </div>
+                </div>
+                <div style={{ width: '100%', background: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>Tap anywhere to close</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {cardRevealed && (
+            <button className="btn btn--ghost" onClick={() => setShowCardPack(false)} style={{ fontSize: '0.85rem' }}>
+              Close
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

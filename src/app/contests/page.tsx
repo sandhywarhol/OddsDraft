@@ -347,6 +347,7 @@ export default function ContestsPage() {
                     onSelect={setSelectedFixture}
                     counts={contestCounts[fixture.fixtureId]}
                     onViewResult={finishedScores[fixture.fixtureId] ? openMatchResult : undefined}
+                    hasEntered={!!(enteredContests[fixture.fixtureId]?.length)}
                   />
                 ))}
               </div>
@@ -600,11 +601,12 @@ function SwitchToLiveButton() {
   );
 }
 
-function ContestCard({ fixture, onSelect, counts, onViewResult }: {
+function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered }: {
   fixture: DemoFixture;
   onSelect?: (f: DemoFixture) => void;
   counts?: { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number };
   onViewResult?: (f: DemoFixture) => void;
+  hasEntered?: boolean;
 }) {
   const kickoff = new Date(fixture.kickoffAt);
   const isLive = fixture.status === 'live';
@@ -787,13 +789,25 @@ function ContestCard({ fixture, onSelect, counts, onViewResult }: {
             </button>
           </div>
         )}
-        {isFinished && onViewResult && (
-          <button
-            onClick={() => onViewResult(fixture)}
-            className="btn btn--secondary btn--full"
-          >
-            📊 Match Details
-          </button>
+        {isFinished && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {hasEntered && (
+              <Link
+                href={`/replay/${fixture.fixtureId}?results=1`}
+                className="btn btn--primary btn--full"
+              >
+                🏆 My Results
+              </Link>
+            )}
+            {onViewResult && (
+              <button
+                onClick={() => onViewResult(fixture)}
+                className={`btn btn--full ${hasEntered ? 'btn--ghost' : 'btn--secondary'}`}
+              >
+                📊 Match Details
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
