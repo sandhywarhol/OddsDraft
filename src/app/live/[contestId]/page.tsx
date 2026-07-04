@@ -861,6 +861,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const matchResultLoadedRef = useRef(false);
   const retroComputedRef = useRef(false);
   const showPopupRef = useRef(false);
+  const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
   const [minutesToKickoff, setMinutesToKickoff] = useState<number | null>(null);
 
@@ -1147,6 +1148,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const clockRunning = u.Clock?.Running === true || u.clock?.running === true;
         if (clockRunning && (!rawStr || /^(scheduled|notstarted|not_started)$/i.test(rawStr))) return 'FirstHalf';
         if (!rawStr) return undefined;
+        // If TxLINE still says "scheduled" after kickoff time, treat as FirstHalf
+        if (/^(scheduled|notstarted|not_started)$/i.test(rawStr)) {
+          const koMs = fixture.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
+          if (koMs > 0 && Date.now() > koMs) return 'FirstHalf';
+        }
         return txoddsStatusToGameState(rawStr) ?? rawStr;
       })(),
       // Only extract score if it contains actual numeric data — Score:{} is truthy but empty
@@ -1772,6 +1778,61 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     return () => { isMounted = false; clearInterval(interval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, contestId]);
+
+  // ── KICKOFF SAFETY NET ────────────────────────────────────────────────────
+  // If TxLINE never sends a valid game state after kickoff time passes,
+  // fire the kickoff event and award starting_xi points directly from the clock.
+  useEffect(() => {
+    if (appMode !== 'live' || !wcFixture) return;
+    if (minutesToKickoff !== null) return; // match hasn't started yet
+    if (kickoffFiredRef.current) return;
+
+    const awardKickoff = () => {
+      if (kickoffFiredRef.current) return;
+      kickoffFiredRef.current = true;
+
+      // Synthesize kickoff event only if none exists yet
+      setEvents(prev => {
+        if (prev.some(e => e.type === 'kick_off')) return prev;
+        const ev = { id: `synth-ko-safenet-${Date.now()}`, minute: 1, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Kick off! The match has started.' };
+        setLatestEvent(ev);
+        setDialogStep(1);
+        setShowPopup(true);
+        playSFX('whistle');
+        return [ev, ...prev];
+      });
+
+      // Award starting_xi if lineup is loaded and points not yet given
+      const lineup = userLineupRef.current;
+      if (!lineup?.players?.length) return;
+      const { players, captain, confidence } = lineup;
+      let totalBonus = 0;
+      for (const p of (players as any[])) {
+        if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+        let pts = 2;
+        const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+        pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+        if (captain === p.id) pts *= 2;
+        pts = Math.round(pts * 100) / 100;
+        totalBonus += pts;
+        appearedPlayersRef.current.add(p.id);
+        setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+        setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 1 }] }));
+      }
+      if (totalBonus > 0) {
+        setLeaderboard(prev => {
+          const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
+          return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
+        });
+      }
+      console.log('[LivePage] Kickoff safety-net fired — starting_xi bonus:', totalBonus);
+    };
+
+    // Small delay so the bootstrap+poll has a chance to fire first via TxLINE
+    const t = setTimeout(awardKickoff, 8000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minutesToKickoff, appMode, wcFixture]);
 
   // ── DEVNET FALLBACK: Retroactive fantasy point computation ────────────────
   // When TxLINE sends no events (userPoints = 0 at full time), compute points
