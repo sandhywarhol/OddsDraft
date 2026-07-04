@@ -25,17 +25,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({}, { status: 500 });
   }
 
-  // Aggregate counts per fixture
-  const counts: Record<string, { total: number; top3: number; '5050': number; wta: number; prizePool: number }> = {};
+  type FixtureCounts = {
+    total: number; top3: number; '5050': number; wta: number;
+    prizePool: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number;
+  };
+  // Aggregate counts and prize pools per fixture per contest type.
+  // Prize pool = participants × 0.1 SOL — 100% returned to winners, no platform cut.
+  const counts: Record<string, FixtureCounts> = {};
 
   for (const row of (data ?? [])) {
     const fid = row.fixture_id;
-    if (!counts[fid]) counts[fid] = { total: 0, top3: 0, '5050': 0, wta: 0, prizePool: 0 };
+    if (!counts[fid]) counts[fid] = { total: 0, top3: 0, '5050': 0, wta: 0, prizePool: 0, top3Pool: 0, fiftyFiftyPool: 0, wtaPool: 0 };
     counts[fid].total++;
-    counts[fid].prizePool = parseFloat((counts[fid].total * 0.1).toFixed(2));
-    if (row.contest_type === 'top3') counts[fid].top3++;
-    if (row.contest_type === '5050') counts[fid]['5050']++;
-    if (row.contest_type === 'wta') counts[fid].wta++;
+    if (row.contest_type === 'top3') { counts[fid].top3++; counts[fid].top3Pool = parseFloat((counts[fid].top3 * 0.1).toFixed(4)); }
+    if (row.contest_type === '5050') { counts[fid]['5050']++; counts[fid].fiftyFiftyPool = parseFloat((counts[fid]['5050'] * 0.1).toFixed(4)); }
+    if (row.contest_type === 'wta')  { counts[fid].wta++;  counts[fid].wtaPool = parseFloat((counts[fid].wta * 0.1).toFixed(4)); }
+    counts[fid].prizePool = parseFloat((counts[fid].total * 0.1).toFixed(4));
   }
 
   return NextResponse.json(counts);

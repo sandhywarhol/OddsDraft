@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
-import { calculateEventPoints, POINT_MAP } from '@/lib/fantasy-engine';
+import { calculateEventPoints, POINT_MAP, getPrizeForRank } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -797,18 +797,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     // Demo mode: simulated leaderboard with scaled points
     let initialBoard = [...DEMO_LEADERBOARD];
     const scaleFactor = initialState.initialMin > 0 ? initialState.initialMin / 90 : 0;
+    const demoN = DEMO_LEADERBOARD.length;
 
     initialBoard = initialBoard.map((entry, index) => {
-      let prize = '-';
-      if (contestType === '5050') {
-        prize = index < 10 ? '0.18 SOL' : '-';
-      } else if (contestType === 'wta') {
-        prize = index === 0 ? '10.0 SOL' : '-';
-      } else {
-        if (index === 0) prize = '5.0 SOL';
-        else if (index === 1) prize = '3.0 SOL';
-        else if (index === 2) prize = '2.0 SOL';
-      }
+      const prizeSol = getPrizeForRank(index + 1, contestType, demoN);
+      const prize = prizeSol > 0 ? `${prizeSol.toFixed(2)} SOL` : '-';
 
       const scaledPoints = parseFloat((entry.points * scaleFactor).toFixed(1));
 
@@ -894,7 +887,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     leaderboardRef.current = leaderboard;
   }, [leaderboard]);
 
-  // Live mode: populate leaderboard with real Supabase participants
+  // Live mode: populate leaderboard with real Supabase participants + compute prizes
   useEffect(() => {
     if (appMode !== 'live') return;
     fetch(`/api/contest/leaderboard?fixture=${contestId}&contestType=${contestType}`)
@@ -902,8 +895,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       .then((data: { participants?: Array<{ wallet_address: string; contest_type: string }> }) => {
         const list = data.participants ?? [];
         if (list.length === 0) return;
+        const n = list.length;
         const walletStr = publicKey?.toString() ?? '';
         const entries = list.map((p, i) => {
+          const rank = i + 1;
           const w = p.wallet_address;
           const isUser = !!walletStr && w === walletStr;
           let username = isUser ? 'You' : `${w.substring(0, 4)}...${w.slice(-3)}`;
@@ -918,15 +913,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               }
             } catch {}
           }
-          return {
-            rank: i + 1,
-            username,
-            wallet: `${w.substring(0, 4)}...${w.slice(-3)}`,
-            avatar,
-            points: 0,
-            prize: '–',
-            isUser,
-          };
+          const prizeSol = getPrizeForRank(rank, contestType, n);
+          const prize = prizeSol > 0 ? `${prizeSol.toFixed(4)} SOL` : '–';
+          return { rank, username, wallet: `${w.substring(0, 4)}...${w.slice(-3)}`, avatar, points: 0, prize, isUser };
         });
         setLeaderboard(entries);
       })
@@ -1143,7 +1132,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             if (totalBonus > 0 && isMounted) {
               setLeaderboard(prev => {
                 const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
               });
             }
           }
@@ -1341,7 +1330,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             if (totalBonus > 0 && isMounted) {
               setLeaderboard(prev => {
                 const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
               });
             }
           }
@@ -1391,7 +1380,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             if (totalBonus > 0 && isMounted) {
               setLeaderboard(prev => {
                 const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
               });
             }
           }
@@ -1469,7 +1458,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 ? { ...entry, points: entry.points + delta }
                 : entry // other real participants — no fake scoring
             );
-            return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+            return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
           });
           if (ev.playerId && delta !== 0) {
             const pid = ev.playerId;
@@ -1630,7 +1619,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           csDelta = Math.round(csDelta * 100) / 100;
           setLeaderboard(prev => {
             const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + csDelta) * 100) / 100 } : e);
-            return next.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+            return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
           });
           setActiveToasts(prev => [{
             id: `toast-cs-${Date.now()}-${p.id}`,
@@ -1686,17 +1675,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         });
         
         const sorted = next.sort((a, b) => b.points - a.points).map((e, i) => {
-          let prize = '-';
-          if (contestType === '5050') {
-            prize = i < 10 ? '0.18 SOL' : '-';
-          } else if (contestType === 'wta') {
-            prize = i === 0 ? '10.0 SOL' : '-';
-          } else {
-            if (i === 0) prize = '5.0 SOL';
-            else if (i === 1) prize = '3.0 SOL';
-            else if (i === 2) prize = '2.0 SOL';
-          }
-          return { ...e, rank: i + 1, prize };
+          const p = getPrizeForRank(i + 1, contestType, next.length);
+          return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '-' };
         });
         return sorted;
       });
@@ -1746,7 +1726,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (entry.isUser) return { ...entry, points: entry.points + delta };
           return { ...entry };
         });
-        const sorted = nextBoard.sort((a, b) => b.points - a.points).map((e, i) => ({ ...e, rank: i + 1 }));
+        const sorted = nextBoard.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, nextBoard.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
         const newUserRank = sorted.find((e) => e.isUser)?.rank ?? 2;
         
         if (newUserRank < prevRankRef.current) {
@@ -2255,7 +2235,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>real-time pts</span>
                     </h3>
                     {/* Inline flex guarantees row layout even if the CSS class fails to load */}
-                    <div className="live-lineup-row" style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: 10, overflowX: 'auto', paddingBottom: 8, alignItems: 'flex-start' }}>
+                    <div className="live-lineup-row" style={{ paddingTop: 'calc(22px * var(--live-card-scale, 1))' }}>
                       {players.map((p: any) => {
                         const pts = playerPoints[p.id] ?? 0;
                         const hist = playerHistory[p.id] ?? [];
@@ -2271,7 +2251,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         return (
-                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: isCap ? `calc(20px * ${cs})` : 0 }}>
+                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
                             {/* Player Card (2).svg — same design as lineup builder */}
                             <div style={{
                               width: cw, height: ch, flexShrink: 0, position: 'relative',

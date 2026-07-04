@@ -17,7 +17,7 @@ export default function ContestsPage() {
   const [mounted, setMounted] = useState(false);
   const [enteredContests, setEnteredContests] = useState<Record<string, string[]>>({});
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);
-  const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number }>>({});
+  const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number }>>({});
   const [finishedScores, setFinishedScores] = useState<Record<string, FixtureScore>>({});
   const [matchResult, setMatchResult] = useState<{ fixture: DemoFixture; data: MatchResult | null; loading: boolean } | null>(null);
 
@@ -386,13 +386,14 @@ export default function ContestsPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {[
-                  { id: 'top3', title: 'Top 3 Classic', desc: '50% / 30% / 20% prize split for the top 3 managers.', icon: '🏆' },
-                  { id: '5050', title: 'Double Up (50/50)', desc: 'Top 50% of the leaderboard doubles their entry fee.', icon: '⚖️' },
-                  { id: 'wta', title: 'Winner Takes All', desc: 'Rank 1 takes 100% of the prize pool. High risk, high reward.', icon: '💀' },
+                  { id: 'top3',  title: 'Top 3 Classic',      desc: '50% / 30% / 20% split to ranks 1, 2, 3.', icon: '🏆', poolKey: 'top3Pool'  as const, ctKey: 'top3'  as const },
+                  { id: '5050',  title: 'Double Up (50/50)',   desc: 'Top 50% of the leaderboard splits the prize pool equally.', icon: '⚖️', poolKey: 'fiftyFiftyPool' as const, ctKey: '5050' as const },
+                  { id: 'wta',   title: 'Winner Takes All',    desc: 'Rank 1 takes 100% of the prize pool. High risk, high reward.', icon: '💀', poolKey: 'wtaPool' as const, ctKey: 'wta' as const },
                 ].map(ct => {
                   const fixtureCount = contestCounts[selectedFixture.fixtureId];
-                  const totalPlayers = fixtureCount?.total ?? 0;
-                  const showCount = !isDemo && totalPlayers > 0;
+                  const ctPlayers = fixtureCount?.[ct.ctKey] ?? 0;
+                  const ctPool = fixtureCount?.[ct.poolKey] ?? 0;
+                  const showCount = !isDemo && ctPlayers > 0;
                   const joined = (enteredContests[selectedFixture.fixtureId] ?? []).includes(ct.id);
                   const card = (
                     <div className={joined ? 'card' : 'card card--hoverable'} style={{
@@ -421,9 +422,16 @@ export default function ContestsPage() {
                               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entry</div>
                               <div style={{ fontWeight: 700, color: 'var(--color-accent)' }}>0.1 SOL</div>
                             </div>
-                            <div style={{ fontSize: '0.65rem', color: showCount ? 'var(--text-secondary)' : 'var(--text-muted)', textAlign: 'right' }}>
-                              {showCount ? `${totalPlayers} joined` : isDemo ? 'Demo mode' : 'Be first!'}
-                            </div>
+                            {showCount ? (
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{ctPlayers} joined</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ffd700' }}>Pool: {ctPool.toFixed(2)} SOL</div>
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+                                {isDemo ? 'Demo mode' : 'Be first!'}
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
@@ -592,7 +600,7 @@ function SwitchToLiveButton() {
 function ContestCard({ fixture, onSelect, counts, onViewResult }: {
   fixture: DemoFixture;
   onSelect?: (f: DemoFixture) => void;
-  counts?: { total: number; prizePool: number };
+  counts?: { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number };
   onViewResult?: (f: DemoFixture) => void;
 }) {
   const kickoff = new Date(fixture.kickoffAt);

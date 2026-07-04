@@ -241,7 +241,40 @@ export function calculateFantasyPoints(
   };
 }
 
-// Calculate prize distribution
+export const ENTRY_FEE_SOL = 0.1;
+
+// Total prize pool = all entry fees collected for this contest type.
+// No platform cut — 100% distributed to winners.
+export function calculatePrizePool(participantCount: number, entryFeeSol = ENTRY_FEE_SOL): number {
+  return Math.round(participantCount * entryFeeSol * 10000) / 10000;
+}
+
+// Returns the SOL prize for a given rank, contest type, and participant count.
+// Rules:
+//   top3  — 50% / 30% / 20% to ranks 1 / 2 / 3
+//   5050  — equal split among top 50% of participants (min 1 winner)
+//   wta   — 100% to rank 1
+export function getPrizeForRank(rank: number, contestType: string, participantCount: number, entryFeeSol = ENTRY_FEE_SOL): number {
+  const pool = calculatePrizePool(participantCount, entryFeeSol);
+  if (pool === 0 || rank < 1) return 0;
+
+  if (contestType === 'wta') {
+    return rank === 1 ? pool : 0;
+  }
+
+  if (contestType === '5050') {
+    const winnersCount = Math.max(1, Math.floor(participantCount / 2));
+    return rank <= winnersCount ? Math.round((pool / winnersCount) * 10000) / 10000 : 0;
+  }
+
+  // top3 (default)
+  if (rank === 1) return Math.round(pool * 0.5 * 10000) / 10000;
+  if (rank === 2) return Math.round(pool * 0.3 * 10000) / 10000;
+  if (rank === 3) return Math.round(pool * 0.2 * 10000) / 10000;
+  return 0;
+}
+
+// Legacy — kept for any callers that pass a pre-computed pool total.
 export function calculatePrizes(prizePool: number): { first: number; second: number; third: number } {
   return {
     first: Math.round(prizePool * 0.5 * 10000) / 10000,
