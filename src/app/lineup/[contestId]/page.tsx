@@ -451,12 +451,12 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         // RPC failed — don't gate on balance; let sendTransaction surface the error
       }
 
-      if (balanceSol !== null && balanceSol < 0.105) {
+      if (balanceSol !== null && balanceSol < 0.015) {
         setSubmitting(false);
-        return; // UI already shows the "Get Devnet SOL" button
+        return; // UI already shows the insufficient balance warning
       }
 
-      // ── Solana payment: 0.1 SOL → treasury ─────────────────────────────
+      // ── Solana payment: 0.01 SOL → treasury ────────────────────────────
       const treasuryAddr = process.env.NEXT_PUBLIC_TREASURY_WALLET;
       if (treasuryAddr) {
         const treasury = new PublicKey(treasuryAddr);
@@ -474,7 +474,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               SystemProgram.transfer({
                 fromPubkey: publicKey,
                 toPubkey: treasury,
-                lamports: Math.floor(0.1 * LAMPORTS_PER_SOL),
+                lamports: Math.floor(0.01 * LAMPORTS_PER_SOL),
               })
             );
             tx.recentBlockhash = blockhash;
@@ -490,7 +490,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             );
             entryTxSig = sig;
             paid = true;
-            console.log('[Payment] 0.1 SOL sent:', sig);
+            console.log('[Payment] 0.01 SOL sent:', sig);
             break;
           } catch (payErr: any) {
             const errMsg: string = payErr?.message ?? '';
@@ -624,7 +624,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2rem', color: 'var(--text-primary)' }}>
-                0.1
+                0.01
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>SOL Paid</div>
             </div>
@@ -798,19 +798,19 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '6px 12px',
-                    background: walletBalance !== null && walletBalance < 0.105 ? 'rgba(255,170,0,0.08)' : 'rgba(0,232,122,0.06)',
-                    border: `1px solid ${walletBalance !== null && walletBalance < 0.105 ? 'rgba(255,170,0,0.3)' : 'rgba(0,232,122,0.2)'}`,
+                    background: walletBalance !== null && walletBalance < 0.015 ? 'rgba(255,170,0,0.08)' : 'rgba(0,232,122,0.06)',
+                    border: `1px solid ${walletBalance !== null && walletBalance < 0.015 ? 'rgba(255,170,0,0.3)' : 'rgba(0,232,122,0.2)'}`,
                     borderRadius: 8,
                     flexShrink: 0,
                   }}>
                     <span style={{ fontSize: '1rem' }}>◎</span>
                     <div>
                       <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Wallet</div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: walletBalance !== null && walletBalance < 0.105 ? '#ffaa00' : '#00e87a' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: walletBalance !== null && walletBalance < 0.015 ? '#ffaa00' : '#00e87a' }}>
                         {walletBalance !== null ? `${walletBalance.toFixed(3)} SOL` : '...'}
                       </div>
                     </div>
-                    {walletBalance !== null && walletBalance < 0.105 && (
+                    {walletBalance !== null && walletBalance < 0.015 && (
                       <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
                         style={{ fontSize: '0.7rem', color: '#ffaa00', fontWeight: 700, textDecoration: 'underline', marginLeft: 4 }}>
                         Get SOL
@@ -1490,13 +1490,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 )}
 
                 {/* Devnet balance warning */}
-                {!isDemo && publicKey && walletBalance !== null && walletBalance < 0.105 && (
+                {!isDemo && publicKey && walletBalance !== null && walletBalance < 0.015 && (
                   <div className="card" style={{ padding: 16, background: 'rgba(255, 60, 60, 0.08)', border: '1px solid rgba(255,60,60,0.35)', borderRadius: 0 }}>
                     <div style={{ fontSize: '0.85rem', color: '#ff6b6b', marginBottom: 10, fontWeight: 700 }}>
                       Insufficient balance: {walletBalance.toFixed(4)} SOL
                     </div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-                      You need at least 0.105 SOL (0.1 entry fee + fees). Get free devnet SOL:
+                      You need at least 0.015 SOL (0.01 entry fee + network fees).
                     </div>
                     <button
                       className="btn btn--secondary"
@@ -1512,7 +1512,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 {/* Submit Button */}
                 <div id="submit-button" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                   {/* Balance indicator */}
-                  {!isDemo && publicKey && walletBalance !== null && walletBalance >= 0.105 && (
+                  {!isDemo && publicKey && walletBalance !== null && walletBalance >= 0.015 && (
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', alignSelf: 'flex-end' }}>
                       Balance: <span style={{ color: '#4ade80', fontWeight: 700 }}>{walletBalance.toFixed(3)} SOL</span>
                     </div>
@@ -1520,19 +1520,19 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   <button
                     className="btn btn--primary btn--lg"
                     onClick={handleSubmit}
-                    disabled={!isLineupFull || !captain || submitting || (!isDemo && publicKey !== null && walletBalance !== null && walletBalance < 0.105)}
+                    disabled={!isLineupFull || !captain || submitting || (!isDemo && publicKey !== null && walletBalance !== null && walletBalance < 0.015)}
                     style={{
-                      opacity: isLineupFull && captain && (isDemo || walletBalance === null || walletBalance >= 0.105) ? 1 : 0.5,
+                      opacity: isLineupFull && captain && (isDemo || walletBalance === null || walletBalance >= 0.015) ? 1 : 0.5,
                       cursor: isLineupFull && captain ? 'pointer' : 'not-allowed',
                       width: '100%',
                       maxWidth: '400px',
                     }}
                   >
-                    {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? '🔒 Lock Lineup & Pay 0.1 SOL' : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}
+                    {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? '🔒 Lock Lineup & Pay 0.01 SOL' : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}
                   </button>
                   {isLineupFull && captain && (
                     <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Entry fee: 0.1 SOL • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
+                      Entry fee: 0.01 SOL • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
                     </p>
                   )}
                 </div>
@@ -1611,7 +1611,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 6:
       return {
         speakerTitle: 'Guide',
-        text: `"Once your squad is ready, lock it in by paying the 0.1 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
+        text: `"Once your squad is ready, lock it in by paying the 0.01 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
         image: '/NPC/NPC Guide Male.svg',
         position: 'right',
         targetId: 'submit-button',

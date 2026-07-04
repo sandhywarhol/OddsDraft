@@ -241,7 +241,7 @@ export function calculateFantasyPoints(
   };
 }
 
-export const ENTRY_FEE_SOL = 0.1;
+export const ENTRY_FEE_SOL = 0.01;
 
 // Total prize pool = all entry fees collected for this contest type.
 // No platform cut — 100% distributed to winners.

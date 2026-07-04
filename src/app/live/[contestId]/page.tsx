@@ -3144,7 +3144,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   {/* Prize pool breakdown */}
                   {(() => {
                     const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
-                    const pool = Math.round(n * 0.1 * 10000) / 10000;
+                    const pool = Math.round(n * 0.01 * 10000) / 10000;
                     type Row = { place: string; prize: string; pct: string; color: string };
                     let breakdown: Row[] = [];
                     if (contestType === '5050') {
