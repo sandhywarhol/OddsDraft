@@ -2667,9 +2667,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         const lScoreTop  = '16%';
-                        const lNameTop   = '68%';
+                        const lNameTop   = '65%';
                         const lNationTop = '76%';
-                        const lPosTop    = '85%';
+                        const lPosTop    = '88%';
                         return (
                           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
                             {/* Player card — High Score variant when pts > 10 */}
@@ -2687,7 +2687,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 name={p.name}
                                 team={p.team}
                                 variant="fill"
-                                style={{ top: '15%', bottom: '48%', left: '8%', right: '8%', zIndex: 1, overflow: 'hidden' }}
+                                style={{ top: '19%', bottom: '44%', left: '8%', right: '8%', zIndex: 1, overflow: 'hidden' }}
                               />
                               {/* Rating */}
                               <div style={{
