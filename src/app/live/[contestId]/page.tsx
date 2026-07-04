@@ -2378,13 +2378,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               <div style={{ fontSize: 'calc(0.45rem * var(--live-card-scale))', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>PTS</div>
                             </div>
 
-                            {/* Point history log */}
-                            {hist.length > 0 && (
+                            {/* Point history log — exclude appearance entries (starting xi / sub_appearance)
+                                since they're not event-specific and clutter the per-card view */}
+                            {hist.filter(h => h.label !== 'starting xi' && h.label !== 'sub_appearance').length > 0 && (
                               <div style={{
                                 width: '100%', display: 'flex', flexDirection: 'column', gap: 2,
                                 maxHeight: 90, overflowY: 'auto',
                               }}>
-                                {hist.map((h, i) => (
+                                {hist.filter(h => h.label !== 'starting xi' && h.label !== 'sub_appearance').map((h, i) => (
                                   <div key={i} style={{
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                     padding: '1px 4px',

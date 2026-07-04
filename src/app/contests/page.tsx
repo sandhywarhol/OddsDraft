@@ -93,7 +93,20 @@ export default function ContestsPage() {
 
     // Status: prefer API live data (authoritative), fallback to time-based calculation
     const timeStatus = getFixtureStatus(f);
-    const status: 'upcoming' | 'live' | 'finished' = (!isDemo && apiLiveMatch) ? 'live' : timeStatus;
+    // Check allFixtures for clock-based finished detection
+    // TxLINE devnet always reports GameState:"scheduled" so we use Clock.Running + Clock.Seconds
+    const apiAllMatch = allFixtures?.find((lf: any) => {
+      const lfId = String(lf.FixtureId ?? lf.fixtureId ?? lf.fixture_id ?? lf.id ?? '');
+      return lfId === fid;
+    });
+    const apiClockSeconds: number | null = apiAllMatch?.Clock?.Seconds ?? apiAllMatch?.clock?.seconds ?? null;
+    const apiClockRunning: boolean = apiAllMatch?.Clock?.Running === true || apiAllMatch?.clock?.running === true;
+    // If clock stopped and ≥90 min elapsed → match is over regardless of GameState field
+    const apiIsFinished = !apiClockRunning && apiClockSeconds !== null && apiClockSeconds >= 90 * 60;
+    const status: 'upcoming' | 'live' | 'finished' =
+      (!isDemo && apiIsFinished) ? 'finished' :
+      (!isDemo && apiLiveMatch) ? 'live' :
+      timeStatus;
 
     // Scores from live API match if available (live mode only)
     let homeScore: number | undefined;
