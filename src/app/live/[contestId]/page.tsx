@@ -857,6 +857,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const lastClockRunningRef = useRef<boolean | null>(null);
   const lastClockSecondsRef = useRef<number | null>(null);
   const matchResultLoadedRef = useRef(false);
+  const retroComputedRef = useRef(false);
   const showPopupRef = useRef(false);
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
   const [minutesToKickoff, setMinutesToKickoff] = useState<number | null>(null);
@@ -1557,6 +1558,160 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     return () => { isMounted = false; clearInterval(interval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, contestId]);
+
+  // ── DEVNET FALLBACK: Retroactive fantasy point computation ────────────────
+  // When TxLINE sends no events (userPoints = 0 at full time), compute points
+  // from ESPN match result by matching player names to the user's lineup.
+  // Only runs once per session when matchCompleted first becomes true.
+  useEffect(() => {
+    if (!matchCompleted || appMode !== 'live') return;
+    if (retroComputedRef.current) return;
+    const currentUserPts = leaderboardRef.current.find(e => e.isUser)?.points ?? 0;
+    if (currentUserPts > 0) return; // TxLINE worked — skip fallback
+    if (!userLineupRef.current) return;
+    retroComputedRef.current = true;
+
+    const computeRetro = async () => {
+      try {
+        const res = await fetch(`/api/match/result?fixtureId=${contestId}`);
+        if (!res.ok) return;
+        const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
+        const espnEvents = resultData.events ?? [];
+
+        const { players, captain, confidence } = userLineupRef.current;
+
+        // Match abbreviated ESPN name (e.g. "J. Rodríguez") to full lineup name
+        const nameMatch = (espnName: string, lineupName: string): boolean => {
+          const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+          const ep = norm(espnName).trim().split(/\s+/);
+          const lp = norm(lineupName).trim().split(/\s+/);
+          if (ep[ep.length - 1] !== lp[lp.length - 1]) return false;
+          if (ep.length >= 2 && ep[0].endsWith('.')) {
+            return ep[0].replace('.', '') === lp[0][0];
+          }
+          return true;
+        };
+
+        let totalBonus = 0;
+
+        // starting_xi appearance for all lineup players
+        for (const p of (players as any[])) {
+          if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+          let pts = 2;
+          const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+          pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+          if (captain === p.id) pts *= 2;
+          pts = Math.round(pts * 100) / 100;
+          totalBonus += pts;
+          appearedPlayersRef.current.add(p.id);
+          setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+          setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }] }));
+        }
+
+        // Goal / card events from ESPN result
+        for (const ev of espnEvents) {
+          const min = parseInt(ev.minute) || 0;
+          const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
+
+          const matched = (players as any[]).find(p => p && nameMatch(ev.player, p.name));
+          if (matched) {
+            let rawPts = calculateEventPoints(evType, matched.position);
+            const cardDef = equippedCardDefsRef.current[matched.id];
+            if (cardDef) rawPts += getCardBonusForEvent(cardDef, evType);
+            let delta = rawPts;
+            if (captain === matched.id) delta *= 2;
+            const stars = (confidence as Record<string, number>)?.[matched.id] ?? 3;
+            delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+            delta = Math.round(delta * 100) / 100;
+            if (delta !== 0) {
+              totalBonus += delta;
+              setPlayerPoints(prev => ({ ...prev, [matched.id]: Math.round(((prev[matched.id] ?? 0) + delta) * 100) / 100 }));
+              setPlayerHistory(prev => ({ ...prev, [matched.id]: [...(prev[matched.id] ?? []), { label: evType.replace(/_/g, ' '), pts: delta, minute: min }] }));
+            }
+          }
+
+          if (ev.assist) {
+            const assistP = (players as any[]).find(p => p && nameMatch(ev.assist!, p.name));
+            if (assistP) {
+              let rawPts = calculateEventPoints('assist', assistP.position);
+              const cardDef = equippedCardDefsRef.current[assistP.id];
+              if (cardDef) rawPts += getCardBonusForEvent(cardDef, 'assist');
+              let delta = rawPts;
+              if (captain === assistP.id) delta *= 2;
+              const stars = (confidence as Record<string, number>)?.[assistP.id] ?? 3;
+              delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+              delta = Math.round(delta * 100) / 100;
+              if (delta !== 0) {
+                totalBonus += delta;
+                setPlayerPoints(prev => ({ ...prev, [assistP.id]: Math.round(((prev[assistP.id] ?? 0) + delta) * 100) / 100 }));
+                setPlayerHistory(prev => ({ ...prev, [assistP.id]: [...(prev[assistP.id] ?? []), { label: 'assist', pts: delta, minute: min }] }));
+              }
+            }
+          }
+        }
+
+        // Goal conceded penalties from final score
+        for (const p of (players as any[])) {
+          if (!p?.id) continue;
+          const isHome = p.team === fixture.homeTeam;
+          const goalsAgainst = isHome ? scoreRef.current.away : scoreRef.current.home;
+          if (goalsAgainst <= 0) continue;
+          const gcBase = calculateEventPoints('goal_conceded', p.position);
+          if (gcBase === 0) continue;
+          let gcDelta = gcBase * goalsAgainst;
+          const cardDef = equippedCardDefsRef.current[p.id];
+          if (cardDef) gcDelta += getCardBonusForEvent(cardDef, 'goal_conceded') * goalsAgainst;
+          if (captain === p.id) gcDelta *= 2;
+          const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+          gcDelta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+          gcDelta = Math.round(gcDelta * 100) / 100;
+          if (gcDelta !== 0) {
+            totalBonus += gcDelta;
+            setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + gcDelta) * 100) / 100 }));
+            setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'goal conceded', pts: gcDelta, minute: 90 }] }));
+          }
+        }
+
+        // Clean sheet bonus
+        const cleanSheetTeams: string[] = [];
+        if (scoreRef.current.away === 0) cleanSheetTeams.push(fixture.homeTeam);
+        if (scoreRef.current.home === 0) cleanSheetTeams.push(fixture.awayTeam);
+        for (const p of (players as any[])) {
+          if (!p?.id || !cleanSheetTeams.includes(p.team)) continue;
+          let csBase = calculateEventPoints('clean_sheet', p.position);
+          const cardDef = equippedCardDefsRef.current[p.id];
+          if (cardDef) csBase += getCardBonusForEvent(cardDef, 'clean_sheet');
+          if (csBase <= 0) continue;
+          let csDelta = captain === p.id ? csBase * 2 : csBase;
+          const csStars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+          csDelta *= csStars === 5 ? 1.5 : csStars === 4 ? 1.35 : csStars === 3 ? 1.2 : csStars === 2 ? 1.1 : 1.0;
+          csDelta = Math.round(csDelta * 100) / 100;
+          totalBonus += csDelta;
+          setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + csDelta) * 100) / 100 }));
+          setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'clean sheet', pts: csDelta, minute: 90 }] }));
+        }
+
+        if (totalBonus > 0) {
+          setLeaderboard(prev => {
+            const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
+            return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
+          });
+          setActiveToasts(prev => [{
+            id: `toast-retro-${Date.now()}`,
+            type: 'achievement' as any,
+            title: 'Final Points Ready',
+            subtitle: 'Based on match result',
+            value: `+${Math.round(totalBonus * 100) / 100} pts`,
+          }, ...prev]);
+        }
+      } catch (e) {
+        console.warn('[LivePage] Retroactive point computation failed:', e);
+      }
+    };
+
+    computeRetro();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchCompleted]);
 
   // ── DEMO MODE: Simulate live events via minute ticker ──────────────────────
   // Simulate live events
