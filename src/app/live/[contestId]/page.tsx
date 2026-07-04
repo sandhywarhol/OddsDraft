@@ -1031,6 +1031,47 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verificationStatus]);
 
+  // When match is completed and events list only has synthetic/zero-point entries,
+  // proactively load full event history from match result API so the timeline is complete.
+  useEffect(() => {
+    if (!matchCompleted || appMode !== 'live') return;
+    const realEvents = events.filter(e => e.type !== 'full_time' && e.type !== 'half_time' && e.type !== 'kick_off');
+    if (realEvents.length > 0) return; // Already have real events — skip
+    if (matchResultLoadedRef.current) return; // Already attempted
+
+    matchResultLoadedRef.current = true;
+    fetch(`/api/match/result?fixtureId=${contestId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } | null) => {
+        if (!resultData) return;
+        const espnEvents = resultData.events ?? [];
+        if (espnEvents.length === 0) return;
+
+        const historyEvents: typeof events = espnEvents.map(ev => {
+          const min = parseInt(ev.minute) || 0;
+          const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
+          const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
+          const desc =
+            evType === 'goal'        ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
+            evType === 'own_goal'    ? `Own goal — ${ev.player}` :
+            evType === 'yellow_card' ? `Yellow card — ${ev.player}` :
+            evType === 'red_card'    ? `Red card — ${ev.player}` :
+            `${evType.replace(/_/g, ' ')} — ${ev.player}`;
+          return { id: `hist-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`, minute: min, team: ev.team, teamFlag, player: ev.player, playerId: '', type: evType, points: 0, description: desc };
+        });
+
+        setEvents(prev => {
+          const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
+          const fresh = historyEvents.filter(e => !existingKeys.has(`${e.type}-${e.minute}`));
+          if (fresh.length === 0) return prev;
+          // Insert sorted by minute descending (most recent first)
+          return [...fresh.sort((a, b) => b.minute - a.minute), ...prev];
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchCompleted]);
+
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -1764,7 +1805,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (gcDelta !== 0) {
             totalBonus += gcDelta;
             setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + gcDelta) * 100) / 100 }));
-            setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'goal conceded', pts: gcDelta, minute: 90 }] }));
+            setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: `goal conceded ×${goalsAgainst}`, pts: gcDelta, minute: 90 }] }));
           }
         }
 
@@ -2361,7 +2402,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         >
                           {txlineStatus === 'live' ? (
                             <><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} /> LIVE</>
-                          ) : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                          ) : matchCompleted ? 'FINAL' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
                         </span>
                       ) : (
                         <span className="badge badge--live" style={{ fontSize: '0.65rem' }}>
@@ -2476,7 +2517,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     </div>
                     <div>
                       <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: '#ffd700' }}>
-                        3.0
+                        {(() => {
+                          const entry = leaderboard.find(e => e.isUser);
+                          if (!entry || !entry.rank || typeof entry.rank !== 'number') return '—';
+                          const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
+                          const sol = getPrizeForRank(entry.rank, contestType, n);
+                          return sol > 0 ? sol.toFixed(4) : '—';
+                        })()}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Estimated SOL</div>
                     </div>
@@ -2622,14 +2669,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               <div style={{ fontSize: `calc(0.45rem * ${cs})`, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>PTS</div>
                             </div>
 
-                            {/* Point history log — exclude appearance entries (starting xi / sub_appearance)
-                                since they're not event-specific and clutter the per-card view */}
-                            {hist.filter(h => h.label !== 'starting xi' && h.label !== 'sub_appearance').length > 0 && (
+                            {/* Point history log — shows all events including appearance bonus */}
+                            {hist.length > 0 && (
                               <div style={{
                                 width: '100%', display: 'flex', flexDirection: 'column', gap: 2,
                                 maxHeight: 90, overflowY: 'auto',
                               }}>
-                                {hist.filter(h => h.label !== 'starting xi' && h.label !== 'sub_appearance').map((h, i) => (
+                                {hist.map((h, i) => (
                                   <div key={i} style={{
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                     padding: '1px 4px',
@@ -2671,7 +2717,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         border: txlineStatus === 'live' ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
                       }}
                     >
-                      {txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                      {txlineStatus === 'live' ? 'LIVE' : matchCompleted ? 'FINAL' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
                     </span>
                   ) : (
                     <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
@@ -2706,6 +2752,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         <div>Connected to TxLINE — waiting for first notable event</div>
                         <div style={{ fontSize: '0.75rem', marginTop: 4, color: 'rgba(255,255,255,0.25)' }}>
                           Goals, cards and key plays will appear here instantly
+                        </div>
+                      </>
+                    ) : appMode === 'live' && matchCompleted ? (
+                      <>
+                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏁</div>
+                        <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match Finished</div>
+                        <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
+                          Final score: {score.home}–{score.away} · Event history recorded above
                         </div>
                       </>
                     ) : appMode === 'live' && txlineStatus === 'waiting' ? (
@@ -3061,38 +3115,41 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   </table>
 
                   {/* Prize pool breakdown */}
-                  <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)' }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                      Prize Pool: 10.0 SOL
-                    </div>
-                    {(() => {
-                      let breakdown = [];
-                      if (contestType === '5050') {
-                        breakdown = [
-                          { place: 'Top 50%', prize: '0.18 SOL (each)', pct: '90%', color: '#10b981' }
-                        ];
-                      } else if (contestType === 'wta') {
-                        breakdown = [
-                          { place: '1st', prize: '10.0 SOL', pct: '100%', color: '#FFD700' }
-                        ];
-                      } else {
-                        breakdown = [
-                          { place: '1st', prize: '5.0 SOL', pct: '50%', color: '#FFD700' },
-                          { place: '2nd', prize: '3.0 SOL', pct: '30%', color: '#C0C0C0' },
-                          { place: '3rd', prize: '2.0 SOL', pct: '20%', color: '#CD7F32' },
-                        ];
-                      }
-                      return breakdown.map((p) => (
-                        <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700, width: 50 }}>{p.place}</span>
-                          <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
-                            <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
-                          </div>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                  {(() => {
+                    const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
+                    const pool = Math.round(n * 0.1 * 10000) / 10000;
+                    type Row = { place: string; prize: string; pct: string; color: string };
+                    let breakdown: Row[] = [];
+                    if (contestType === '5050') {
+                      const winners = Math.max(1, Math.floor(n / 2));
+                      const each = winners > 0 ? Math.round((pool / winners) * 10000) / 10000 : 0;
+                      breakdown = [{ place: 'Top 50%', prize: `${each.toFixed(4)} SOL each`, pct: '100%', color: '#10b981' }];
+                    } else if (contestType === 'wta') {
+                      breakdown = [{ place: '1st', prize: `${pool.toFixed(4)} SOL`, pct: '100%', color: '#FFD700' }];
+                    } else {
+                      breakdown = [
+                        { place: '1st', prize: `${(pool * 0.5).toFixed(4)} SOL`, pct: '50%', color: '#FFD700' },
+                        { place: '2nd', prize: `${(pool * 0.3).toFixed(4)} SOL`, pct: '30%', color: '#C0C0C0' },
+                        { place: '3rd', prize: `${(pool * 0.2).toFixed(4)} SOL`, pct: '20%', color: '#CD7F32' },
+                      ];
+                    }
+                    return (
+                      <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                          Prize Pool: {pool.toFixed(4)} SOL · {n} player{n !== 1 ? 's' : ''}
                         </div>
-                      ));
-                    })()}
-                  </div>
+                        {breakdown.map((p) => (
+                          <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700, width: 50 }}>{p.place}</span>
+                            <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
+                              <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
+                            </div>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
