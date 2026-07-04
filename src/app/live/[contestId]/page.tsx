@@ -1000,10 +1000,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       seq:       u.seq       ?? u.Seq,
       ts:        u.ts        ?? u.Ts,
       fixtureId: u.fixtureId ?? u.FixtureId,
-      // TxLINE uses GameState; TxODDS legacy uses Status (e.g. 'InProgress', 'Halftime', 'Finished')
-      gameState: u.gameState ?? u.GameState
-        ?? (u.Status ? txoddsStatusToGameState(String(u.Status)) : undefined)
-        ?? (u.MatchStatus ? txoddsStatusToGameState(String(u.MatchStatus)) : undefined),
+      // TxLINE uses GameState; TxODDS legacy uses Status; Clock.Running is ground truth
+      // when GameState is "scheduled" but match has actually started (TxLINE devnet quirk)
+      gameState: (() => {
+        const raw = u.gameState ?? u.GameState ?? u.Status ?? u.MatchStatus;
+        const rawStr = raw != null ? String(raw) : undefined;
+        const clockRunning = u.Clock?.Running === true || u.clock?.running === true;
+        if (clockRunning && (!rawStr || /^(scheduled|notstarted|not_started)$/i.test(rawStr))) return 'FirstHalf';
+        if (!rawStr) return undefined;
+        return txoddsStatusToGameState(rawStr) ?? rawStr;
+      })(),
       score: u.score ?? (u.Score
         ? { home: u.Score.Home ?? u.Score.home ?? 0, away: u.Score.Away ?? u.Score.away ?? 0 }
         : u.ScoreSoccer
@@ -1322,14 +1328,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (!showPopupRef.current) {
           setLatestEvent(trigger);
           setDialogStep(1);
-          if (window.innerWidth >= 768) {
-            setShowPopup(true);
-          } else {
-            const txt = `${trigger.minute}' - ${trigger.player || ''} ${trigger.description || ''}`;
-            setMobileToast({ text: txt, type: trigger.type });
-            if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-            toastTimeoutRef.current = setTimeout(() => setMobileToast(null), 4000);
-          }
+          setShowPopup(true);
         }
 
         // Fantasy points + toasts for every event
@@ -1477,16 +1476,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       setCurrentEventIdx((idx) => idx + 1);
       setLatestEvent(event);
       setDialogStep(1);
-      if (window.innerWidth >= 768) {
-        setShowPopup(true);
-      } else {
-        const eventText = `${event.minute}' - ${event.player || ''} ${event.description || ''}`;
-        setMobileToast({ text: eventText, type: event.type });
-        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-        toastTimeoutRef.current = setTimeout(() => {
-          setMobileToast(null);
-        }, 4000);
-      }
+      setShowPopup(true);
   
       // Update score — mirror into scoreRef synchronously so full_time can read final score
       if (event.type === 'goal' || event.type === 'own_goal') {
@@ -1857,141 +1847,67 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         
         if (dialog.isRefereeStyle) {
           return (
-            <div style={{
-              position: 'fixed',
-              inset: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.65)',
-              backdropFilter: 'blur(5px)',
-              zIndex: 1000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              userSelect: 'none',
-            }}>
+            <div className="npc-dialog-overlay" onClick={() => setShowPopup(false)}>
               {/* Referee Image */}
               <img
                 src={dialog.refereeImage}
                 alt="Referee"
-                style={{
-                  position: 'absolute',
-                  bottom: '-30vh',
-                  right: (dialog as any).refereePosition === 'left' ? 'auto' : '2%',
-                  left: (dialog as any).refereePosition === 'left' ? '2%' : 'auto',
-                  height: '125vh',
-                  objectFit: 'contain',
-                  zIndex: 1020,
-                  animation: (dialog as any).refereePosition === 'left' ? 'slide-in-left 400ms ease-out' : 'slide-in-right 400ms ease-out',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-referee-img-style referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}
               />
               
               {/* Giant Yellow Explosion Speech Bubble */}
-              <div 
-                onClick={() => setShowPopup(false)}
-                style={{
-                  position: 'absolute',
-                  bottom: '35vh',
-                  left: (dialog as any).refereePosition === 'left' ? 'auto' : '15%',
-                  right: (dialog as any).refereePosition === 'left' ? '15%' : 'auto',
-                  zIndex: 1010,
-                  cursor: 'pointer',
-                  animation: 'score-pop 500ms cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                }}
-              >
-                <div style={{
-                  background: '#ffee00',
-                  color: '#000000',
-                  border: '8px solid #000000',
-                  padding: '32px 64px',
-                  fontSize: 'clamp(3rem, 6vw, 5.5rem)',
-                  fontWeight: 900,
-                  fontFamily: 'Impact, Arial Black, sans-serif',
-                  textTransform: 'uppercase',
-                  boxShadow: '12px 12px 0px #000000',
-                  transform: 'skewX(-6deg) rotate(-4deg)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                }}>
-                  {dialog.text}
-                  <span style={{ color: '#ff0000', fontSize: '1.2em' }}>!!</span>
+              <div className={`npc-referee-bubble-wrapper referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}>
+                <div className="npc-referee-bubble-container">
+                  {/* Background Starburst SVG */}
+                  <svg viewBox="0 0 500 300" width="100%" height="100%" preserveAspectRatio="none" className="npc-referee-bubble-bg">
+                    <polygon points="250,10 280,70 340,30 350,90 410,60 400,120 470,110 440,160 490,190 430,210 460,260 400,250 390,290 330,260 300,295 270,240 220,285 200,230 140,270 140,210 70,225 100,175 40,140 105,115 70,65 130,85 140,25 190,75 220,15" fill="black" transform="translate(8, 8)" />
+                    <polygon points="250,10 280,70 340,30 350,90 410,60 400,120 470,110 440,160 490,190 430,210 460,260 400,250 390,290 330,260 300,295 270,240 220,285 200,230 140,270 140,210 70,225 100,175 40,140 105,115 70,65 130,85 140,25 190,75 220,15" fill="#ffee00" stroke="black" strokeWidth="8" strokeLinejoin="miter" />
+                  </svg>
+                  <div className="npc-referee-bubble-text">
+                    {dialog.text}
+                    <span style={{ color: '#ff0000', fontSize: '1.2em', WebkitTextStroke: '2px #000000', textShadow: '3px 3px 0px #000000' }}>!</span>
+                  </div>
                 </div>
               </div>
             </div>
           );
         }
 
-        return (
-          <div style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(5px)',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            paddingBottom: '8vh',
-            userSelect: 'none',
-          }}>
-            <style>{`
-              @keyframes slide-in-left {
-                from { transform: translateX(-150px); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-              }
-              @keyframes slide-in-right {
-                from { transform: translateX(150px); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-              }
-              @keyframes bounce-horizontal {
-                from { transform: translateX(0); }
-                to { transform: translateX(6px); }
-              }
-              @keyframes dialog-glow {
-                0% { box-shadow: 0 0 15px rgba(251, 240, 185, 0.2); }
-                50% { box-shadow: 0 0 25px rgba(251, 240, 185, 0.45); }
-                100% { box-shadow: 0 0 15px rgba(251, 240, 185, 0.2); }
-              }
-            `}</style>
+        const hasDual = !!(dialog.commentator1Image && (dialog.refereeImage || dialog.commentator2Image));
 
+        return (
+          <div 
+            className="npc-dialog-overlay"
+            onClick={() => {
+              const type = latestEvent.type;
+              let maxSteps = 2; // Default for most multi-step events
+              if (type === 'full_time') maxSteps = 7;
+              else if (type === 'half_time') maxSteps = 4;
+              else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
+              else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
+
+              if (dialogStep < maxSteps) {
+                setDialogStep(prev => prev + 1);
+              } else {
+                setShowPopup(false);
+              }
+            }}
+          >
             {/* Left character: Commentator 1 */}
             {dialog.commentator1Image && (
               <img
                 src={dialog.commentator1Image}
                 alt="Commentator 1"
-                style={{
-                  position: 'absolute',
-                  bottom: '-25vh',
-                  left: '4%',
-                  height: '120vh',
-                  objectFit: 'contain',
-                  zIndex: 1005,
-                  animation: 'slide-in-left 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-commentator1-img${hasDual ? ' dual-active' : ''}`}
               />
             )}
-
 
             {/* Right character: Commentator 2 */}
             {dialog.commentator2Image && (
               <img
                 src={dialog.commentator2Image}
                 alt="Commentator 2"
-                style={{
-                  position: 'absolute',
-                  bottom: '-25vh',
-                  right: '4%',
-                  height: '120vh',
-                  objectFit: 'contain',
-                  zIndex: 1005,
-                  animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-commentator2-img${hasDual ? ' dual-active' : ''}`}
               />
             )}
 
@@ -2000,91 +1916,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               <img
                 src={dialog.refereeImage}
                 alt="Referee"
-                style={{
-                  position: 'absolute',
-                  bottom: '-30vh',
-                  right: '1%',
-                  height: '125vh',
-                  objectFit: 'contain',
-                  zIndex: 1006,
-                  animation: 'slide-in-right 450ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                  filter: 'drop-shadow(3px 0px 0px white) drop-shadow(0px 3px 0px white) drop-shadow(-3px 0px 0px white) drop-shadow(0px -3px 0px white)',
-                  willChange: 'filter',
-                }}
+                className={`npc-referee-img${hasDual ? ' dual-active' : ''}`}
               />
             )}
 
             {/* JRPG Dialog Box */}
-            <div 
-              onClick={(e) => {
-                e.stopPropagation();
-                const type = latestEvent.type;
-                let maxSteps = 2; // Default for most multi-step events
-                if (type === 'full_time') maxSteps = 7;
-                else if (type === 'half_time') maxSteps = 4;
-                else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
-                else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
-
-                if (dialogStep < maxSteps) {
-                  setDialogStep(prev => prev + 1);
-                } else {
-                  setShowPopup(false);
-                }
-              }}
-              style={{
-                width: '94%',
-                maxWidth: '920px',
-                background: '#fcf8eb',
-                border: '5px solid #1a1008',
-                borderRadius: '0px',
-                padding: '36px 48px',
-                boxShadow: '10px 10px 0px #1a1008',
-                position: 'relative',
-                cursor: 'pointer',
-                zIndex: 1010,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                animation: 'score-pop 300ms ease-out, dialog-glow 2s infinite',
-              }}
-            >
+            <div className="npc-jrpg-dialog-box">
               {/* Speaker Tag */}
-              <div style={{
-                position: 'absolute',
-                top: '-22px',
-                left: '32px',
-                background: '#1a1008',
-                color: '#ffffff',
-                padding: '6px 24px',
-                fontSize: '1rem',
-                fontWeight: 800,
-                fontFamily: 'Inter, sans-serif',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                boxShadow: '2px 2px 0px #ebdac0',
-              }}>
+              <div className="npc-jrpg-speaker-tag">
                 {dialog.speakerTitle}
               </div>
 
               {/* Dialog Text */}
-              <div style={{
-                color: '#1a1008',
-                fontSize: 'clamp(1.15rem, 2.6vw, 1.6rem)',
-                fontWeight: 700,
-                fontFamily: 'Inter, -apple-system, sans-serif',
-                lineHeight: 1.6,
-                paddingRight: '36px',
-              }}>
+              <div className="npc-jrpg-dialog-text">
                 {dialog.text}
               </div>
 
               {/* Next/Close Action Arrow */}
-              <div style={{
-                position: 'absolute',
-                bottom: '16px',
-                right: '20px',
-                animation: 'bounce-horizontal 0.8s infinite alternate',
-              }}>
+              <div className="npc-jrpg-arrow">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <circle cx="12" cy="12" r="12" fill="#1a1008" />
                   <path d="M10 7L15 12L10 17" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -2232,7 +2081,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             <div>
               {/* User Fantasy Stats */}
               <div className="card card--primary" style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 'var(--live-stats-gap)', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                       Fantasy Points
@@ -2243,7 +2092,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   </div>
                   <div style={{ flex: 1, display: 'flex', gap: 16 }}>
                     <div>
-                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: 'var(--text-primary)' }}>
+                      <div suppressHydrationWarning style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: 'var(--text-primary)' }}>
                         #{userRank}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rank</div>
@@ -2280,8 +2129,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               {/* ── My Lineup — 5-card horizontal row with live pts + history ── */}
               {userLineup && userLineup.players?.filter(Boolean).length > 0 && (() => {
-                const CARD_W = 110;
-                const CARD_H = Math.round(CARD_W * (165 / 120)); // Player Card (2).svg ratio
                 const players = (userLineup.players as any[]).filter(Boolean);
                 return (
                   <div className="card" style={{ marginBottom: 20 }}>
@@ -2289,22 +2136,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       My Lineup
                       <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>real-time pts</span>
                     </h3>
-                    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, alignItems: 'flex-start' }}>
+                    <div className="live-lineup-row">
                       {players.map((p: any) => {
                         const pts = playerPoints[p.id] ?? 0;
                         const hist = playerHistory[p.id] ?? [];
                         const isCap = userLineup.captain === p.id;
                         const stars = userLineup.confidence?.[p.id] ?? 3;
                         const ptColor = pts > 0 ? '#4ade80' : pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)';
-                        const nameFs = p.name.length > 15 ? '0.46rem' : p.name.length > 10 ? '0.52rem' : '0.6rem';
+                        const nameFs = `calc(${p.name.length > 15 ? '0.46rem' : p.name.length > 10 ? '0.52rem' : '0.6rem'} * var(--live-card-scale))`;
                         const equippedCard = equippedCardDefsRef.current[p.id] ?? null;
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         return (
-                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: CARD_W, paddingTop: isCap ? 20 : 0 }}>
+                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: 'var(--live-card-w)', paddingTop: isCap ? 'calc(20px * var(--live-card-scale))' : 0 }}>
                             {/* Player Card (2).svg — same design as lineup builder */}
                             <div style={{
-                              width: CARD_W, height: CARD_H, flexShrink: 0, position: 'relative',
+                              width: 'var(--live-card-w)', height: 'var(--live-card-h)', flexShrink: 0, position: 'relative',
                               backgroundImage: "url('/Player%20Card%20(2).svg')",
                               backgroundSize: '100% 100%', overflow: 'visible',
                               boxShadow: isCap
@@ -2315,7 +2162,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               <div style={{
                                 position: 'absolute', top: '22.5%', right: '10.5%', width: '18%',
                                 textAlign: 'center', color: (p.rating ?? 0) >= 90 ? '#ca8a04' : (p.rating ?? 0) >= 85 ? '#15803d' : '#1e293b',
-                                fontFamily: 'Inter, sans-serif', fontSize: `${CARD_W * 0.11}px`,
+                                fontFamily: 'Inter, sans-serif', fontSize: 'calc(var(--live-card-w) * 0.11)',
                                 fontWeight: 800, lineHeight: 1, zIndex: 2,
                               }}>
                                 {p.rating ?? '-'}
@@ -2332,7 +2179,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               {/* Team flag + name */}
                               <div style={{
                                 position: 'absolute', top: '75.5%', left: '38%', width: '52%',
-                                color: '#36220f', fontSize: '0.48rem', fontWeight: 700,
+                                color: '#36220f', fontSize: 'calc(0.48rem * var(--live-card-scale))', fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center',
                                 gap: 3, whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 2,
                               }}>
@@ -2344,7 +2191,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 position: 'absolute', top: '85.5%', left: '42%', zIndex: 2,
                                 background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
                                 color: '#fff', border: '1px solid #36220f', borderRadius: 0,
-                                padding: '1px 3px', fontSize: '0.42rem', fontWeight: 900,
+                                padding: '1px 3px', fontSize: 'calc(0.42rem * var(--live-card-scale))', fontWeight: 900,
                                 fontFamily: 'Inter, sans-serif', textTransform: 'uppercase',
                               }}>
                                 {p.position}
@@ -2352,17 +2199,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               {/* Captain badge — sits above the card using negative top; paddingTop on wrapper gives clearance */}
                               {isCap && (
                                 <div style={{
-                                  position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)',
+                                  position: 'absolute', top: 'calc(-20px * var(--live-card-scale))', left: '50%', transform: 'translateX(-50%)',
                                   background: 'linear-gradient(to bottom, #d32f2f, #8b1e1e)',
                                   border: '2px solid #fff', padding: '2px 6px', whiteSpace: 'nowrap',
                                   fontWeight: 800, fontFamily: 'Inter, sans-serif',
-                                  fontSize: '0.55rem', color: '#fff', letterSpacing: '0.04em',
+                                  fontSize: 'calc(0.55rem * var(--live-card-scale))', color: '#fff', letterSpacing: '0.04em',
                                   boxShadow: '0 0 0 1px #000, 1px 2px 4px rgba(0,0,0,0.5)', zIndex: 10,
                                 }}>⭐ CAPTAIN</div>
                               )}
                             </div>
                             {/* Confidence stars — outside the card SVG so they're always visible */}
-                            <div style={{ textAlign: 'center', fontSize: '0.65rem', letterSpacing: 1, lineHeight: 1 }}>
+                            <div style={{ textAlign: 'center', fontSize: 'calc(0.65rem * var(--live-card-scale))', letterSpacing: 1, lineHeight: 1 }}>
                               <span style={{ color: '#ffd700' }}>{'★'.repeat(stars)}</span>
                               <span style={{ color: 'rgba(255,255,255,0.2)' }}>{'★'.repeat(5 - stars)}</span>
                             </div>
@@ -2371,7 +2218,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             {equippedCard && cardRarityColor && cardRarityStars && (
                               <div style={{
                                 width: '100%', textAlign: 'center',
-                                fontSize: '0.4rem', lineHeight: 1.3,
+                                fontSize: 'calc(0.4rem * var(--live-card-scale))', lineHeight: 1.3,
                               }}>
                                 <span style={{ color: cardRarityColor, fontWeight: 800, letterSpacing: '0.03em' }}>
                                   {cardRarityStars}
@@ -2385,12 +2232,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             {/* Live total pts */}
                             <div style={{ textAlign: 'center', lineHeight: 1 }}>
                               <div style={{
-                                fontFamily: 'Bebas Neue, cursive', fontSize: '1.35rem',
+                                fontFamily: 'Bebas Neue, cursive', fontSize: 'calc(1.35rem * var(--live-card-scale))',
                                 color: ptColor, textShadow: pts !== 0 ? `0 0 6px ${ptColor}88` : 'none',
                               }}>
                                 {pts > 0 ? `+${pts.toFixed(1)}` : pts === 0 ? '0' : pts.toFixed(1)}
                               </div>
-                              <div style={{ fontSize: '0.45rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>PTS</div>
+                              <div style={{ fontSize: 'calc(0.45rem * var(--live-card-scale))', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>PTS</div>
                             </div>
 
                             {/* Point history log */}
@@ -2406,10 +2253,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                     background: h.pts > 0 ? 'rgba(74,222,128,0.07)' : h.pts < 0 ? 'rgba(248,113,113,0.07)' : 'transparent',
                                     borderRadius: 3,
                                   }}>
-                                    <span style={{ fontSize: '0.42rem', color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
+                                    <span style={{ fontSize: 'calc(0.42rem * var(--live-card-scale))', color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
                                       {h.label}
                                     </span>
-                                    <span style={{ fontSize: '0.44rem', fontWeight: 700, flexShrink: 0, color: h.pts > 0 ? '#4ade80' : h.pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)' }}>
+                                    <span style={{ fontSize: 'calc(0.44rem * var(--live-card-scale))', fontWeight: 700, flexShrink: 0, color: h.pts > 0 ? '#4ade80' : h.pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)' }}>
                                       {h.pts > 0 ? `+${h.pts.toFixed(1)}` : h.pts.toFixed(1)}
                                     </span>
                                   </div>

@@ -135,8 +135,9 @@ export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | nu
   const liveStates = ['FirstHalf', 'SecondHalf', 'HalfTime', 'ExtraTimeFirstHalf',
     'ExtraTimeHalfTime', 'ExtraTimeSecondHalf', 'Penalties', 'InProgress', 'Live'];
   return all.filter((f: any) => {
-    const state = f.GameState || f.gameState || f.Status || f.status || '';
-    return liveStates.some(s => state.toLowerCase().includes(s.toLowerCase()));
+    const state = String(f.GameState || f.gameState || f.Status || f.status || '').toLowerCase();
+    const clockRunning = f.Clock?.Running === true || f.clock?.running === true;
+    return liveStates.some(s => state.includes(s.toLowerCase())) || clockRunning;
   });
 }
 
