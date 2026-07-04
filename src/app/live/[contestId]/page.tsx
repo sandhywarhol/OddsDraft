@@ -16,7 +16,7 @@ import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEve
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
-import { fetchLiveScoreUpdates, fetchScoreSnapshot } from '@/lib/txline';
+import { fetchLiveScoreUpdates, fetchScoreSnapshot, fetchGuestToken } from '@/lib/txline';
 import PlayerAvatar from '@/components/PlayerAvatar';
 
 // Demo live events that replay at interval to simulate a live match
@@ -862,6 +862,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const retroComputedRef = useRef(false);
   const showPopupRef = useRef(false);
   const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
+  // Always holds the latest guestJwt so poll closure doesn't capture a stale null
+  const guestJwtRef = useRef<string | null>(null);
   // Track cumulative PlayerStats from TxLINE — compare each poll to find new events
   const prevPlayerStatsRef = useRef<Record<string, Record<string, number>>>({});
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
@@ -869,6 +871,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
   const equippedCardDefsRef = useRef<Record<string, SkillCard | null>>({});
+
+  // Keep ref current so poll closure always uses latest JWT without needing guestJwt in deps
+  useEffect(() => { guestJwtRef.current = guestJwt; }, [guestJwt]);
 
   useEffect(() => {
     try {
@@ -1307,15 +1312,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
       const resolvedFixtureId = txlineFixtureIdRef.current ?? contestId;
 
+      // Ensure we have a JWT before making authenticated calls
+      if (!guestJwtRef.current) {
+        try {
+          const fresh = await fetchGuestToken();
+          guestJwtRef.current = fresh;
+          localStorage.setItem('txline_guest_jwt', fresh);
+        } catch { /* proceed without JWT */ }
+      }
+
       // Build player ID map (from lineups or snapshot events)
-      const pMap = await buildPlayerIdMap(apiToken!, resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, guestJwt);
+      const pMap = await buildPlayerIdMap(apiToken!, resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, guestJwtRef.current);
       if (isMounted) {
         playerIdMapRef.current = pMap;
         console.log(`[LivePage] Player map — ${Object.keys(pMap).length} players matched`);
       }
 
       // Load all events that happened before we connected via the score snapshot
-      const snap = await fetchScoreSnapshot(apiToken!, resolvedFixtureId, guestJwt);
+      const snap = await fetchScoreSnapshot(apiToken!, resolvedFixtureId, guestJwtRef.current);
       if (snap && isMounted) {
         const snapRaw = Array.isArray(snap) ? snap : [snap];
         const snapUpdates = snapRaw.map(normalizeUpdate);
@@ -1459,12 +1473,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     const poll = async () => {
       if (!txlineFixtureIdRef.current) return;
       try {
-        const raw = await fetchLiveScoreUpdates(apiToken!, txlineFixtureIdRef.current, guestJwt);
+        // Use ref so closure always reads the latest JWT even after context refreshes it
+        const jwt = guestJwtRef.current;
+        const raw = await fetchLiveScoreUpdates(apiToken!, txlineFixtureIdRef.current, jwt);
         if (!isMounted) return;
 
         // null = 404 (fixture not live on TxLINE yet) — try snapshot fallback
         if (raw === null) {
-          const snap = await fetchScoreSnapshot(apiToken!, txlineFixtureIdRef.current!, guestJwt);
+          const snap = await fetchScoreSnapshot(apiToken!, txlineFixtureIdRef.current!, guestJwtRef.current);
           if (snap && isMounted) {
             const snapUpdates = Array.isArray(snap) ? snap : [snap];
             const latest = snapUpdates[snapUpdates.length - 1];
@@ -1807,7 +1823,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             setActiveToasts(prev => [...toasts, ...prev]);
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        // 401/403 = expired JWT — fetch a fresh one; next poll interval will retry
+        if (err?.response?.status === 401 || err?.response?.status === 403) {
+          try {
+            const fresh = await fetchGuestToken();
+            guestJwtRef.current = fresh;
+            localStorage.setItem('txline_guest_jwt', fresh);
+            console.log('[LivePage] Refreshed guest JWT after 401');
+          } catch { /* ignore refresh failure */ }
+        }
         if (isMounted) setTxlineStatus('waiting');
         console.error('[LivePage] poll error:', err);
       }
