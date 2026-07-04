@@ -17,6 +17,7 @@ import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
 import { fetchLiveScoreUpdates, fetchScoreSnapshot } from '@/lib/txline';
+import PlayerAvatar from '@/components/PlayerAvatar';
 
 // Demo live events that replay at interval to simulate a live match
 const LIVE_EVENTS = [
@@ -2676,6 +2677,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 ? '0 0 14px rgba(255,215,0,0.55)'
                                 : pts !== 0 ? `0 0 8px ${ptColor}44` : '2px 2px 6px rgba(0,0,0,0.4)',
                             }}>
+                              {/* Player photo — upper zone behind rating/name */}
+                              <PlayerAvatar
+                                playerId={p.id}
+                                name={p.name}
+                                team={p.team}
+                                variant="fill"
+                                style={{ top: '7%', bottom: '37%', left: 0, right: 0, zIndex: 1, overflow: 'hidden' }}
+                              />
                               {/* Rating */}
                               <div style={{
                                 position: 'absolute', top: '22.5%', right: '10.5%', width: '18%',

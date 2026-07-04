@@ -14,6 +14,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import PlayerAvatar from '@/components/PlayerAvatar';
+import { prefetchPlayerPhotos } from '@/lib/player-photos';
 // Demo score events for showing fantasy points in action
 const DEMO_EVENTS = [
   { playerId: 'fra-mbappe', playerName: 'Mbappé', eventType: 'goal', minute: 23, points: 10 },
@@ -141,6 +143,16 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       setWalletBalance(lamports / LAMPORTS_PER_SOL);
     }).catch(() => {});
   }, [publicKey, isDemo, connection]);
+
+  // Prefetch player photos for both teams when fixture loads
+  useEffect(() => {
+    if (!fixture) return;
+    const { homeTeam, awayTeam } = fixture;
+    import('@/lib/players').then(({ getPlayersByTeam }) => {
+      const players = [...getPlayersByTeam(homeTeam), ...getPlayersByTeam(awayTeam)];
+      prefetchPlayerPhotos(players.map(p => ({ id: p.id, name: p.name })));
+    });
+  }, [fixture?.homeTeam, fixture?.awayTeam]);
 
   const handleAirdrop = async () => {
     if (!publicKey) return;
@@ -923,6 +935,14 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       >
                         {player ? (
                           <>
+                            {/* Player photo — upper zone of card, behind rating/name */}
+                            <PlayerAvatar
+                              playerId={player.id}
+                              name={player.name}
+                              team={player.team}
+                              variant="fill"
+                              style={{ top: '7%', bottom: '37%', left: 0, right: 0, zIndex: 1 }}
+                            />
                             {/* Score / Rating inside the designated 'スコア' shield */}
                             <div style={{
                               position: 'absolute',
