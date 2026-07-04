@@ -1583,6 +1583,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           const matched = players.find((p: any) => p && p.id === ev.playerId);
           if (!matched) continue;
 
+          // GKs cannot score regular goals — only penalty shootout goals are valid
+          if (ev.type === 'goal' && matched.position === 'GK') continue;
+
           let rawPts = calculateEventPoints(ev.type, matched.position);
           const isAppearanceEv = ev.type === 'starting_xi' || ev.type === 'sub_appearance';
           if (!isAppearanceEv && !appearedPlayersRef.current.has(ev.playerId)) {
@@ -1762,6 +1765,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
           // Match player name AND team to prevent Cape Verde scorer matching Argentine player
           const matched = (players as any[]).find(p => p && nameMatch(ev.player, p.name) && p.team === ev.team);
+          // GKs cannot score regular goals
+          if (matched && evType === 'goal' && matched.position === 'GK') continue;
           if (matched) {
             let rawPts = calculateEventPoints(evType, matched.position);
             const cardDef = equippedCardDefsRef.current[matched.id];

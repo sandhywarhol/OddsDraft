@@ -163,22 +163,37 @@ export function matchPlayerName(txlineName: string, teamName: string): string | 
   if (hit) return hit.id;
 
   // 2. Last name match (>3 chars to avoid false positives)
-  const txLast = normTx.split(' ').pop() ?? normTx;
+  // When multiple players share a last name, try first-initial to disambiguate.
+  const txParts = normTx.split(' ');
+  const txLast = txParts[txParts.length - 1] ?? normTx;
+  const txFirstInitial = txParts[0]?.replace(/\./g, '') ?? '';
   if (txLast.length > 3) {
-    hit = candidates.find(p => {
+    const lastMatches = candidates.filter(p => {
       const ourLast = norm(p.name).split(' ').pop() ?? '';
       return ourLast === txLast;
     });
-    if (hit) return hit.id;
+    if (lastMatches.length === 1) {
+      return lastMatches[0].id;
+    } else if (lastMatches.length > 1 && txFirstInitial.length >= 1) {
+      // Disambiguate by first initial (handles "L. Martinez" vs "E. Martinez")
+      const byInitial = lastMatches.find(p => {
+        const ourFirst = norm(p.name).split(' ')[0] ?? '';
+        return ourFirst.startsWith(txFirstInitial[0]) || txFirstInitial.startsWith(ourFirst[0]);
+      });
+      if (byInitial) return byInitial.id;
+      // Ambiguous — don't guess, return null to avoid wrong mapping
+      return null;
+    }
   }
 
-  // 3. Any token overlap
-  const txTokens = normTx.split(' ').filter(t => t.length > 3);
-  hit = candidates.find(p => {
+  // 3. Any token overlap (only for unambiguous matches)
+  const txTokens = txParts.filter(t => t.length > 3);
+  const tokenMatches = candidates.filter(p => {
     const ourTokens = norm(p.name).split(' ');
     return txTokens.some(t => ourTokens.includes(t));
   });
-  return hit?.id ?? null;
+  if (tokenMatches.length === 1) return tokenMatches[0].id;
+  return null;
 }
 
 // Fetch TxLINE lineups for a fixture and return txlinePlayerId → our internal ID.
