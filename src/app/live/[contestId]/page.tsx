@@ -2274,22 +2274,27 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       My Lineup
                       <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>real-time pts</span>
                     </h3>
-                    <div className="live-lineup-row">
+                    {/* Inline flex guarantees row layout even if the CSS class fails to load */}
+                    <div className="live-lineup-row" style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: 10, overflowX: 'auto', paddingBottom: 8, alignItems: 'flex-start' }}>
                       {players.map((p: any) => {
                         const pts = playerPoints[p.id] ?? 0;
                         const hist = playerHistory[p.id] ?? [];
                         const isCap = userLineup.captain === p.id;
                         const stars = userLineup.confidence?.[p.id] ?? 3;
                         const ptColor = pts > 0 ? '#4ade80' : pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)';
-                        const nameFs = `calc(${p.name.length > 15 ? '0.46rem' : p.name.length > 10 ? '0.52rem' : '0.6rem'} * var(--live-card-scale))`;
+                        // CSS var fallbacks: desktop 110×151 scale=1, mobile 78×107 scale=0.73
+                        const cw = 'var(--live-card-w, 110px)';
+                        const ch = 'var(--live-card-h, 151px)';
+                        const cs = 'var(--live-card-scale, 1)';
+                        const nameFs = `calc(${(p.name?.length ?? 0) > 15 ? '0.46rem' : (p.name?.length ?? 0) > 10 ? '0.52rem' : '0.6rem'} * ${cs})`;
                         const equippedCard = equippedCardDefsRef.current[p.id] ?? null;
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         return (
-                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: 'var(--live-card-w)', paddingTop: isCap ? 'calc(20px * var(--live-card-scale))' : 0 }}>
+                          <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: isCap ? `calc(20px * ${cs})` : 0 }}>
                             {/* Player Card (2).svg — same design as lineup builder */}
                             <div style={{
-                              width: 'var(--live-card-w)', height: 'var(--live-card-h)', flexShrink: 0, position: 'relative',
+                              width: cw, height: ch, flexShrink: 0, position: 'relative',
                               backgroundImage: "url('/Player%20Card%20(2).svg')",
                               backgroundSize: '100% 100%', overflow: 'visible',
                               boxShadow: isCap
@@ -2300,7 +2305,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               <div style={{
                                 position: 'absolute', top: '22.5%', right: '10.5%', width: '18%',
                                 textAlign: 'center', color: (p.rating ?? 0) >= 90 ? '#ca8a04' : (p.rating ?? 0) >= 85 ? '#15803d' : '#1e293b',
-                                fontFamily: 'Inter, sans-serif', fontSize: 'calc(var(--live-card-w) * 0.11)',
+                                fontFamily: 'Inter, sans-serif', fontSize: `calc(${cw} * 0.11)`,
                                 fontWeight: 800, lineHeight: 1, zIndex: 2,
                               }}>
                                 {p.rating ?? '-'}
@@ -2317,7 +2322,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               {/* Team flag + name */}
                               <div style={{
                                 position: 'absolute', top: '75.5%', left: '38%', width: '52%',
-                                color: '#36220f', fontSize: 'calc(0.48rem * var(--live-card-scale))', fontWeight: 700,
+                                color: '#36220f', fontSize: `calc(0.48rem * ${cs})`, fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center',
                                 gap: 3, whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 2,
                               }}>
@@ -2329,7 +2334,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 position: 'absolute', top: '85.5%', left: '42%', zIndex: 2,
                                 background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
                                 color: '#fff', border: '1px solid #36220f', borderRadius: 0,
-                                padding: '1px 3px', fontSize: 'calc(0.42rem * var(--live-card-scale))', fontWeight: 900,
+                                padding: '1px 3px', fontSize: `calc(0.42rem * ${cs})`, fontWeight: 900,
                                 fontFamily: 'Inter, sans-serif', textTransform: 'uppercase',
                               }}>
                                 {p.position}
@@ -2337,17 +2342,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               {/* Captain badge — sits above the card using negative top; paddingTop on wrapper gives clearance */}
                               {isCap && (
                                 <div style={{
-                                  position: 'absolute', top: 'calc(-20px * var(--live-card-scale))', left: '50%', transform: 'translateX(-50%)',
+                                  position: 'absolute', top: `calc(-20px * ${cs})`, left: '50%', transform: 'translateX(-50%)',
                                   background: 'linear-gradient(to bottom, #d32f2f, #8b1e1e)',
                                   border: '2px solid #fff', padding: '2px 6px', whiteSpace: 'nowrap',
                                   fontWeight: 800, fontFamily: 'Inter, sans-serif',
-                                  fontSize: 'calc(0.55rem * var(--live-card-scale))', color: '#fff', letterSpacing: '0.04em',
+                                  fontSize: `calc(0.55rem * ${cs})`, color: '#fff', letterSpacing: '0.04em',
                                   boxShadow: '0 0 0 1px #000, 1px 2px 4px rgba(0,0,0,0.5)', zIndex: 10,
                                 }}>⭐ CAPTAIN</div>
                               )}
                             </div>
                             {/* Confidence stars — outside the card SVG so they're always visible */}
-                            <div style={{ textAlign: 'center', fontSize: 'calc(0.65rem * var(--live-card-scale))', letterSpacing: 1, lineHeight: 1 }}>
+                            <div style={{ textAlign: 'center', fontSize: `calc(0.65rem * ${cs})`, letterSpacing: 1, lineHeight: 1 }}>
                               <span style={{ color: '#ffd700' }}>{'★'.repeat(stars)}</span>
                               <span style={{ color: 'rgba(255,255,255,0.2)' }}>{'★'.repeat(5 - stars)}</span>
                             </div>
@@ -2356,7 +2361,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             {equippedCard && cardRarityColor && cardRarityStars && (
                               <div style={{
                                 width: '100%', textAlign: 'center',
-                                fontSize: 'calc(0.4rem * var(--live-card-scale))', lineHeight: 1.3,
+                                fontSize: `calc(0.4rem * ${cs})`, lineHeight: 1.3,
                               }}>
                                 <span style={{ color: cardRarityColor, fontWeight: 800, letterSpacing: '0.03em' }}>
                                   {cardRarityStars}
@@ -2370,12 +2375,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             {/* Live total pts */}
                             <div style={{ textAlign: 'center', lineHeight: 1 }}>
                               <div style={{
-                                fontFamily: 'Bebas Neue, cursive', fontSize: 'calc(1.35rem * var(--live-card-scale))',
+                                fontFamily: 'Bebas Neue, cursive', fontSize: `calc(1.35rem * ${cs})`,
                                 color: ptColor, textShadow: pts !== 0 ? `0 0 6px ${ptColor}88` : 'none',
                               }}>
                                 {pts > 0 ? `+${pts.toFixed(1)}` : pts === 0 ? '0' : pts.toFixed(1)}
                               </div>
-                              <div style={{ fontSize: 'calc(0.45rem * var(--live-card-scale))', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>PTS</div>
+                              <div style={{ fontSize: `calc(0.45rem * ${cs})`, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>PTS</div>
                             </div>
 
                             {/* Point history log — exclude appearance entries (starting xi / sub_appearance)
@@ -2392,10 +2397,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                     background: h.pts > 0 ? 'rgba(74,222,128,0.07)' : h.pts < 0 ? 'rgba(248,113,113,0.07)' : 'transparent',
                                     borderRadius: 3,
                                   }}>
-                                    <span style={{ fontSize: 'calc(0.42rem * var(--live-card-scale))', color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
+                                    <span style={{ fontSize: `calc(0.42rem * ${cs})`, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
                                       {h.label}
                                     </span>
-                                    <span style={{ fontSize: 'calc(0.44rem * var(--live-card-scale))', fontWeight: 700, flexShrink: 0, color: h.pts > 0 ? '#4ade80' : h.pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)' }}>
+                                    <span style={{ fontSize: `calc(0.44rem * ${cs})`, fontWeight: 700, flexShrink: 0, color: h.pts > 0 ? '#4ade80' : h.pts < 0 ? '#f87171' : 'rgba(255,255,255,0.3)' }}>
                                       {h.pts > 0 ? `+${h.pts.toFixed(1)}` : h.pts.toFixed(1)}
                                     </span>
                                   </div>
