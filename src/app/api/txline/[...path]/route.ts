@@ -33,8 +33,21 @@ async function proxy(req: NextRequest, path: string[]) {
       data = await res.json().catch(() => null);
     } else {
       const text = await res.text();
-      // Try to parse as JSON anyway in case Content-Type is wrong
-      try { data = JSON.parse(text); } catch { data = text || null; }
+      // TxLINE score endpoints return Server-Sent Events (text/event-stream).
+      // Parse each "data: {...}" line and return all events as an array.
+      if (ct.includes('text/event-stream') || text.startsWith('data:')) {
+        const events: unknown[] = [];
+        for (const line of text.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          const json = line.slice(5).trim();
+          if (!json) continue;
+          try { events.push(JSON.parse(json)); } catch { /* skip malformed line */ }
+        }
+        data = events.length > 0 ? events : null;
+      } else {
+        // Try to parse as JSON anyway in case Content-Type is wrong
+        try { data = JSON.parse(text); } catch { data = text || null; }
+      }
     }
     return NextResponse.json(data, { status: res.status });
   } catch (err) {

@@ -121,16 +121,23 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
         consecutive403 = 0; // reset on success
         if (!isMounted) return;
 
-        // Live states per TxLINE documentation
-        const liveStates = ['firsthalf', 'secondhalf', 'halftime', 'extratimefirsthalf',
+        // Live states per TxLINE documentation (string names from score updates)
+        const liveStateStrings = ['firsthalf', 'secondhalf', 'halftime', 'extratimefirsthalf',
           'extratimehalftime', 'extratimesecondhalf', 'penalties', 'inprogress', 'live'];
+        // TxLINE fixture snapshot uses integer GameState codes (2=FirstHalf, 3=HalfTime, 4=SecondHalf, etc.)
+        const liveStateInts = new Set([2, 3, 4, 5, 6, 7, 8]);
         const live = all.filter((f: any) => {
-          // String() prevents TypeError if GameState is an object or number
-          const state = String(f.GameState ?? f.gameState ?? f.Status ?? f.status ?? '').toLowerCase();
-          const stateMatch = liveStates.some(s => state.includes(s));
-          // TxLINE devnet sometimes reports "scheduled" even when match is running — use Clock as fallback
+          const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
+          const intState = typeof rawState === 'number' ? rawState : null;
+          const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
+          const stateMatch = (intState !== null && liveStateInts.has(intState))
+            || liveStateStrings.some(s => strState.includes(s));
+          // TxLINE sometimes reports "scheduled" even when match is running — use Clock as fallback
           const clockRunning = f.Clock?.Running === true || f.clock?.running === true;
-          return stateMatch || clockRunning;
+          // Also check kickoff time — if past kickoff and state=1 (scheduled), treat as potentially live
+          const startMs = f.StartTime ?? 0;
+          const kickoffPassed = startMs > 0 && Date.now() > startMs && Date.now() < startMs + 4.5 * 3600 * 1000;
+          return stateMatch || clockRunning || kickoffPassed;
         });
 
         console.log(`[TxLINE] Fixtures: ${all.length} total, ${live.length} live`);

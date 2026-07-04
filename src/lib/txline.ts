@@ -141,15 +141,28 @@ export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | nu
   });
 }
 
-// GET /api/scores/updates/{fixtureId} — live score updates (poll every 10s during match)
-// Falls back to /api/scores/snapshot/{fixtureId} for initial/historical data
+// GET /api/scores/updates/{fixtureId} — live score updates (SSE stream via proxy)
+// Proxy converts SSE events to a JSON array. We merge all events into one state
+// object so callers get the most complete snapshot: latest GameState/Clock/Score
+// from the last event, plus PlayerStats from whichever event has them.
 export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string, guestJwt?: string | null) {
   try {
     const res = await axios.get(`${TXLINE_API_BASE}/api/scores/updates/${fixtureId}`, {
       headers: txlineHeaders(apiToken, guestJwt),
-      timeout: 10000,
+      timeout: 15000,
     });
-    return res.data;
+    if (!Array.isArray(res.data) || res.data.length === 0) return res.data ?? null;
+    // Start with the last event (most recent GameState/Clock/Score)
+    const merged: Record<string, unknown> = { ...res.data[res.data.length - 1] };
+    // Layer in PlayerStats from the most recent event that has it
+    for (let i = res.data.length - 1; i >= 0; i--) {
+      const ev = res.data[i];
+      if (ev?.PlayerStats || ev?.playerStats) {
+        merged.PlayerStats = ev.PlayerStats ?? ev.playerStats;
+        break;
+      }
+    }
+    return merged;
   } catch (err: any) {
     if (err?.response?.status === 404) return null;
     throw err;
@@ -157,13 +170,23 @@ export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string,
 }
 
 // GET /api/scores/snapshot/{fixtureId} — full score snapshot (use for initial load)
+// Returns a merged object (same shape as fetchLiveScoreUpdates) from all accumulated events.
 export async function fetchScoreSnapshot(apiToken: string, fixtureId: string, guestJwt?: string | null) {
   try {
     const res = await axios.get(`${TXLINE_API_BASE}/api/scores/snapshot/${fixtureId}`, {
       headers: txlineHeaders(apiToken, guestJwt),
       timeout: 10000,
     });
-    return res.data;
+    if (!Array.isArray(res.data) || res.data.length === 0) return res.data ?? null;
+    const merged: Record<string, unknown> = { ...res.data[res.data.length - 1] };
+    for (let i = res.data.length - 1; i >= 0; i--) {
+      const ev = res.data[i];
+      if (ev?.PlayerStats || ev?.playerStats) {
+        merged.PlayerStats = ev.PlayerStats ?? ev.playerStats;
+        break;
+      }
+    }
+    return merged;
   } catch (err: any) {
     if (err?.response?.status === 404) return null;
     throw err;
