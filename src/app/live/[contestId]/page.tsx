@@ -929,17 +929,107 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [matchCompleted, setMatchCompleted] = useState(false);
   const [showCardPack, setShowCardPack] = useState(false);
 
+  // Prize claim state
+  type ClaimStatus = 'idle' | 'submitting' | 'ready' | 'claiming' | 'claimed' | 'no_prize' | 'error';
+  const [claimStatus, setClaimStatus] = useState<ClaimStatus>('idle');
+  const [claimTxSig, setClaimTxSig] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const prizeSubmittedRef = useRef(false);
+
   const handleVerify = () => {
     setVerificationStatus('verifying');
     setTimeout(() => {
       setVerificationStatus('success');
-      // Open card pack reward after verification succeeds — only if user has a lineup
-      // and hasn't already claimed this contest's pack.
       if (userLineupRef.current && !hasOpenedPack(contestId)) {
         setTimeout(() => setShowCardPack(true), 600);
       }
     }, 2000);
   };
+
+  // After verification, submit leaderboard to server and check prize eligibility
+  const handleSubmitAndCheckPrize = async (walletAddr: string) => {
+    if (prizeSubmittedRef.current) return;
+    prizeSubmittedRef.current = true;
+    setClaimStatus('submitting');
+
+    const board = leaderboardRef.current;
+    const realParticipants = board.filter(e => e.wallet !== 'YOUR WALLET');
+    const n = realParticipants.length || board.length;
+
+    // Submit final leaderboard to persist results server-side
+    try {
+      await fetch('/api/prize/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fixtureId: contestId,
+          contestType,
+          participantCount: n,
+          leaderboard: board
+            .filter(e => e.wallet && e.wallet !== 'YOUR WALLET')
+            .map(e => ({ walletAddress: e.wallet, rank: e.rank, points: e.points })),
+        }),
+      });
+    } catch {
+      // Non-fatal — still check prize status
+    }
+
+    // Check prize status for this wallet
+    try {
+      const res = await fetch(
+        `/api/prize/status?fixtureId=${contestId}&contestType=${contestType}&wallet=${encodeURIComponent(walletAddr)}`
+      );
+      const data = await res.json();
+      if (!data.found || data.prizeSol <= 0) {
+        setClaimStatus('no_prize');
+      } else if (data.claimed) {
+        setClaimStatus('claimed');
+        setClaimTxSig(data.txSignature);
+      } else {
+        setClaimStatus('ready');
+      }
+    } catch {
+      setClaimStatus('error');
+      setClaimError('Could not load prize status.');
+    }
+  };
+
+  const handleClaimPrize = async (walletAddr: string) => {
+    setClaimStatus('claiming');
+    setClaimError(null);
+    try {
+      const res = await fetch('/api/prize/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fixtureId: contestId, contestType, walletAddress: walletAddr }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409 && data.txSignature) {
+          setClaimStatus('claimed');
+          setClaimTxSig(data.txSignature);
+        } else {
+          setClaimStatus('error');
+          setClaimError(data.error || 'Claim failed.');
+        }
+      } else {
+        setClaimStatus('claimed');
+        setClaimTxSig(data.txSignature);
+      }
+    } catch (err: any) {
+      setClaimStatus('error');
+      setClaimError(err.message || 'Network error.');
+    }
+  };
+
+  // Trigger prize submission + check as soon as verification succeeds (live mode only)
+  useEffect(() => {
+    if (verificationStatus !== 'success') return;
+    if (appMode !== 'live') return;
+    if (!publicKey) return;
+    handleSubmitAndCheckPrize(publicKey.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verificationStatus]);
 
   useEffect(() => {
     return () => {
@@ -2790,6 +2880,109 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   </button>
                 )}
               </div>
+
+              {/* SOL Prize Claim Panel — visible after verification in live mode */}
+              {verificationStatus === 'success' && appMode === 'live' && publicKey && (
+                <div className="card" style={{
+                  marginBottom: 20,
+                  border: claimStatus === 'claimed'
+                    ? '1px solid rgba(0,232,122,0.4)'
+                    : claimStatus === 'ready'
+                    ? '1px solid rgba(255,215,0,0.4)'
+                    : '1px solid rgba(255,255,255,0.08)',
+                  background: claimStatus === 'claimed'
+                    ? 'rgba(0,232,122,0.06)'
+                    : claimStatus === 'ready'
+                    ? 'rgba(255,215,0,0.06)'
+                    : 'var(--bg-card)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: '#ffd700' }}>
+                      💰 SOL Prize
+                    </h3>
+                    <span style={{
+                      fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px',
+                      borderRadius: 4,
+                      background: claimStatus === 'claimed' ? 'rgba(0,232,122,0.15)' : claimStatus === 'ready' ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.05)',
+                      color: claimStatus === 'claimed' ? '#00e87a' : claimStatus === 'ready' ? '#ffd700' : 'var(--text-muted)',
+                    }}>
+                      {claimStatus === 'claimed' ? '✅ CLAIMED' : claimStatus === 'ready' ? '🎁 READY' : claimStatus === 'no_prize' ? 'NO PRIZE' : claimStatus === 'error' ? '⚠ ERROR' : '⏳ CHECKING...'}
+                    </span>
+                  </div>
+
+                  {(claimStatus === 'submitting' || claimStatus === 'idle') && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 14, height: 14, border: '2px solid var(--text-muted)', borderTopColor: '#ffd700', borderRadius: '50%', animation: 'spin 1s linear infinite', display: 'inline-block' }} />
+                      Submitting results and checking prize eligibility...
+                    </div>
+                  )}
+
+                  {claimStatus === 'no_prize' && (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      Your rank does not qualify for a prize in this contest. Better luck next time!
+                    </p>
+                  )}
+
+                  {claimStatus === 'ready' && (() => {
+                    const userEntry = leaderboard.find(e => e.isUser);
+                    const prizeSol = userEntry ? getPrizeForRank(userEntry.rank as number, contestType, leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length) : 0;
+                    return (
+                      <div>
+                        <div style={{ marginBottom: 14 }}>
+                          <div style={{ fontSize: '2rem', fontWeight: 900, color: '#ffd700', lineHeight: 1 }}>
+                            {prizeSol.toFixed(4)} SOL
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                            Rank #{userEntry?.rank} · {contestType === 'wta' ? 'Winner Takes All' : contestType === '5050' ? 'Double Up' : 'Top 3'} prize
+                          </div>
+                        </div>
+                        <button
+                          className="btn btn--primary btn--full"
+                          style={{ fontWeight: 800, fontSize: '0.9rem', padding: '12px' }}
+                          onClick={() => handleClaimPrize(publicKey.toString())}
+                        >
+                          Claim {prizeSol.toFixed(4)} SOL →
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                  {claimStatus === 'claiming' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      <span style={{ width: 16, height: 16, border: '2px solid var(--text-muted)', borderTopColor: '#ffd700', borderRadius: '50%', animation: 'spin 1s linear infinite', display: 'inline-block' }} />
+                      Sending SOL to your wallet...
+                    </div>
+                  )}
+
+                  {claimStatus === 'claimed' && claimTxSig && (
+                    <div>
+                      <div style={{ fontSize: '1rem', fontWeight: 800, color: '#00e87a', marginBottom: 8 }}>
+                        Prize sent to your wallet!
+                      </div>
+                      <a
+                        href={`https://solscan.io/tx/${claimTxSig}${process.env.NEXT_PUBLIC_SOLANA_NETWORK !== 'mainnet-beta' ? '?cluster=devnet' : ''}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: '0.78rem', color: 'var(--color-primary)', wordBreak: 'break-all' }}
+                      >
+                        View on Solscan: {claimTxSig.substring(0, 20)}...
+                      </a>
+                    </div>
+                  )}
+
+                  {claimStatus === 'error' && (
+                    <div>
+                      <div style={{ fontSize: '0.8rem', color: '#ff6b6b', marginBottom: 8 }}>{claimError}</div>
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => { prizeSubmittedRef.current = false; handleSubmitAndCheckPrize(publicKey.toString()); }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Point Reference */}
               <div className="card" style={{ marginTop: 20 }}>
