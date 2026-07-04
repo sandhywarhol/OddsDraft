@@ -517,6 +517,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
       }
     case 'danger_attack':
       // TxLINE: possessionType=Danger|HighDanger — predictive signal before a goal
+      // (handled below)
       if (step === 1) {
         return {
           speakerTitle: 'Alan',
@@ -1158,19 +1159,79 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (u.ScoreSoccer) return { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 };
         return undefined;
       })(),
-      // TxLINE uses Events[]; TxODDS legacy uses Incidents[] with IncidentType/Team fields
-      events: (u.events ?? u.Events ?? u.Incidents ?? u.incidents ?? []).map((e: any) => ({
-        type:              (e.type ?? e.Type ?? e.IncidentType ?? e.incidentType ?? '').toLowerCase(),
-        minute:            e.minute ?? e.Minute ?? 0,
-        period:            e.period ?? e.Period ?? '',
-        // TxLINE uses Participant (1=home, 2=away); TxODDS uses Team with same 1/2 values
-        participant:       e.participant ?? e.Participant ?? e.Team ?? e.team ?? 1,
-        playerId:          e.playerId ?? e.PlayerId,
-        playerName:        e.playerName ?? e.PlayerName,
-        assistPlayerId:    e.assistPlayerId ?? e.AssistPlayerId,
-        assistPlayerName:  e.assistPlayerName ?? e.AssistPlayerName,
-        goalType:          e.goalType ?? e.GoalType,
-      })),
+      // TxODDS legacy: events/Events/Incidents array. TxLINE: Action at top level with Data field.
+      events: (() => {
+        const legacy = u.events ?? u.Events ?? u.Incidents ?? u.incidents;
+        if (legacy) {
+          return legacy.map((e: any) => ({
+            type:             (e.type ?? e.Type ?? e.IncidentType ?? e.incidentType ?? '').toLowerCase(),
+            minute:           e.minute ?? e.Minute ?? 0,
+            period:           e.period ?? e.Period ?? '',
+            participant:      e.participant ?? e.Participant ?? e.Team ?? e.team ?? 1,
+            playerId:         e.playerId ?? e.PlayerId,
+            playerName:       e.playerName ?? e.PlayerName,
+            assistPlayerId:   e.assistPlayerId ?? e.AssistPlayerId,
+            assistPlayerName: e.assistPlayerName ?? e.AssistPlayerName,
+            goalType:         e.goalType ?? e.GoalType,
+          }));
+        }
+        // TxLINE native format: each SSE object IS the event (Action at top level)
+        const action = (u.Action ?? u.action ?? '').toLowerCase();
+        // Skip infrastructure/non-scoring actions
+        const skipActions = new Set([
+          'coverage_update','comment','connected','disconnected','standby','weather',
+          'venue','pitch','players_warming_up','players_on_the_pitch','jersey',
+          'kickoff_team','status','lineups','clock_adjustment','possible','game_finalised',
+          'halftime_finalised','safe_possession','attack_possession','danger_possession',
+          'high_danger_possession','possession','throw_in','goal_kick','additional_time',
+          'action_amend','action_discarded','players_on_the_pitch',
+        ]);
+        if (!action || skipActions.has(action)) return [];
+
+        const rawData = u.Data?.New ?? u.Data ?? {};
+        const clkSecs = u.Clock?.Seconds ?? rawData.Clock?.Seconds ?? 0;
+        const minute = Math.max(0, Math.floor(clkSecs / 60));
+        const participant = rawData.Participant ?? u.Participant ?? 1;
+
+        // Goals/cards with no PlayerId are intermediate TxLINE events (3-stage delivery)
+        // Only process the final stage that includes the PlayerId
+        if ((action === 'goal' || action === 'yellow_card' || action === 'red_card') && !rawData.PlayerId) return [];
+
+        // Detect own goals from GoalType field
+        if (action === 'goal' && rawData.GoalType === 'Own') {
+          return [{ type: 'own_goal', minute, period: '', participant, playerId: rawData.PlayerId,
+            playerName: rawData.PlayerName, assistPlayerId: undefined, assistPlayerName: undefined, goalType: 'Own' }];
+        }
+
+        // Substitution: two events — sub out (substitution) and sub in (sub_appearance)
+        if (action === 'substitution') {
+          const events: any[] = [];
+          if (rawData.PlayerOutId) events.push({ type: 'substitution', minute, period: '', participant,
+            playerId: rawData.PlayerOutId, playerName: rawData.PlayerOutName,
+            assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined });
+          if (rawData.PlayerInId) events.push({ type: 'sub_appearance', minute, period: '', participant,
+            playerId: rawData.PlayerInId, playerName: rawData.PlayerInName,
+            assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined });
+          return events;
+        }
+
+        // Shot saved → synthesize goalkeeper_save for the opposing team's GK
+        if (action === 'shot' && rawData.Outcome === 'Saved') {
+          return [{ type: 'goalkeeper_save', minute, period: '',
+            participant: participant === 1 ? 2 : 1, // opposing team's GK
+            playerId: undefined, playerName: undefined,
+            assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
+        }
+
+        // Free kick, corner, kickoff, injury — show in feed but no fantasy points
+        return [{ type: action, minute, period: '', participant,
+          playerId: rawData.PlayerId ?? rawData.Player1Id,
+          playerName: rawData.PlayerName,
+          assistPlayerId: rawData.AssistPlayerId,
+          assistPlayerName: rawData.AssistPlayerName,
+          goalType: rawData.GoalType,
+        }];
+      })(),
       clockRunning: u.Clock?.Running ?? u.clock?.running,
       clockSeconds: u.Clock?.Seconds ?? u.Clock?.seconds ?? u.clock?.seconds,
     });
@@ -1578,9 +1639,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
         // Fantasy points + toasts for every event
         for (const ev of newEvents) {
-          if (!userLineupRef.current || !ev.playerId) continue;
+          if (!userLineupRef.current) continue;
           const { players, captain, confidence } = userLineupRef.current;
-          const matched = players.find((p: any) => p && p.id === ev.playerId);
+
+          // goalkeeper_save synthesized from shot events may have no playerId —
+          // find the GK in our lineup that plays for the saving team
+          let matched = players.find((p: any) => p && p.id === ev.playerId);
+          if (!matched && ev.type === 'goalkeeper_save' && !ev.playerId) {
+            matched = (players as any[]).find((p: any) => p && p.position === 'GK' && p.team === ev.team);
+          }
           if (!matched) continue;
 
           // GKs cannot score regular goals — only penalty shootout goals are valid

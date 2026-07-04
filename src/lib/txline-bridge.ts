@@ -243,25 +243,69 @@ export async function buildPlayerIdMap(
     }
   }
 
-  // Lineup endpoints unavailable — build map from score snapshot player names
+  // Lineup endpoints unavailable — build map from score snapshot
   try {
     const snapRes = await axios.get(`${TXLINE_API_BASE}/api/scores/snapshot/${txlineFixtureId}`, { headers, timeout: 10000 });
     const updates = Array.isArray(snapRes.data) ? snapRes.data : (snapRes.data ? [snapRes.data] : []);
     const map: Record<string, string> = {};
+
     for (const update of updates) {
-      // Handle both TxLINE (Events) and TxODDS legacy (Incidents) formats
+      const action = (update.Action ?? update.action ?? '').toLowerCase();
+
+      // ── TxLINE format: lineups action has Lineups[] with nested player arrays ──
+      if (action === 'lineups') {
+        const teamsArr: any[] = update.Lineups ?? update.lineups ?? [];
+        teamsArr.forEach((teamData: any, idx: number) => {
+          // Index 0 = Participant1 (home), 1 = Participant2 (away)
+          const teamName = idx === 0 ? homeTeam : awayTeam;
+          const playerArr: any[] = teamData.lineups ?? teamData.Lineups ?? [];
+          for (const p of playerArr) {
+            const fixturePlayerId = String(p.fixturePlayerId ?? '');
+            const normativeId = String(p.player?.normativeId ?? '');
+            // TxLINE name format: "LastName, FirstName" → convert to "FirstName LastName"
+            const rawName: string = p.player?.preferredName ?? p.preferredName ?? '';
+            const name = rawName.includes(',')
+              ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ')
+              : rawName;
+            if (!name) continue;
+            const ourId = matchPlayerName(name, teamName);
+            if (ourId) {
+              if (fixturePlayerId) map[fixturePlayerId] = ourId;
+              if (normativeId && normativeId !== fixturePlayerId) map[normativeId] = ourId;
+            }
+          }
+        });
+        if (Object.keys(map).length > 0) {
+          console.log(`[TxLineBridge] buildPlayerIdMap: ${Object.keys(map).length} players from snapshot lineups action`);
+          return map;
+        }
+        continue;
+      }
+
+      // ── TxODDS legacy format: events/Events/Incidents array ──
       const events = update.events ?? update.Events ?? update.Incidents ?? update.incidents ?? [];
       for (const e of events) {
         const pid = String(e.playerId ?? e.PlayerId ?? '');
         const pName = e.playerName ?? e.PlayerName ?? '';
-        // TxLINE uses Participant (1/2); TxODDS uses Team (1/2)
         const participant = e.participant ?? e.Participant ?? e.Team ?? e.team ?? 1;
         if (!pid || !pName || map[pid]) continue;
         const teamName = participant === 1 ? homeTeam : awayTeam;
         const ourId = matchPlayerName(pName, teamName);
         if (ourId) map[pid] = ourId;
       }
+
+      // ── TxLINE format: PlayerId may be in Data field of goal/card events ──
+      const data = update.Data?.New ?? update.Data ?? {};
+      const pid = String(data.PlayerId ?? data.Player1Id ?? '');
+      const pName = data.PlayerName ?? '';
+      if (pid && pName && !map[pid]) {
+        const participant = data.Participant ?? 1;
+        const teamName = participant === 2 ? awayTeam : homeTeam;
+        const ourId = matchPlayerName(pName, teamName);
+        if (ourId) map[pid] = ourId;
+      }
     }
+
     console.log(`[TxLineBridge] buildPlayerIdMap: ${Object.keys(map).length} players from score snapshot`);
     return map;
   } catch {
