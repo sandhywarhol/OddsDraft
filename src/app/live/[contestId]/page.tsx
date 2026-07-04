@@ -1779,6 +1779,67 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, contestId]);
 
+  // ── LIVE ESPN EVENT POLLING ───────────────────────────────────────────────
+  // When TxLINE is not providing events (status=waiting), poll ESPN every 60s
+  // to populate the match event feed with goals and cards.
+  useEffect(() => {
+    if (appMode !== 'live' || !wcFixture) return;
+    if (minutesToKickoff !== null) return;
+
+    let isMounted = true;
+    const seenIds = new Set<string>();
+
+    const pollEspn = async () => {
+      try {
+        const res = await fetch(`/api/match/result?fixtureId=${contestId}&_t=${Date.now()}`);
+        if (!res.ok || !isMounted) return;
+        const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
+        const espnEvents = resultData.events ?? [];
+        if (espnEvents.length === 0) return;
+
+        const newEvs: typeof matchEvents = [];
+        for (const ev of espnEvents) {
+          const min = parseInt(ev.minute) || 0;
+          const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
+          const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
+          const evId = `esp-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
+          if (seenIds.has(evId)) continue;
+          seenIds.add(evId);
+          const desc =
+            evType === 'goal'        ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
+            evType === 'own_goal'    ? `Own goal — ${ev.player}` :
+            evType === 'yellow_card' ? `Yellow card — ${ev.player}` :
+            evType === 'red_card'    ? `Red card — ${ev.player}` :
+            `${evType.replace(/_/g,' ')} — ${ev.player}`;
+          newEvs.push({ id: evId, minute: min, team: ev.team, teamFlag, player: ev.player, playerId: '', type: evType, points: 0, description: desc });
+        }
+
+        if (newEvs.length === 0 || !isMounted) return;
+        setEvents(prev => {
+          const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
+          const fresh = newEvs.filter(e =>
+            !existingKeys.has(`${e.type}-${e.minute}`) &&
+            !existingKeys.has(`${e.type}-${e.minute - 1}`) &&
+            !existingKeys.has(`${e.type}-${e.minute + 1}`) &&
+            !prev.some(p => p.id === e.id)
+          );
+          if (fresh.length === 0) return prev;
+          // Play SFX for genuinely new goal/card events
+          const newest = fresh[fresh.length - 1];
+          if (newest.type === 'goal' || newest.type === 'own_goal') playSFX('goal');
+          else if (newest.type === 'yellow_card' || newest.type === 'red_card') playSFX('whistle');
+          setMinute(newest.minute);
+          return [...fresh.slice().reverse(), ...prev];
+        });
+      } catch { /* silent */ }
+    };
+
+    pollEspn();
+    const interval = setInterval(pollEspn, 60000);
+    return () => { isMounted = false; clearInterval(interval); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minutesToKickoff, appMode, contestId, wcFixture]);
+
   // ── KICKOFF SAFETY NET ────────────────────────────────────────────────────
   // If TxLINE never sends a valid game state after kickoff time passes,
   // fire the kickoff event and award starting_xi points directly from the clock.
@@ -2554,7 +2615,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         >
                           {txlineStatus === 'live' ? (
                             <><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} /> LIVE</>
-                          ) : matchCompleted ? 'FINAL' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                          ) : matchCompleted ? 'FINAL' : txlineStatus === 'connecting' ? 'CONNECTING…' : minutesToKickoff === null ? 'LIVE' : 'WAITING'}
                         </span>
                       ) : (
                         <span className="badge badge--live" style={{ fontSize: '0.65rem' }}>
@@ -2883,15 +2944,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   Match Events
                   {appMode === 'live' ? (
                     <span
-                      className={txlineStatus === 'live' ? 'badge badge--live' : undefined}
+                      className={(txlineStatus === 'live' || minutesToKickoff === null) ? 'badge badge--live' : undefined}
                       style={{
                         fontSize: '0.6rem',
                         padding: '2px 6px',
                         borderRadius: 4,
                         fontWeight: 700,
-                        background: txlineStatus === 'live' ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: txlineStatus === 'live' ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
-                        border: txlineStatus === 'live' ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                        background: (txlineStatus === 'live' || minutesToKickoff === null) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: (txlineStatus === 'live' || minutesToKickoff === null) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
+                        border: (txlineStatus === 'live' || minutesToKickoff === null) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
                       }}
                     >
                       {txlineStatus === 'live' ? 'LIVE' : matchCompleted ? 'FINAL' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}

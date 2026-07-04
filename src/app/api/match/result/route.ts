@@ -66,11 +66,11 @@ async function fetchDayEvents(dateStr: string): Promise<any[]> {
   } catch { return []; }
 }
 
-async function fetchEventDetail(internalRef: string): Promise<any> {
+async function fetchEventDetail(internalRef: string, isLive: boolean): Promise<any> {
   try {
     const r = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${internalRef}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 1800 } }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, ...(isLive ? { cache: 'no-store' } : { next: { revalidate: 1800 } }) }
     );
     return r.ok ? await r.json() : null;
   } catch { return null; }
@@ -113,8 +113,13 @@ export async function GET(req: NextRequest) {
 
   if (!event?.id) return NextResponse.json({ events: [] });
 
+  // Determine if match is currently live (started but not finished)
+  const now = Date.now();
+  const koMs = new Date(fixture.kickoffAt).getTime();
+  const isLive = koMs > 0 && now > koMs && now < koMs + 3 * 60 * 60 * 1000;
+
   // Fetch full match detail using the internal reference
-  const detail = await fetchEventDetail(event.id);
+  const detail = await fetchEventDetail(event.id, isLive);
   if (!detail) return NextResponse.json({ events: [] });
 
   const events: MatchEvent[] = [];
@@ -182,6 +187,10 @@ export async function GET(req: NextRequest) {
 
   const result: MatchResult = { events, venue, attendance };
   return NextResponse.json(result, {
-    headers: { 'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=86400' },
+    headers: {
+      'Cache-Control': isLive
+        ? 'no-store'
+        : 'public, s-maxage=1800, stale-while-revalidate=86400',
+    },
   });
 }
