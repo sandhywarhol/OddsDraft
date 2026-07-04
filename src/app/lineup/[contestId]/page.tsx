@@ -945,12 +945,12 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               name={player.name}
                               team={player.team}
                               variant="fill"
-                              style={{ top: '7%', bottom: '37%', left: 0, right: 0, zIndex: 1 }}
+                              style={{ top: '7%', bottom: '44%', left: '5%', right: '5%', zIndex: 1 }}
                             />
                             {/* Score / Rating inside the designated 'スコア' shield */}
                             <div style={{
                               position: 'absolute',
-                              top: '22.5%',
+                              top: '17%',
                               right: '10.5%',
                               width: '18%',
                               textAlign: 'center',
@@ -971,9 +971,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             </div>
 
                             {/* Nama Pemain (Nama) row */}
-                            <div style={{ 
+                            <div style={{
                               position: 'absolute',
-                              top: '67.2%',
+                              top: '59%',
                               left: '38%',
                               width: '52%',
                               textAlign: 'left',
@@ -995,9 +995,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             </div>
 
                             {/* Negara (Flag & Name) (国籍) row */}
-                            <div style={{ 
+                            <div style={{
                               position: 'absolute',
-                              top: '75.5%',
+                              top: '67%',
                               left: '38%',
                               width: '52%',
                               textAlign: 'left',
@@ -1052,9 +1052,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             </div>
 
                             {/* Posisi (ポジション) row */}
-                            <div style={{ 
+                            <div style={{
                               position: 'absolute',
-                              top: '85.5%',
+                              top: '76%',
                               left: '42%',
                               width: '54%',
                               zIndex: 2,

@@ -2685,11 +2685,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 name={p.name}
                                 team={p.team}
                                 variant="fill"
-                                style={{ top: '7%', bottom: '37%', left: 0, right: 0, zIndex: 1, overflow: 'hidden' }}
+                                style={{ top: '7%', bottom: '44%', left: '5%', right: '5%', zIndex: 1, overflow: 'hidden' }}
                               />
                               {/* Rating */}
                               <div style={{
-                                position: 'absolute', top: '22.5%', right: '10.5%', width: '18%',
+                                position: 'absolute', top: '17%', right: '10.5%', width: '18%',
                                 textAlign: 'center', color: (p.rating ?? 0) >= 90 ? '#ca8a04' : (p.rating ?? 0) >= 85 ? '#15803d' : '#1e293b',
                                 fontFamily: 'Inter, sans-serif', fontSize: `calc(${cw} * 0.11)`,
                                 fontWeight: 800, lineHeight: 1, zIndex: 2,
@@ -2698,7 +2698,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               </div>
                               {/* Name */}
                               <div style={{
-                                position: 'absolute', top: '67.2%', left: '38%', width: '52%',
+                                position: 'absolute', top: '59%', left: '38%', width: '52%',
                                 color: '#36220f', fontSize: nameFs, fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
                                 overflow: 'hidden', textOverflow: 'ellipsis', zIndex: 2,
@@ -2707,7 +2707,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               </div>
                               {/* Team flag + name */}
                               <div style={{
-                                position: 'absolute', top: '75.5%', left: '38%', width: '52%',
+                                position: 'absolute', top: '67%', left: '38%', width: '52%',
                                 color: '#36220f', fontSize: `calc(0.48rem * ${cs})`, fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center',
                                 gap: 3, whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 2,
@@ -2717,7 +2717,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               </div>
                               {/* Position badge */}
                               <div style={{
-                                position: 'absolute', top: '85.5%', left: '42%', zIndex: 2,
+                                position: 'absolute', top: '76%', left: '42%', zIndex: 2,
                                 background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
                                 color: '#fff', border: '1px solid #36220f', borderRadius: 0,
                                 padding: '1px 3px', fontSize: `calc(0.42rem * ${cs})`, fontWeight: 900,
