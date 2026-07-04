@@ -44,6 +44,11 @@ const r32 = (id: string, h: string, a: string, ...dt: Parameters<typeof utc>): W
   homeFlag: flag(h), awayFlag: flag(a), kickoffAt: utc(...dt), stage: 'r32',
 });
 
+const r16 = (id: string, h: string, a: string, ...dt: Parameters<typeof utc>): WCFixture => ({
+  fixtureId: id, homeTeam: h, awayTeam: a,
+  homeFlag: flag(h), awayFlag: flag(a), kickoffAt: utc(...dt), stage: 'r16',
+});
+
 // ── Group Stage ───────────────────────────────────────────────────────────────
 
 export const WC2026_FIXTURES: WCFixture[] = [
@@ -161,6 +166,17 @@ export const WC2026_FIXTURES: WCFixture[] = [
   r32('18176123', 'Australia',    'Egypt',             2026, 7,  3, 18),
   r32('18175918', 'Argentina',    'Cape Verde',        2026, 7,  3, 22),
   r32('18179549', 'Colombia',     'Ghana',             2026, 7,  4,  1, 30),
+
+  // ── Round of 16 ──────────────────────────────────────────────────────────────
+
+  r16('18185036', 'Canada',       'Morocco',           2026, 7,  4, 17),
+  r16('18188721', 'Paraguay',     'France',            2026, 7,  4, 21),
+  r16('18187298', 'Brazil',       'Norway',            2026, 7,  5, 20),
+  r16('18192996', 'Mexico',       'England',           2026, 7,  6,  0),
+  r16('18198205', 'Portugal',     'Spain',             2026, 7,  6, 19),
+  r16('18193785', 'USA',          'Belgium',           2026, 7,  7,  0),
+  r16('18202701', 'Argentina',    'Egypt',             2026, 7,  7, 16),
+  r16('18202783', 'Switzerland',  'Colombia',          2026, 7,  7, 20),
 ];
 
 /** Fixture IDs for matches scheduled for today or live right now */
