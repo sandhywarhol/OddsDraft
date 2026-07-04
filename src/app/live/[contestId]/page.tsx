@@ -1900,8 +1900,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   }, [appMode, contestId]);
 
   // ── LIVE ESPN EVENT POLLING ───────────────────────────────────────────────
-  // When TxLINE is not providing events (status=waiting), poll ESPN every 60s
-  // to populate the match event feed with goals and cards.
+  // Primary source of goals/cards for the event feed. Runs every 30s while live.
   useEffect(() => {
     if (appMode !== 'live' || !wcFixture) return;
     if (minutesToKickoff !== null) return;
@@ -1926,15 +1925,35 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (seenIds.has(evId)) continue;
           seenIds.add(evId);
           const desc =
-            evType === 'goal'        ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
-            evType === 'own_goal'    ? `Own goal — ${ev.player}` :
-            evType === 'yellow_card' ? `Yellow card — ${ev.player}` :
-            evType === 'red_card'    ? `Red card — ${ev.player}` :
+            evType === 'goal'        ? `⚽ GOAL! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''} — ${ev.team}!` :
+            evType === 'own_goal'    ? `😬 Own goal — ${ev.player} (${ev.team})` :
+            evType === 'yellow_card' ? `🟨 Yellow card — ${ev.player} (${ev.team})` :
+            evType === 'red_card'    ? `🟥 Red card! ${ev.player} is sent off (${ev.team})` :
             `${evType.replace(/_/g,' ')} — ${ev.player}`;
           newEvs.push({ id: evId, minute: min, team: ev.team, teamFlag, player: ev.player, playerId: '', type: evType, points: 0, description: desc });
         }
 
         if (newEvs.length === 0 || !isMounted) return;
+
+        // Most significant new event for SFX + dialog (seenIds already deduped newEvs)
+        const goalEv = newEvs.find(e => e.type === 'goal' || e.type === 'own_goal');
+        const cardEv = newEvs.find(e => e.type === 'yellow_card' || e.type === 'red_card');
+        const triggerEv = goalEv ?? cardEv ?? newEvs[newEvs.length - 1];
+
+        if (goalEv) playSFX('goal');
+        else if (cardEv) playSFX('whistle');
+        setMinute(triggerEv.minute);
+
+        // Update score immediately from goal events (don't wait for /api/scores/wc2026 poll)
+        if (goalEv) {
+          const isHome = goalEv.team === fixture.homeTeam;
+          setScore(s => {
+            const next = { home: isHome ? s.home + 1 : s.home, away: !isHome ? s.away + 1 : s.away };
+            scoreRef.current = next;
+            return next;
+          });
+        }
+
         setEvents(prev => {
           const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
           const fresh = newEvs.filter(e =>
@@ -1943,19 +1962,21 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             !existingKeys.has(`${e.type}-${e.minute + 1}`) &&
             !prev.some(p => p.id === e.id)
           );
-          if (fresh.length === 0) return prev;
-          // Play SFX for genuinely new goal/card events
-          const newest = fresh[fresh.length - 1];
-          if (newest.type === 'goal' || newest.type === 'own_goal') playSFX('goal');
-          else if (newest.type === 'yellow_card' || newest.type === 'red_card') playSFX('whistle');
-          setMinute(newest.minute);
-          return [...fresh.slice().reverse(), ...prev];
+          return fresh.length > 0 ? [...fresh.slice().reverse(), ...prev] : prev;
         });
+
+        // Show commentator dialog (popup) for significant events
+        if (!showPopupRef.current) {
+          setLatestEvent(triggerEv);
+          setDialogStep(1);
+          setShowPopup(true);
+          showPopupRef.current = true;
+        }
       } catch { /* silent */ }
     };
 
     pollEspn();
-    const interval = setInterval(pollEspn, 60000);
+    const interval = setInterval(pollEspn, 30000);
     return () => { isMounted = false; clearInterval(interval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minutesToKickoff, appMode, contestId, wcFixture]);

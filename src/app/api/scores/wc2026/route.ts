@@ -117,6 +117,6 @@ export async function GET() {
   console.log(`[scores/wc2026] ${Object.keys(results).length}/${WC2026_FIXTURES.length} fixtures matched`);
 
   return NextResponse.json(results, {
-    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
+    headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=30' },
   });
 }
