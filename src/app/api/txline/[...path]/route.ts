@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const TXLINE_ORIGIN = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet'
-  ? 'https://txline-dev.txodds.com'
-  : 'https://txline.txodds.com';
+// NEXT_PUBLIC_TXLINE_ENV=production overrides the Solana network setting,
+// allowing production TxLINE data on devnet Solana (no real SOL needed).
+const useProdTxLine =
+  process.env.NEXT_PUBLIC_TXLINE_ENV === 'production' ||
+  process.env.NEXT_PUBLIC_SOLANA_NETWORK !== 'devnet';
+
+const TXLINE_ORIGIN = useProdTxLine
+  ? 'https://txline.txodds.com'
+  : 'https://txline-dev.txodds.com';
 
 async function proxy(req: NextRequest, path: string[]) {
   const url = `${TXLINE_ORIGIN}/${path.join('/')}`;

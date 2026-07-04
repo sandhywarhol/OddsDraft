@@ -6,12 +6,14 @@ import axios from 'axios';
 import { WORLD_CUP_PLAYERS, getPlayerById } from './players';
 import { mapEventToFantasyType } from './txodds';
 
-const IS_DEVNET = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
+const IS_PROD_TXLINE =
+  process.env.NEXT_PUBLIC_TXLINE_ENV === 'production' ||
+  process.env.NEXT_PUBLIC_SOLANA_NETWORK !== 'devnet';
 
 // Browser calls go through our proxy to avoid CORS; server-side calls go direct
 const TXLINE_API_BASE = typeof window !== 'undefined'
   ? '/api/txline'
-  : IS_DEVNET ? 'https://txline-dev.txodds.com' : 'https://txline.txodds.com';
+  : IS_PROD_TXLINE ? 'https://txline.txodds.com' : 'https://txline-dev.txodds.com';
 
 // ── TxLINE API types ─────────────────────────────────────────────────────────
 
