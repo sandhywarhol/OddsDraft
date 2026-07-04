@@ -862,6 +862,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const retroComputedRef = useRef(false);
   const showPopupRef = useRef(false);
   const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
+  // Track cumulative PlayerStats from TxLINE — compare each poll to find new events
+  const prevPlayerStatsRef = useRef<Record<string, Record<string, number>>>({});
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
   const [minutesToKickoff, setMinutesToKickoff] = useState<number | null>(null);
 
@@ -1140,6 +1142,29 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       seq:       u.seq       ?? u.Seq,
       ts:        u.ts        ?? u.Ts,
       fixtureId: u.fixtureId ?? u.FixtureId,
+      // PlayerStats: {Participant1:{playerId:{goals,yellowCards,redCards,...}}, Participant2:{...}}
+      // Released by TxLINE on dev cluster 4 July 2026 — cumulative snapshot per poll
+      playerStats: (() => {
+        const ps = u.PlayerStats ?? u.playerStats;
+        if (!ps) return undefined;
+        const out: Record<string, Record<string, number>> = {};
+        for (const part of ['Participant1', 'Participant2']) {
+          const players = ps[part];
+          if (!players || typeof players !== 'object') continue;
+          for (const [pid, stats] of Object.entries(players as Record<string, any>)) {
+            out[pid] = {
+              goals:       Number(stats.goals       ?? 0),
+              yellowCards: Number(stats.yellowCards ?? 0),
+              redCards:    Number(stats.redCards    ?? 0),
+              assists:     Number(stats.assists     ?? 0),
+              ownGoals:    Number(stats.ownGoals    ?? 0),
+              saves:       Number(stats.saves       ?? 0),
+              participant: part === 'Participant1' ? 1 : 2,
+            };
+          }
+        }
+        return Object.keys(out).length > 0 ? out : undefined;
+      })(),
       // TxLINE uses GameState; TxODDS legacy uses Status; Clock.Running is ground truth
       // when GameState is "scheduled" but match has actually started (TxLINE devnet quirk)
       gameState: (() => {
@@ -1602,6 +1627,76 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           console.log('[LivePage] Fallback: TxLINE live but no GameState detected — synthesized kick_off');
         }
 
+        // ── PlayerStats delta: detect new goals/cards from cumulative TxLINE snapshot ──
+        const latestStats = latest?.playerStats as Record<string, Record<string, number>> | undefined;
+        if (latestStats) {
+          const statsEvents: typeof matchEvents = [];
+          for (const [txPid, cur] of Object.entries(latestStats)) {
+            const prev = prevPlayerStatsRef.current[txPid] ?? {};
+            const ourId = playerIdMapRef.current[txPid] ?? '';
+            const playerInfo = ourId ? (await import('@/lib/players').then(m => m.getPlayerById(ourId))) : null;
+            const isHome = cur.participant === 1;
+            const team = isHome ? fixture.homeTeam : fixture.awayTeam;
+            const teamFlag = isHome ? fixture.homeFlag : fixture.awayFlag;
+            const playerName = playerInfo?.name ?? `Player ${txPid}`;
+            const clkMin = Math.floor((latest?.clockSeconds ?? 0) / 60) || liveClockMinute;
+
+            const mkEv = (type: string, count: number) => {
+              for (let i = 0; i < count; i++) {
+                const evId = `ps-${type}-${txPid}-${(prev[type] ?? 0) + i + 1}`;
+                if (seenSeqsRef.current.has(Number(evId.slice(-4)))) continue;
+                statsEvents.push({ id: evId, minute: clkMin, team, teamFlag, player: playerName, playerId: ourId, type, points: 0, description: `${playerName} — ${type.replace(/_/g,' ')} (${team})` });
+              }
+            };
+
+            const delta = (k: string) => Math.max(0, (cur[k] ?? 0) - (prev[k] ?? 0));
+            mkEv('goal', delta('goals'));
+            mkEv('assist', delta('assists'));
+            mkEv('yellow_card', delta('yellowCards'));
+            mkEv('red_card', delta('redCards'));
+            mkEv('own_goal', delta('ownGoals'));
+            if (delta('saves') > 0) mkEv('goalkeeper_save', delta('saves'));
+          }
+          // Update prev stats snapshot
+          prevPlayerStatsRef.current = { ...prevPlayerStatsRef.current, ...latestStats };
+
+          if (statsEvents.length > 0 && isMounted) {
+            console.log('[LivePage] PlayerStats delta events:', statsEvents.map(e => `${e.type}@${e.minute}'`));
+            setEvents(prev => {
+              const existingKeys = new Set(prev.map(e => e.id));
+              const fresh = statsEvents.filter(e => !existingKeys.has(e.id));
+              return fresh.length > 0 ? [...fresh.slice().reverse(), ...prev] : prev;
+            });
+            // Process points for PlayerStats events (same pipeline as TxLINE events)
+            for (const ev of statsEvents) {
+              if (!userLineupRef.current) continue;
+              const { players, captain, confidence } = userLineupRef.current;
+              const matched = players.find((p: any) => p?.id === ev.playerId);
+              if (!matched) continue;
+              if (ev.type === 'goal' && matched.position === 'GK') continue;
+              let rawPts = calculateEventPoints(ev.type, matched.position);
+              if (!appearedPlayersRef.current.has(ev.playerId)) { rawPts += 2; appearedPlayersRef.current.add(ev.playerId); }
+              const cardDef = equippedCardDefsRef.current[ev.playerId];
+              if (cardDef) rawPts += getCardBonusForEvent(cardDef, ev.type);
+              let delta = rawPts;
+              if (captain === ev.playerId) delta *= 2;
+              const stars = confidence?.[ev.playerId] ?? 3;
+              delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+              delta = Math.round(delta * 100) / 100;
+              if (delta === 0) continue;
+              setPlayerPoints(prev => ({ ...prev, [ev.playerId]: Math.round(((prev[ev.playerId] ?? 0) + delta) * 100) / 100 }));
+              setPlayerHistory(prev => ({ ...prev, [ev.playerId]: [...(prev[ev.playerId] ?? []), { label: ev.type.replace(/_/g,' '), pts: delta, minute: ev.minute }] }));
+              setLeaderboard(prev => {
+                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + delta) * 100) / 100 } : e);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
+              });
+              if (ev.type === 'goal' || ev.type === 'own_goal') playSFX('goal');
+              else if (ev.type === 'yellow_card' || ev.type === 'red_card') playSFX('whistle');
+            }
+          }
+        }
+        // ── End PlayerStats delta ──────────────────────────────────────────────
+
         const newEvents = convertTxLineUpdates(
           updates,
           playerIdMapRef.current,
@@ -1612,7 +1707,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           seenSeqsRef.current
         );
 
-        if (newEvents.length === 0) return;
+        if (newEvents.length === 0 && !latestStats) return;
 
         // Add all events to the feed silently
         setEvents(prev => [...newEvents.slice().reverse(), ...prev]);
