@@ -107,6 +107,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     if (!apiToken) return;
 
     let isMounted = true;
+    let consecutive403 = 0;
 
     const fetchFixtures = async () => {
       try {
@@ -117,6 +118,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
         const raw = await fetchAllFixtures(apiToken, jwt);
         const all: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
 
+        consecutive403 = 0; // reset on success
         if (!isMounted) return;
 
         // Live states per TxLINE documentation
@@ -137,9 +139,16 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
         setFixturesAvailable(true);
       } catch (error: any) {
         if (error.response?.status === 401 || error.response?.status === 403) {
-          console.log('[TxLINE] Auth expired, refreshing guest JWT...');
-          setGuestJwt(null);
-          localStorage.removeItem('txline_guest_jwt');
+          consecutive403++;
+          if (consecutive403 <= 2) {
+            // Might be an expired JWT — refresh once and let next poll retry
+            console.log(`[TxLINE] Auth error (${consecutive403}/2), refreshing guest JWT…`);
+            setGuestJwt(null);
+            localStorage.removeItem('txline_guest_jwt');
+          } else {
+            // Persistent 403 — this is a permissions issue, not an auth issue. Stop looping.
+            console.warn('[TxLINE] Persistent 403 after JWT refresh — fixture likely not in free tier. Stopping refresh loop.');
+          }
         } else if (error.response?.status === 404) {
           console.log('[TxLINE] /api/fixtures/snapshot returned 404');
           setFixturesAvailable(false);
@@ -152,14 +161,17 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     };
 
     fetchFixtures();
-    const pollRate = appMode === 'live' ? 10000 : 30000;
+    const pollRate = appMode === 'live' ? 30000 : 60000;
     const interval = setInterval(fetchFixtures, pollRate);
 
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [apiToken, guestJwt, appMode]);
+  // guestJwt intentionally excluded — it's a credential, not a trigger to restart the poll loop.
+  // Removing it from deps prevents an infinite refresh cycle when TxLINE returns 403.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiToken, appMode]);
 
   const getGuestToken = async () => {
     try {
