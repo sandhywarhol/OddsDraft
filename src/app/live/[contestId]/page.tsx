@@ -2667,9 +2667,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         const lScoreTop  = '16%';
-                        const lNameTop   = '63%';
-                        const lNationTop = '71%';
-                        const lPosTop    = '81%';
+                        const lNameTop   = '68%';
+                        const lNationTop = '76%';
+                        const lPosTop    = '85%';
                         return (
                           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
                             {/* Player card — High Score variant when pts > 10 */}
@@ -2687,11 +2687,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 name={p.name}
                                 team={p.team}
                                 variant="fill"
-                                style={{ top: '11%', bottom: '48%', left: '8%', right: '8%', zIndex: 1, overflow: 'hidden' }}
+                                style={{ top: '15%', bottom: '48%', left: '8%', right: '8%', zIndex: 1, overflow: 'hidden' }}
                               />
                               {/* Rating */}
                               <div style={{
-                                position: 'absolute', top: lScoreTop, right: '14%', width: '18%',
+                                position: 'absolute', top: lScoreTop, right: '12%', width: '18%',
                                 textAlign: 'center', color: (p.rating ?? 0) >= 90 ? '#ca8a04' : (p.rating ?? 0) >= 85 ? '#15803d' : '#1e293b',
                                 fontFamily: 'Inter, sans-serif', fontSize: `calc(${cw} * 0.08)`,
                                 fontWeight: 800, lineHeight: 1, zIndex: 2,
