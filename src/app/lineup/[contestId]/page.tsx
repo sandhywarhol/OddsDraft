@@ -454,7 +454,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
     // Save to localStorage for live/replay pages
     try {
-      localStorage.setItem(`txodds_user_lineup_${contestId}`, JSON.stringify(lineupData));
+      localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(lineupData));
     } catch (e) {
       console.error('Failed to save lineup to localStorage', e);
     }

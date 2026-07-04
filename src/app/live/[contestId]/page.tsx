@@ -869,7 +869,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}`);
+      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
+        ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
       if (stored) {
         const parsed = JSON.parse(stored);
         userLineupRef.current = parsed;

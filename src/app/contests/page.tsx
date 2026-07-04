@@ -41,10 +41,17 @@ export default function ContestsPage() {
         const fixtureId = key.replace('txodds_entered_contests_', '');
         try { map[fixtureId] = JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { /* */ }
       }
-      // Fallback: if a saved lineup exists for a fixture, treat it as entered
+      // Fallback: if a saved lineup exists for a fixture, treat it as entered.
+      // New key format: txodds_user_lineup_{fixtureId}_{contestType}
+      // Old key format: txodds_user_lineup_{fixtureId}
       if (key?.startsWith('txodds_user_lineup_')) {
-        const fixtureId = key.replace('txodds_user_lineup_', '');
-        if (!map[fixtureId]) map[fixtureId] = ['top3'];
+        const rest = key.replace('txodds_user_lineup_', '');
+        const knownTypes = ['top3', '5050', 'wta'];
+        const matchedType = knownTypes.find(ct => rest.endsWith(`_${ct}`));
+        const fixtureId = matchedType ? rest.slice(0, -(matchedType.length + 1)) : rest;
+        const ct = matchedType ?? 'top3';
+        if (!map[fixtureId]) map[fixtureId] = [];
+        if (!map[fixtureId].includes(ct)) map[fixtureId].push(ct);
       }
     }
     setEnteredContests(map);

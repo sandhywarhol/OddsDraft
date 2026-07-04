@@ -704,6 +704,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const { contestId } = use(params);
   const searchParams = useSearchParams();
   const isResultsMode = searchParams.get('results') === '1';
+  const contestTypeParam = searchParams.get('contestType') ?? 'top3';
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt } = useTxLine();
 
@@ -752,7 +753,8 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}`);
+      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestTypeParam}`)
+        ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
       if (stored) {
         userLineupRef.current = JSON.parse(stored);
       }
