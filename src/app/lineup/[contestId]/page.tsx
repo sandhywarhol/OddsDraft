@@ -51,6 +51,15 @@ const getShortLabel = (label: string) => {
   return label;
 };
 
+const getPositionFullName = (label: string) => {
+  if (label.includes('GK')) return 'Goalkeeper';
+  if (label.includes('FLEX')) return 'Flex';
+  if (label.includes('DEF')) return 'Defender';
+  if (label.includes('MID')) return 'Midfielder';
+  if (label.includes('FWD')) return 'Forward';
+  return label;
+};
+
 
 const TEAM_FLAG_CODES: Record<string, string> = {
   'Brazil': 'br', 'Argentina': 'ar', 'France': 'fr', 'England': 'gb-eng',
@@ -472,8 +481,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       const treasuryAddr = process.env.NEXT_PUBLIC_TREASURY_WALLET;
       if (treasuryAddr) {
         const treasury = new PublicKey(treasuryAddr);
-        const MAX_ATTEMPTS = 3;
+        const MAX_ATTEMPTS = 5;
         let paid = false;
+        let lastSig: string | null = null;
 
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
           try {
@@ -495,8 +505,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             const sig = await sendTransaction(tx, connection, {
               skipPreflight: true,
               preflightCommitment: 'confirmed',
-              maxRetries: 3,
+              maxRetries: 5,
             });
+            lastSig = sig;
             await connection.confirmTransaction(
               { signature: sig, blockhash, lastValidBlockHeight },
               'confirmed'
@@ -512,8 +523,24 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               errMsg.includes('Blockhash not found') ||
               errMsg.includes('expired');
 
+            if (isBlockhashExpiry && lastSig) {
+              // confirmTransaction may time out even when tx actually landed —
+              // verify on-chain before deciding to retry or fail.
+              try {
+                const statuses = await connection.getSignatureStatuses([lastSig]);
+                const status = statuses?.value?.[0];
+                if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+                  entryTxSig = lastSig;
+                  paid = true;
+                  console.log('[Payment] tx landed despite timeout:', lastSig);
+                  break;
+                }
+              } catch { /* ignore status check failure, fall through to retry */ }
+            }
+
             if (isBlockhashExpiry && attempt < MAX_ATTEMPTS) {
               console.warn(`[Payment] Blockhash expired, retrying (${attempt}/${MAX_ATTEMPTS})…`);
+              lastSig = null;
               continue;
             }
 
@@ -897,7 +924,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                     const isActive = activeSlot === i;
                     const scoreTop  = '16%';
                     const nameTop   = '67%';
-                    const nationTop = '76%';
+                    const nationTop = '77%';
                     const posTop    = '86%';
 
                     return (
@@ -979,10 +1006,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               textAlign: 'left',
                               color: '#36220f',
                               fontSize: player.name.length > 15
-                                ? 'clamp(0.46rem, 1vw, 0.58rem)'
+                                ? 'clamp(0.36rem, 0.82vw, 0.46rem)'
                                 : (player.name.length > 10
-                                  ? 'clamp(0.5rem, 1.15vw, 0.65rem)'
-                                  : 'clamp(0.55rem, 1.25vw, 0.72rem)'),
+                                  ? 'clamp(0.4rem, 0.92vw, 0.52rem)'
+                                  : 'clamp(0.44rem, 1vw, 0.58rem)'),
                               fontWeight: 700,
                               fontFamily: 'Inter, sans-serif',
                               fontStyle: 'normal',
@@ -1002,7 +1029,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               width: '52%',
                               textAlign: 'left',
                               color: '#36220f',
-                              fontSize: 'clamp(0.55rem, 1.3vw, 0.75rem)',
+                              fontSize: 'clamp(0.38rem, 0.88vw, 0.5rem)',
                               fontWeight: 700,
                               fontFamily: 'Inter, sans-serif',
                               fontStyle: 'normal',
@@ -1056,26 +1083,24 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               position: 'absolute',
                               top: posTop,
                               left: '42%',
-                              width: '54%',
+                              width: '56%',
                               zIndex: 2,
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '4px',
+                              gap: '3px',
+                              overflow: 'hidden',
                             }}>
                               <span style={{
                                 color: '#36220f',
-                                fontSize: getPositionDescription(slotConfig.label).length > 10
-                                  ? 'clamp(0.32rem, 0.7vw, 0.42rem)'
-                                  : 'clamp(0.36rem, 0.8vw, 0.48rem)',
-                                fontWeight: 800,
+                                fontSize: 'clamp(0.28rem, 0.62vw, 0.36rem)',
+                                fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif',
-                                fontStyle: 'normal',
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
-                                opacity: 0.85,
-                              }} title={getPositionDescription(slotConfig.label)}>
-                                {getPositionDescription(slotConfig.label)}
+                                flexShrink: 1,
+                              }}>
+                                {getPositionFullName(slotConfig.label)}
                               </span>
                               <span style={{
                                 display: 'inline-flex',
@@ -1086,7 +1111,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                 border: '1.5px solid #36220f',
                                 borderRadius: '0px',
                                 padding: '1px 3px',
-                                fontSize: 'clamp(0.38rem, 0.95vw, 0.52rem)',
+                                fontSize: 'clamp(0.3rem, 0.75vw, 0.42rem)',
                                 fontWeight: 900,
                                 fontFamily: 'Inter, sans-serif',
                                 fontStyle: 'normal',
@@ -1094,6 +1119,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                 boxShadow: '1px 1px 0px #36220f',
                                 lineHeight: 1,
                                 whiteSpace: 'nowrap',
+                                flexShrink: 0,
                               }}>
                                 {getShortLabel(slotConfig.label)}
                               </span>

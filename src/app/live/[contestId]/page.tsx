@@ -2662,13 +2662,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const cw = 'var(--live-card-w, 110px)';
                         const ch = 'var(--live-card-h, 151px)';
                         const cs = 'var(--live-card-scale, 1)';
-                        const nameFs = `calc(${(p.name?.length ?? 0) > 15 ? '0.46rem' : (p.name?.length ?? 0) > 10 ? '0.52rem' : '0.6rem'} * ${cs})`;
+                        const nameFs = `calc(${(p.name?.length ?? 0) > 15 ? '0.36rem' : (p.name?.length ?? 0) > 10 ? '0.42rem' : '0.5rem'} * ${cs})`;
                         const equippedCard = equippedCardDefsRef.current[p.id] ?? null;
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         const lScoreTop  = '16%';
                         const lNameTop   = '67%';
-                        const lNationTop = '76%';
+                        const lNationTop = '77%';
                         const lPosTop    = '86%';
                         return (
                           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
@@ -2710,7 +2710,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               {/* Team flag + name */}
                               <div style={{
                                 position: 'absolute', top: lNationTop, left: '43%', width: '50%',
-                                color: '#36220f', fontSize: `calc(0.48rem * ${cs})`, fontWeight: 700,
+                                color: '#36220f', fontSize: `calc(0.38rem * ${cs})`, fontWeight: 700,
                                 fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center',
                                 gap: 3, whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 2,
                               }}>
@@ -2720,12 +2720,25 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                               {/* Position badge */}
                               <div style={{
                                 position: 'absolute', top: lPosTop, left: '43%', zIndex: 2,
-                                background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
-                                color: '#fff', border: '1px solid #36220f', borderRadius: 0,
-                                padding: '1px 3px', fontSize: `calc(0.42rem * ${cs})`, fontWeight: 900,
-                                fontFamily: 'Inter, sans-serif', textTransform: 'uppercase',
+                                display: 'flex', alignItems: 'center', gap: 3,
+                                overflow: 'hidden', width: '55%',
                               }}>
-                                {p.position}
+                                <span style={{
+                                  color: '#36220f',
+                                  fontSize: `calc(0.3rem * ${cs})`,
+                                  fontWeight: 700, fontFamily: 'Inter, sans-serif',
+                                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1,
+                                }}>
+                                  {p.position === 'GK' ? 'Goalkeeper' : p.position === 'DEF' ? 'Defender' : p.position === 'MID' ? 'Midfielder' : p.position === 'ATT' ? 'Attacker' : 'Forward'}
+                                </span>
+                                <span style={{
+                                  background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
+                                  color: '#fff', border: '1px solid #36220f', borderRadius: 0,
+                                  padding: '1px 3px', fontSize: `calc(0.38rem * ${cs})`, fontWeight: 900,
+                                  fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', flexShrink: 0,
+                                }}>
+                                  {p.position}
+                                </span>
                               </div>
                               {/* Captain badge — sits above the card using negative top; paddingTop on wrapper gives clearance */}
                               {isCap && (
