@@ -60,25 +60,30 @@ function normalizeTeamName(name: string): string {
 
 function makeId(team: string, name: string, jerseyNumber?: number | null, usedIds?: Set<string>): string {
   const prefix = team.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
-  const parts = name
+  const normalized = name
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z ]/g, '')
-    .trim()
-    .split(' ');
-  const last = parts.pop() ?? 'player';
-  let id = `${prefix}-${last}`;
+    .trim();
+  const parts = normalized.split(' ').filter(Boolean);
+  const last = parts[parts.length - 1] ?? 'player';
+  const first = parts.slice(0, -1).join('');
 
-  // Resolve collision: append first initial, then jersey number
-  if (usedIds?.has(id)) {
-    const first = parts[0]?.[0] ?? '';
-    id = first ? `${prefix}-${first}${last}` : id;
+  // Try progressively more specific slugs until unique
+  const candidates = [
+    `${prefix}-${last}`,
+    first ? `${prefix}-${first[0]}${last}` : null,
+    first.length > 1 ? `${prefix}-${first.slice(0, 2)}${last}` : null,
+    first ? `${prefix}-${first}${last}` : null,
+    jerseyNumber != null ? `${prefix}-${last}${jerseyNumber}` : null,
+    `${prefix}-${normalized.replace(/ /g, '')}`,
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    if (!usedIds?.has(candidate)) return candidate;
   }
-  if (usedIds?.has(id) && jerseyNumber != null) {
-    id = `${prefix}-${last}${jerseyNumber}`;
-  }
-  return id;
+  return candidates[candidates.length - 1]; // last resort fallback
 }
 
 export interface FDPlayer {
