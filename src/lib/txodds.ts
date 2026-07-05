@@ -193,8 +193,10 @@ export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: stri
   if (type === 'penaltymiss' && gameState === 'Penalties') return 'penalty_missed_shootout';
 
   const map: Record<string, string> = {
-    goal:           'goal',
-    yellowcard:     'yellow_card',
+    goal:              'goal',
+    penalty_outcome:   'goal',   // TxLINE sends penalty_outcome instead of goal for penalties
+    penaltyoutcome:    'goal',
+    yellowcard:        'yellow_card',
     yellow_card:    'yellow_card',
     redcard:        'red_card',
     red_card:       'red_card',
