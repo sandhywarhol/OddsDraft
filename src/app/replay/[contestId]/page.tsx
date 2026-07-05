@@ -805,8 +805,9 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     Promise.all([
       fetchLiveScoreUpdates(apiToken, contestId, guestJwt),
       buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt),
+      fetch('/api/scores/wc2026').then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ])
-      .then(([raw, pMap]) => {
+      .then(([raw, pMap, scoresData]) => {
         if (cancelled) return;
         const updates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
         const seenSeqs = new Set<number>();
@@ -818,16 +819,33 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         );
 
         if (apiEvents.length > 0) {
-          // Sort chronologically
-          eventsQueueRef.current = [...apiEvents].sort((a, b) => a.minute - b.minute);
-          // Reset replay to beginning
-          setEvents([]);
-          setMinute(0);
-          setCurrentEventIdx(0);
-          setScore({ home: 0, away: 0 });
+          const sorted = [...apiEvents].sort((a, b) => a.minute - b.minute);
+          eventsQueueRef.current = sorted;
           triggeredEventsRef.current.clear();
           notifiedEventsRef.current.clear();
-          setApiVersion(v => v + 1);
+
+          // If the match is already completed, jump straight to the final state
+          const matchScore: { home: number; away: number; completed?: boolean } | undefined = (scoresData as Record<string, { home: number; away: number; completed?: boolean }>)[contestId];
+          const kickoffMs = wcFixture?.kickoffAt ? new Date(wcFixture.kickoffAt).getTime() : 0;
+          const matchIsComplete = matchScore?.completed || (kickoffMs > 0 && Date.now() > kickoffMs + 2.5 * 3600 * 1000);
+
+          if (matchIsComplete) {
+            sorted.forEach(ev => triggeredEventsRef.current.add(ev.id));
+            setEvents([...sorted].reverse());
+            setCurrentEventIdx(sorted.length);
+            const ftEvent = sorted.find(ev => ev.type === 'full_time');
+            setMinute(ftEvent?.minute ?? 90);
+            if (matchScore) setScore({ home: matchScore.home, away: matchScore.away });
+            setIsPlaying(false);
+            console.log(`[Replay] Match complete — jumping to final state`);
+          } else {
+            // Match still in progress — replay from beginning
+            setEvents([]);
+            setMinute(0);
+            setCurrentEventIdx(0);
+            setScore({ home: 0, away: 0 });
+            setApiVersion(v => v + 1);
+          }
           console.log(`[Replay] Loaded ${apiEvents.length} events from TxLINE API`);
         }
       })
@@ -887,9 +905,6 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
       setEvents((prev) => [event, ...prev]);
       setCurrentEventIdx((idx) => idx + 1);
-      setLatestEvent(event);
-      setDialogStep(1);
-      setShowPopup(true);
   
       // Update score
       if (event.type === 'goal' || event.type === 'own_goal') {
@@ -1401,7 +1416,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                 )}
 
                 <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
-                  {events.map((event) => (
+                  {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
                     <div
                       key={event.id}
                       style={{

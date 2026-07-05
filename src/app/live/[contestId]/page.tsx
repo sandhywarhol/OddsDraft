@@ -3185,7 +3185,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 )}
 
                 <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
-                  {events.map((event) => (
+                  {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
                     <div
                       key={event.id}
                       style={{
