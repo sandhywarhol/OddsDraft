@@ -226,31 +226,16 @@ export default function ContestsPage() {
             overflow: 'hidden',
             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
           }}>
-            {/* Sharp Background Image (Base) */}
+            {/* Background Image without blur */}
             <div style={{
               position: 'absolute',
               inset: 0,
               zIndex: 0,
-              backgroundImage: 'url("/match schedule.png")',
+              backgroundImage: 'url("/ schedule.png")',
               backgroundSize: 'cover',
-              backgroundPosition: 'center',
+              backgroundPosition: 'bottom',
               opacity: 1,
               pointerEvents: 'none',
-            }} />
-
-            {/* Blurred Background Image Overlay (Left to Center only) */}
-            <div style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 1,
-              backgroundImage: 'url("/match schedule.png")',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              filter: 'blur(3px)',
-              opacity: 1,
-              pointerEvents: 'none',
-              WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 65%)',
-              maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 65%)',
             }} />
 
             {/* Light gradient overlay to ensure text readability without being too dark */}
@@ -341,7 +326,7 @@ export default function ContestsPage() {
                 {/* 1. Live Matches Cards (Left) */}
                 <div style={{ flex: '1 1 35%', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {live.map((fixture) => (
-                    <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} />
+                    <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} firstContestType={enteredContests[fixture.fixtureId]?.[0]} />
                   ))}
                 </div>
 
@@ -436,7 +421,7 @@ export default function ContestsPage() {
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 20 }}>Upcoming</h2>
               <div className="grid-contests">
                 {upcoming.map((fixture) => (
-                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} />
+                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} firstContestType={enteredContests[fixture.fixtureId]?.[0]} />
                 ))}
               </div>
             </section>
@@ -457,6 +442,7 @@ export default function ContestsPage() {
                     counts={contestCounts[fixture.fixtureId]}
                     onViewResult={finishedScores[fixture.fixtureId] ? openMatchResult : undefined}
                     hasEntered={!!(enteredContests[fixture.fixtureId]?.length)}
+                    firstContestType={enteredContests[fixture.fixtureId]?.[0]}
                   />
                 ))}
               </div>
@@ -710,12 +696,13 @@ function SwitchToLiveButton() {
   );
 }
 
-function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered }: {
+function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firstContestType }: {
   fixture: DemoFixture;
   onSelect?: (f: DemoFixture) => void;
   counts?: { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number };
   onViewResult?: (f: DemoFixture) => void;
   hasEntered?: boolean;
+  firstContestType?: string;
 }) {
   const kickoff = new Date(fixture.kickoffAt);
   const isLive = fixture.status === 'live';
@@ -874,7 +861,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered }: {
               Build Lineup →
             </button>
             <Link
-              href={`/live/${fixture.fixtureId}`}
+              href={`/live/${fixture.fixtureId}${firstContestType ? `?contestType=${firstContestType}` : ''}`}
               className="btn btn--ghost"
               id={`watch-${fixture.fixtureId}`}
               style={{ whiteSpace: 'nowrap' }}
@@ -885,7 +872,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered }: {
         )}
         {isLive && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <Link href={`/live/${fixture.fixtureId}`} className="btn btn--danger btn--full" id={`live-${fixture.fixtureId}`}>
+            <Link href={`/live/${fixture.fixtureId}${firstContestType ? `?contestType=${firstContestType}` : ''}`} className="btn btn--danger btn--full" id={`live-${fixture.fixtureId}`}>
               🔴 Watch Live
             </Link>
             <button
@@ -902,7 +889,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {hasEntered && (
               <Link
-                href={`/live/${fixture.fixtureId}`}
+                href={`/live/${fixture.fixtureId}${firstContestType ? `?contestType=${firstContestType}` : ''}`}
                 className="btn btn--primary btn--full"
               >
                 🏆 My Results

@@ -427,7 +427,7 @@ export default function TeamsPage() {
             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
           }}
         >
-          {/* Sharp Background Image (Base) */}
+          {/* Background Image without blur */}
           <div style={{
             position: 'absolute',
             inset: 0,
@@ -437,21 +437,6 @@ export default function TeamsPage() {
             backgroundPosition: 'center',
             opacity: 1,
             pointerEvents: 'none',
-          }} />
-
-          {/* Blurred Background Image Overlay (Left to Center only) */}
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 1,
-            backgroundImage: 'url("/team.png")',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            filter: 'blur(3px)',
-            opacity: 1,
-            pointerEvents: 'none',
-            WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 65%)',
-            maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 65%)',
           }} />
 
           {/* Light gradient overlay to ensure text readability without being too dark */}

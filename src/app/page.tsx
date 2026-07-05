@@ -848,23 +848,88 @@ function LiveTicker() {
 }
 function StatsSection() {
   const stats = [
-    { value: '48', label: 'Teams', icon: '🌍' },
-    { value: '104', label: 'Matches', icon: '⚽' },
-    { value: '0.1', label: 'SOL Entry', icon: '💰' },
-    { value: '100%', label: 'On-Chain Prizes', icon: '🔗' },
+    { value: '48', label: 'Teams', sub: 'Qualified Nations' },
+    { value: '104', label: 'Matches', sub: 'Total Tournament Games' },
+    { value: '0.1 SOL', label: 'Entry Fee', sub: 'Low Entry Cost' },
+    { value: '100%', label: 'Prizes', sub: 'Distributed On-Chain' },
   ];
 
   return (
-    <section style={{ padding: '60px 0' }}>
-      <div className="container">
-        <div className="stats-grid">
-          {stats.map((stat) => (
-            <div key={stat.label} className="stat-item card" id={`stat-${stat.label.toLowerCase().replace(' ', '-')}`}>
-              <div style={{ fontSize: '2rem', marginBottom: 8 }}>{stat.icon}</div>
-              <div className="stat-item__value">{stat.value}</div>
-              <div className="stat-item__label">{stat.label}</div>
+    <section style={{ padding: '40px 0 80px' }}>
+      <div style={{
+        position: 'relative',
+        padding: '54px 0',
+        borderTop: '2px solid #ffd700',
+        borderBottom: '2px solid #ffd700',
+        overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      }}>
+        {/* Background Image without blur */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          backgroundImage: 'url("/homepage.png")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: 1,
+          pointerEvents: 'none',
+        }} />
+
+        {/* Content wrapped in container so it aligns nicely with the rest of the page */}
+        <div className="container" style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 32 }}>
+          {/* Header inside the stats box */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <span style={{
+                background: '#ffd700',
+                color: '#000000',
+                padding: '3px 8px',
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                borderRadius: 0
+              }}>
+                Tournament Stats
+              </span>
             </div>
-          ))}
+            <h2 style={{ fontSize: 'clamp(1.4rem, 2.5vw, 2rem)', fontWeight: 800, margin: 0, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+              2026 World Cup by the Numbers
+            </h2>
+          </div>
+
+          {/* Stats grid */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+            gap: 24 
+          }}>
+            {stats.map((stat) => (
+              <div 
+                key={stat.label} 
+                style={{ 
+                  background: 'rgba(10,13,18,0.3)', 
+                  border: '1px solid rgba(255,215,0,0.25)', 
+                  padding: '20px 24px', 
+                  borderRadius: 0,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)'
+                }}
+              >
+                <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#ffd700', fontFamily: 'monospace', lineHeight: 1 }}>
+                  {stat.value}
+                </div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {stat.label}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                  {stat.sub}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

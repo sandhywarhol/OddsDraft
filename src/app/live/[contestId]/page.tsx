@@ -879,6 +879,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // Keep ref current so poll closure always uses latest JWT without needing guestJwt in deps
   useEffect(() => { guestJwtRef.current = guestJwt; }, [guestJwt]);
 
+  // Which contests this wallet has entered for this fixture (from localStorage)
+  const [enteredContests, setEnteredContests] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const list: string[] = JSON.parse(
+        localStorage.getItem(`txodds_entered_contests_${contestId}`) ?? '[]'
+      );
+      setEnteredContests(list);
+    } catch { /* ignore */ }
+  }, [contestId]);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
@@ -887,17 +899,19 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const parsed = JSON.parse(stored);
         userLineupRef.current = parsed;
         setUserLineup(parsed);
-        // Build card-def lookup once so event handlers don't hit localStorage every tick
         const defs: Record<string, SkillCard | null> = {};
         for (const [pid, instId] of Object.entries(parsed.equippedCards ?? {})) {
           defs[pid] = getCardDefByInstanceId(instId as string) ?? null;
         }
         equippedCardDefsRef.current = defs;
+      } else {
+        userLineupRef.current = null;
+        setUserLineup(null);
       }
     } catch (e) {
       console.error('Failed to parse user lineup:', e);
     }
-  }, [contestId]);
+  }, [contestId, contestType]);
 
   useEffect(() => {
     leaderboardRef.current = leaderboard;
@@ -2825,6 +2839,37 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 Subscribe →
               </div>
             </a>
+          )}
+
+          {/* Contest switcher — shown when user entered multiple pools for this fixture */}
+          {enteredContests.length > 1 && (
+            <div style={{
+              display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap',
+              background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '8px 12px',
+            }}>
+              <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)', alignSelf: 'center', marginRight: 4 }}>
+                Viewing:
+              </span>
+              {[
+                { id: 'top3', label: '🏆 Top 3 Classic' },
+                { id: '5050', label: '⚖️ 50/50' },
+                { id: 'wta',  label: '💀 Winner Takes All' },
+              ].filter(ct => enteredContests.includes(ct.id)).map(ct => (
+                <a
+                  key={ct.id}
+                  href={`/live/${contestId}?contestType=${ct.id}`}
+                  style={{
+                    padding: '5px 14px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 700,
+                    textDecoration: 'none', transition: 'all 0.15s',
+                    background: contestType === ct.id ? '#ffd700' : 'rgba(255,255,255,0.1)',
+                    color: contestType === ct.id ? '#000' : 'rgba(255,255,255,0.7)',
+                    border: contestType === ct.id ? '1px solid #ffd700' : '1px solid rgba(255,255,255,0.15)',
+                  }}
+                >
+                  {ct.label}
+                </a>
+              ))}
+            </div>
           )}
 
           {/* Score Bug — suppressHydrationWarning because minute/score are initialised from
