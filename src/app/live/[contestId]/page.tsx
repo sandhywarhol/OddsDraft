@@ -862,6 +862,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const retroComputedRef = useRef(false);
   const showPopupRef = useRef(false);
   const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
+  // Suppress popup on the very first TxLINE poll (historical events, not live arrivals)
+  const isFirstTxLinePollRef = useRef(true);
+  // Mirrors matchCompleted state so poll closures can read it without stale capture
+  const matchCompletedRef = useRef(false);
   // Always holds the latest guestJwt so poll closure doesn't capture a stale null
   const guestJwtRef = useRef<string | null>(null);
   // Track cumulative PlayerStats from TxLINE — compare each poll to find new events
@@ -1098,6 +1102,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   useEffect(() => {
     showPopupRef.current = showPopup;
   }, [showPopup]);
+
+  useEffect(() => {
+    matchCompletedRef.current = matchCompleted;
+  }, [matchCompleted]);
 
   // ── Kickoff countdown + live clock fallback ───────────────────────────────
   // minutesToKickoff: positive = pre-match; null = match in progress or finished
@@ -1743,10 +1751,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           seenSeqsRef.current
         );
 
+        // First poll seeds seenSeqs with historical events — suppress popup so the dialog
+        // only appears for events that arrive AFTER the user opens the page.
+        const suppressDialog = isFirstTxLinePollRef.current || matchCompletedRef.current;
+        isFirstTxLinePollRef.current = false;
+
         if (newEvents.length === 0 && !latestStats) return;
 
         // Add all events to the feed silently
         setEvents(prev => [...newEvents.slice().reverse(), ...prev]);
+
+        if (newEvents.length === 0) return;
 
         // Only pop dialog for the final (most recent) event — same as demo UX
         const trigger = newEvents[newEvents.length - 1];
@@ -1761,8 +1776,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           playSFX('whistle');
         }
 
-        // Show popup if not already open
-        if (!showPopupRef.current) {
+        // Show popup only for genuinely new live events (not history loaded on page open,
+        // and not for completed matches where no new events will arrive)
+        if (!showPopupRef.current && !suppressDialog) {
           setLatestEvent(trigger);
           setDialogStep(1);
           setShowPopup(true);
@@ -1919,6 +1935,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
     let isMounted = true;
     const seenIds = new Set<string>();
+    // First call loads all current events into seenIds — don't pop dialog for those
+    let isFirstEspnPoll = true;
 
     const pollEspn = async () => {
       try {
@@ -1926,6 +1944,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (!res.ok || !isMounted) return;
         const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
         const espnEvents = resultData.events ?? [];
+
+        const suppressDialog = isFirstEspnPoll || matchCompletedRef.current;
+        isFirstEspnPoll = false;
+
         if (espnEvents.length === 0) return;
 
         const newEvs: typeof matchEvents = [];
@@ -1952,8 +1974,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const cardEv = newEvs.find(e => e.type === 'yellow_card' || e.type === 'red_card');
         const triggerEv = goalEv ?? cardEv ?? newEvs[newEvs.length - 1];
 
-        if (goalEv) playSFX('goal');
-        else if (cardEv) playSFX('whistle');
+        if (!suppressDialog) {
+          if (goalEv) playSFX('goal');
+          else if (cardEv) playSFX('whistle');
+        }
         setMinute(triggerEv.minute);
 
         setEvents(prev => {
@@ -1967,8 +1991,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           return fresh.length > 0 ? [...fresh.slice().reverse(), ...prev] : prev;
         });
 
-        // Show commentator dialog (popup) for significant events
-        if (!showPopupRef.current) {
+        // Show commentator dialog only for events that arrive after the user opens the page
+        if (!showPopupRef.current && !suppressDialog) {
           setLatestEvent(triggerEv);
           setDialogStep(1);
           setShowPopup(true);
