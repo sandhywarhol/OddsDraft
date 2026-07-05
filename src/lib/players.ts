@@ -1,6 +1,6 @@
 // World Cup 2026 Player Registry — OddsDraft
-// Seeded player data for demo/lineup building
-// Source: World Cup 2026 squads (USA, Canada, Mexico host nations + major teams)
+// Primary source: Supabase `players` table (synced from football-data.org via /api/admin/sync-players)
+// Fallback: static WORLD_CUP_PLAYERS array below (used when Supabase is unavailable or not yet synced)
 
 export interface Player {
   id: string;

@@ -163,6 +163,30 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const [confidence, setConfidence] = useState<Record<string, number>>({});
   const [playerSearch, setPlayerSearch] = useState('');
   const [activeTeam, setActiveTeam] = useState<'home' | 'away'>('home');
+
+  // Dynamic player pool: fetched from Supabase via /api/players, falls back to static data
+  const [dynamicPlayers, setDynamicPlayers] = useState<import('@/lib/players').Player[]>([]);
+  const [playersLoading, setPlayersLoading] = useState(true);
+
+  // Helper: same interface as static getPlayersByTeam, but prefers Supabase data
+  const getPlayers = (team: string): import('@/lib/players').Player[] => {
+    const pool = dynamicPlayers.length > 0 ? dynamicPlayers : [];
+    const fromDb = pool.filter(p => p.team === team);
+    if (fromDb.length > 0) return fromDb;
+    return getPlayersByTeam(team); // static fallback
+  };
+
+  useEffect(() => {
+    if (!fixture.homeTeam || !fixture.awayTeam) return;
+    fetch(`/api/players?team=${encodeURIComponent(fixture.homeTeam)}&team=${encodeURIComponent(fixture.awayTeam)}`)
+      .then(r => r.json())
+      .then((data: import('@/lib/players').Player[]) => {
+        if (Array.isArray(data) && data.length > 0) setDynamicPlayers(data);
+      })
+      .catch(() => { /* stay on static fallback */ })
+      .finally(() => setPlayersLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixture.homeTeam, fixture.awayTeam]);
   const enteredContestsKey = `txodds_entered_contests_${contestId}`;
   const alreadyEntered = typeof window !== 'undefined'
     ? (JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]') as string[]).includes(contestType)
@@ -209,15 +233,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     }).catch(() => {});
   }, [publicKey, isDemo, connection]);
 
-  // Prefetch player photos for both teams when fixture loads
+  // Prefetch player photos once dynamic players are loaded
   useEffect(() => {
-    if (!fixture) return;
-    const { homeTeam, awayTeam } = fixture;
-    import('@/lib/players').then(({ getPlayersByTeam }) => {
-      const players = [...getPlayersByTeam(homeTeam), ...getPlayersByTeam(awayTeam)];
-      prefetchPlayerPhotos(players.map(p => ({ id: p.id, name: p.name })));
-    });
-  }, [fixture?.homeTeam, fixture?.awayTeam]);
+    if (playersLoading) return;
+    const players = [...getPlayers(fixture.homeTeam), ...getPlayers(fixture.awayTeam)];
+    prefetchPlayerPhotos(players.map(p => ({ id: p.id, name: p.name })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playersLoading]);
 
   const handleAirdrop = async () => {
     if (!publicKey) return;
@@ -410,7 +432,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   useEffect(() => {
     if (tutorialStep === 4) {
       const team = fixture.homeTeam;
-      const allPlayers = getPlayersByTeam(team);
+      const allPlayers = getPlayers(team);
       const gk = allPlayers.find(p => p.position === 'GK');
       const cb = allPlayers.find(p => p.position === 'DEF');
       const mf = allPlayers.find(p => p.position === 'MID');
@@ -439,7 +461,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
   // Get available players for the currently active slot
   const teamName = activeTeam === 'home' ? fixture.homeTeam : fixture.awayTeam;
-  const availablePlayers = getPlayersByTeam(teamName)
+  const availablePlayers = getPlayers(teamName)
     .filter((p) => {
       // Must match slot filter
       if (activeSlot !== null && p.position !== SLOTS[activeSlot].filter) return false;
@@ -1575,7 +1597,16 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             </div>
                           )}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
-                            {availablePlayers.length === 0 && (
+                            {playersLoading && availablePlayers.length === 0 && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                                <svg viewBox="0 0 24 24" style={{ width: 16, height: 16, animation: 'spin 1s linear infinite', flexShrink: 0 }}>
+                                  <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.2)" strokeWidth="3" fill="none"/>
+                                  <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--color-primary)" strokeWidth="3" strokeLinecap="round" fill="none"/>
+                                </svg>
+                                Loading squad data…
+                              </div>
+                            )}
+                            {!playersLoading && availablePlayers.length === 0 && (
                               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: 16 }}>
                                 No players available
                               </p>
