@@ -141,27 +141,36 @@ export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | nu
 }
 
 // GET /api/scores/updates/{fixtureId} — live score updates (SSE stream via proxy)
-// Merges an array of TxLINE events into one unified state object:
-// - Action/GameState from the most authoritative event (game_finalised > others)
-// - Clock from the event with the highest Seconds (actual match time)
-// - Score from the last event that has Participant1/Participant2 score data
-// - PlayerStats from the most recent event that has them
+// Merges an array of TxLINE events into one state object for score/clock/gameState,
+// AND preserves the full event list under _allEvents for the event feed.
 function mergeEvents(events: any[]): Record<string, unknown> {
   if (events.length === 0) return {};
   const merged: Record<string, unknown> = { ...events[events.length - 1] };
 
-  // Prefer game_finalised / halftime_finalised action for definitive state
-  const finalEv = events.find(e => /^(game_finalised|halftime_finalised)$/i.test(e?.Action ?? ''));
-  if (finalEv) { merged.Action = finalEv.Action; merged.GameState = finalEv.GameState; }
+  // Preserve all individual events so the live page can build a complete event feed
+  merged._allEvents = events;
 
-  // Highest Clock.Seconds = most accurate live clock
-  let maxSecs = -1;
-  for (const ev of events) {
-    const s = ev?.Clock?.Seconds;
-    if (typeof s === 'number' && s > maxSecs) { maxSecs = s; merged.Clock = ev.Clock; }
+  // game_finalised / halftime_finalised are definitive — override Action + force clock stopped
+  const finalEv = events.find(e => /^(game_finalised|halftime_finalised)$/i.test(e?.Action ?? ''));
+  if (finalEv) {
+    merged.Action = finalEv.Action;
+    merged.GameState = finalEv.GameState;
+    // Match is over — clock must not be running regardless of individual event state
+    if (/game_finalised/i.test(String(finalEv.Action))) {
+      merged.Clock = { Running: false, Seconds: 0 };
+    }
   }
 
-  // Last event with non-empty Participant1/Participant2 score has the most recent tally
+  // For non-finalised matches: highest Clock.Seconds = most accurate live time
+  if (!finalEv || !/game_finalised/i.test(String(finalEv.Action))) {
+    let maxSecs = -1;
+    for (const ev of events) {
+      const s = ev?.Clock?.Seconds;
+      if (typeof s === 'number' && s > maxSecs) { maxSecs = s; merged.Clock = ev.Clock; }
+    }
+  }
+
+  // Last event with Participant1/Participant2 score = most recent goal tally
   for (let i = events.length - 1; i >= 0; i--) {
     const sc = events[i]?.Score;
     if (sc?.Participant1 || sc?.Participant2) { merged.Score = sc; break; }
@@ -178,7 +187,7 @@ function mergeEvents(events: any[]): Record<string, unknown> {
   return merged;
 }
 
-// GET /api/scores/updates/{fixtureId} — live score updates (SSE stream via proxy)
+// GET /api/scores/updates/{fixtureId} — live score updates (SSE stream, direct browser call)
 export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string, guestJwt?: string | null) {
   try {
     const res = await axios.get(`${TXLINE_API_BASE}/api/scores/updates/${fixtureId}`, {

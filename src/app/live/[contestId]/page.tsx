@@ -1511,13 +1511,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           console.log('[LivePage] TxLINE first poll raw:', JSON.stringify(raw)?.slice(0, 1000));
         }
 
-        const rawUpdates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-        const updates = rawUpdates.map(normalizeUpdate);
+        // raw is a merged state object with _allEvents = array of individual events.
+        // Use merged state for score/clock/gameState; individual events for the feed.
+        const allIndividualEvents: any[] = Array.isArray((raw as any)?._allEvents)
+          ? (raw as any)._allEvents
+          : (Array.isArray(raw) ? raw : [raw]);
+        const updates = allIndividualEvents.map(normalizeUpdate);
         if (updates.length === 0) { setTxlineStatus('waiting'); return; }
         setTxlineStatus('live');
 
-        // Update score from latest snapshot
-        const latest = updates[updates.length - 1];
+        // Authoritative state comes from the merged object, not the last individual event
+        const mergedState = normalizeUpdate(raw);
+        const latest = mergedState;
         if (latest?.score) {
           setScore({ home: latest.score.home ?? 0, away: latest.score.away ?? 0 });
           scoreRef.current = { home: latest.score.home ?? 0, away: latest.score.away ?? 0 };
