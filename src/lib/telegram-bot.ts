@@ -40,14 +40,16 @@ export async function setWebhook(webhookUrl: string) {
   return res.json();
 }
 
-// Convert UTC ISO string to WIB (UTC+7) display string
-export function toWIB(isoUtc: string): string {
-  const d = new Date(new Date(isoUtc).getTime() + 7 * 3600 * 1000);
+// Format a UTC ISO timestamp in the user's local offset.
+// tzOffset = hours from UTC, e.g. 7 = WIB, -4 = EDT, 3 = AST
+export function formatKickoff(isoUtc: string, tzOffset: number): string {
+  const d = new Date(new Date(isoUtc).getTime() + tzOffset * 3600 * 1000);
   const dd = String(d.getUTCDate()).padStart(2, '0');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const hh = String(d.getUTCHours()).padStart(2, '0');
   const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${dd} ${months[d.getUTCMonth()]} ${hh}:${mm} WIB`;
+  const sign = tzOffset >= 0 ? '+' : '';
+  return `${dd} ${months[d.getUTCMonth()]} ${hh}:${mm} (UTC${sign}${tzOffset})`;
 }
 
 export async function getWebhookInfo() {

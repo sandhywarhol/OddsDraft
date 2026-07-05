@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendMessage, answerCallbackQuery, toWIB } from '@/lib/telegram-bot';
+import { sendMessage, answerCallbackQuery, formatKickoff } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 const supabase = createClient(
@@ -12,12 +12,11 @@ const HELP_TEXT = `
 🏆 *OddsDraft Bot*
 
 Commands:
+/matches — live & upcoming matches (tap to subscribe)
+/timezone <offset> — set your timezone, e.g. /timezone +7 or /timezone -4
 /register <wallet> — link your Solana wallet
-/subscribe <matchId> — get live notifications for a match
-/unsubscribe <matchId> — stop notifications
 /points <matchId> — see your fantasy points
 /leaderboard <matchId> — top 5 leaderboard
-/matches — list live & upcoming matches
 /help — show this message
 `.trim();
 
@@ -123,6 +122,29 @@ export async function POST(req: NextRequest) {
         break;
       }
 
+      case '/timezone': {
+        if (!arg) {
+          const { data: u } = await supabase.from('telegram_users').select('tz_offset').eq('chat_id', chatId).single();
+          const current = u?.tz_offset ?? 0;
+          await sendMessage(chatId,
+            `🕐 Your current timezone: *UTC${current >= 0 ? '+' : ''}${current}*\n\nTo change it, send:\n/timezone +7 _(Indonesia/WIB)_\n/timezone -4 _(US East/EDT)_\n/timezone +3 _(Saudi Arabia/AST)_\n/timezone 0 _(UTC)_`,
+            { parse_mode: 'Markdown' }
+          );
+          break;
+        }
+        const parsed = parseInt(arg.replace(/^\+/, ''), 10);
+        if (isNaN(parsed) || parsed < -12 || parsed > 14) {
+          await sendMessage(chatId, '❌ Invalid offset. Use a value between -12 and +14, e.g. /timezone +7');
+          break;
+        }
+        await supabase.from('telegram_users').upsert({ chat_id: chatId, username, first_name: firstName, tz_offset: parsed });
+        await sendMessage(chatId,
+          `✅ Timezone set to *UTC${parsed >= 0 ? '+' : ''}${parsed}*\nMatch times in /matches will now use your timezone.`,
+          { parse_mode: 'Markdown' }
+        );
+        break;
+      }
+
       case '/matches': {
         const now = Date.now();
         const upcoming = WC2026_FIXTURES
@@ -137,16 +159,19 @@ export async function POST(req: NextRequest) {
           break;
         }
 
-        // Fetch which matches this user is already subscribed to
-        const { data: subs } = await supabase
-          .from('telegram_subscriptions')
-          .select('contest_id')
-          .eq('chat_id', chatId);
+        // Fetch user's timezone preference + subscriptions in parallel
+        const [{ data: userRow }, { data: subs }] = await Promise.all([
+          supabase.from('telegram_users').select('tz_offset').eq('chat_id', chatId).single(),
+          supabase.from('telegram_subscriptions').select('contest_id').eq('chat_id', chatId),
+        ]);
+        const tzOffset: number = userRow?.tz_offset ?? 0;
         const subscribedIds = new Set((subs ?? []).map((s: { contest_id: string }) => s.contest_id));
+        const tzLabel = tzOffset >= 0 ? `UTC+${tzOffset}` : `UTC${tzOffset}`;
 
         const lines = upcoming.map(f => {
-          const ko = f.kickoffAt ? toWIB(f.kickoffAt) : 'TBD';
-          const isLive = Date.now() > new Date(f.kickoffAt).getTime() && Date.now() < new Date(f.kickoffAt).getTime() + 2 * 3600 * 1000;
+          const ko = f.kickoffAt ? formatKickoff(f.kickoffAt, tzOffset) : 'TBD';
+          const koMs = new Date(f.kickoffAt).getTime();
+          const isLive = Date.now() > koMs && Date.now() < koMs + 2 * 3600 * 1000;
           const status = isLive ? ' 🔴 LIVE' : '';
           return `${f.homeFlag} *${f.homeTeam} vs ${f.awayTeam}* ${f.awayFlag}${status}\n  🕐 ${ko}`;
         });
@@ -161,7 +186,7 @@ export async function POST(req: NextRequest) {
 
         await sendMessage(
           chatId,
-          `🗓 *Upcoming & Live Matches* (times in WIB)\n\n${lines.join('\n\n')}`,
+          `🗓 *Upcoming & Live Matches* _(${tzLabel} — use /timezone to change)_\n\n${lines.join('\n\n')}`,
           { parse_mode: 'Markdown', reply_markup: { inline_keyboard: inlineKeyboard } }
         );
         break;
