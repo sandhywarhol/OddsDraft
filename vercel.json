@@ -1,0 +1,6 @@
+{
+  "env": {
+    "TELEGRAM_BOT_TOKEN": "@telegram-bot-token",
+    "NEXT_PUBLIC_APP_URL": "https://odds-draft.vercel.app"
+  }
+}

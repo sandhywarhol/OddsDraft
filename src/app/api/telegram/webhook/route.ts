@@ -1,0 +1,181 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { sendMessage } from '@/lib/telegram-bot';
+import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+const HELP_TEXT = `
+🏆 *OddsDraft Bot*
+
+Commands:
+/register <wallet> — link your Solana wallet
+/subscribe <matchId> — get live notifications for a match
+/unsubscribe <matchId> — stop notifications
+/points <matchId> — see your fantasy points
+/leaderboard <matchId> — top 5 leaderboard
+/matches — list live & upcoming matches
+/help — show this message
+`.trim();
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const message = body.message;
+    if (!message?.text) return NextResponse.json({ ok: true });
+
+    const chatId: number = message.chat.id;
+    const username: string = message.from?.username ?? '';
+    const firstName: string = message.from?.first_name ?? '';
+    const text: string = message.text.trim();
+    const parts = text.split(/\s+/);
+    const cmd = parts[0].toLowerCase().split('@')[0]; // strip @botname suffix
+    const arg = parts[1] ?? '';
+
+    switch (cmd) {
+      case '/start':
+      case '/help': {
+        await sendMessage(chatId, HELP_TEXT, { parse_mode: 'Markdown' });
+        break;
+      }
+
+      case '/register': {
+        if (!arg) {
+          await sendMessage(chatId, '❌ Usage: /register <your_wallet_address>');
+          break;
+        }
+        await supabase.from('telegram_users').upsert({
+          chat_id: chatId,
+          wallet_address: arg,
+          username,
+          first_name: firstName,
+        });
+        await sendMessage(
+          chatId,
+          `✅ Registered!\nWallet: \`${arg}\`\n\nNow subscribe to a match:\n/subscribe <matchId>`,
+          { parse_mode: 'Markdown' }
+        );
+        break;
+      }
+
+      case '/subscribe': {
+        if (!arg) {
+          await sendMessage(chatId, '❌ Usage: /subscribe <matchId>\n\nSee /matches for available IDs.');
+          break;
+        }
+        const fixture = WC2026_FIXTURES.find(f => f.fixtureId === arg);
+        await supabase.from('telegram_subscriptions').upsert({ chat_id: chatId, contest_id: arg });
+        const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : arg;
+        await sendMessage(chatId, `✅ Subscribed to *${matchName}*!\nYou'll receive live goal, card, and match event notifications.`, { parse_mode: 'Markdown' });
+        break;
+      }
+
+      case '/unsubscribe': {
+        if (!arg) {
+          await sendMessage(chatId, '❌ Usage: /unsubscribe <matchId>');
+          break;
+        }
+        await supabase.from('telegram_subscriptions').delete().eq('chat_id', chatId).eq('contest_id', arg);
+        await sendMessage(chatId, `🔕 Unsubscribed from match \`${arg}\`.`, { parse_mode: 'Markdown' });
+        break;
+      }
+
+      case '/matches': {
+        const now = Date.now();
+        const upcoming = WC2026_FIXTURES
+          .filter(f => {
+            const ko = f.kickoffAt ? new Date(f.kickoffAt).getTime() : 0;
+            return ko > now - 3 * 3600 * 1000; // within last 3h or future
+          })
+          .slice(0, 10);
+
+        if (upcoming.length === 0) {
+          await sendMessage(chatId, 'No upcoming matches found.');
+          break;
+        }
+
+        const lines = upcoming.map(f => {
+          const ko = f.kickoffAt ? new Date(f.kickoffAt).toUTCString().slice(5, 22) : 'TBD';
+          return `• ${f.homeTeam} vs ${f.awayTeam}\n  ID: \`${f.fixtureId}\` | ${ko}`;
+        });
+
+        await sendMessage(
+          chatId,
+          `🗓 *Upcoming Matches:*\n\n${lines.join('\n\n')}\n\nUse /subscribe <ID> to get live notifications.`,
+          { parse_mode: 'Markdown' }
+        );
+        break;
+      }
+
+      case '/points': {
+        if (!arg) { await sendMessage(chatId, '❌ Usage: /points <matchId>'); break; }
+        const { data: user } = await supabase
+          .from('telegram_users')
+          .select('wallet_address')
+          .eq('chat_id', chatId)
+          .single();
+
+        if (!user?.wallet_address) {
+          await sendMessage(chatId, '❌ Please register first: /register <wallet>');
+          break;
+        }
+        // Points are stored in the leaderboard — fetch from our contest API
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${arg}`);
+          if (res.ok) {
+            const data = await res.json();
+            const entry = data?.find((e: any) =>
+              e.wallet?.toLowerCase() === user.wallet_address.toLowerCase()
+            );
+            if (entry) {
+              await sendMessage(chatId, `📊 *Your Points — Match ${arg}*\n\nPoints: *${entry.points}*\nRank: #${entry.rank}\nPrize: ${entry.prize ?? '–'}`, { parse_mode: 'Markdown' });
+            } else {
+              await sendMessage(chatId, `📊 No lineup found for match \`${arg}\`.\nJoin at odds-draft.vercel.app`, { parse_mode: 'Markdown' });
+            }
+          }
+        } catch {
+          await sendMessage(chatId, '❌ Could not fetch points right now. Try again later.');
+        }
+        break;
+      }
+
+      case '/leaderboard': {
+        if (!arg) { await sendMessage(chatId, '❌ Usage: /leaderboard <matchId>'); break; }
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${arg}`);
+          if (res.ok) {
+            const data: Array<{ wallet: string; points: number; rank: number; prize?: string }> = await res.json();
+            const top5 = data.slice(0, 5);
+            if (top5.length === 0) {
+              await sendMessage(chatId, 'No leaderboard data yet for this match.');
+              break;
+            }
+            const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+            const lines = top5.map((e, i) => {
+              const short = `${e.wallet.slice(0, 4)}...${e.wallet.slice(-4)}`;
+              return `${medals[i]} ${short} — *${e.points} pts* ${e.prize ? `| ${e.prize}` : ''}`;
+            });
+            const fixture = WC2026_FIXTURES.find(f => f.fixtureId === arg);
+            const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : arg;
+            await sendMessage(chatId, `🏆 *Leaderboard — ${matchName}*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+          }
+        } catch {
+          await sendMessage(chatId, '❌ Could not fetch leaderboard right now.');
+        }
+        break;
+      }
+
+      default: {
+        await sendMessage(chatId, `❓ Unknown command. Type /help for available commands.`);
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('[TelegramWebhook] Error:', err);
+    return NextResponse.json({ ok: true }); // always 200 to Telegram
+  }
+}

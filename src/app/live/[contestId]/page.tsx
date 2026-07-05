@@ -1784,6 +1784,28 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setShowPopup(true);
         }
 
+        // Push Telegram notifications for significant new events (fire-and-forget)
+        if (!suppressDialog) {
+          for (const ev of newEvents) {
+            const significant = ['goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save', 'half_time', 'full_time'];
+            if (!significant.includes(ev.type)) continue;
+            fetch('/api/telegram/notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contestId,
+                eventType: ev.type,
+                playerName: ev.player || '',
+                teamName: ev.team || '',
+                minute: ev.minute,
+                homeTeam: fixture.homeTeam,
+                awayTeam: fixture.awayTeam,
+                score: scoreRef.current,
+              }),
+            }).catch(() => {});
+          }
+        }
+
         // Fantasy points + toasts for every event
         for (const ev of newEvents) {
           if (!userLineupRef.current) continue;
