@@ -15,7 +15,7 @@ const HELP_TEXT = `
 /points — your fantasy points _(select match from list)_
 /leaderboard — top 5 ranking _(select match from list)_
 /register <wallet> — link your Solana wallet
-/timezone +7 — set your timezone _(e.g. +7, \\-4, +3)_
+/timezone +7 — set your timezone _(e.g. +7, -4, +3)_
 /help — show this message
 `.trim();
 
@@ -126,12 +126,29 @@ export async function POST(req: NextRequest) {
       case '/help': {
         // Deep link: /start subscribe_18188721 → auto-subscribe to that match
         if (cmd === '/start' && arg?.startsWith('subscribe_')) {
-          const contestId = arg.replace('subscribe_', '');
+          // Format: subscribe_{contestId} or subscribe_{contestId}_{walletAddress}
+          const parts = arg.replace('subscribe_', '').split('_');
+          const contestId = parts[0];
+          const walletAddress = parts.slice(1).join('_') || null; // wallet may contain underscores? unlikely but safe
           const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
-          await supabase.from('telegram_subscriptions').upsert({ chat_id: chatId, contest_id: contestId });
           const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+
+          await supabase.from('telegram_subscriptions').upsert({ chat_id: chatId, contest_id: contestId });
+
+          // Auto-register wallet if passed via deep link
+          if (walletAddress) {
+            await supabase.from('telegram_users').upsert({
+              chat_id: chatId, username, first_name: firstName,
+              wallet_address: walletAddress, tz_offset: 0,
+            });
+          }
+
+          const walletNote = walletAddress
+            ? `\n✅ Wallet linked automatically — use /points to check your score.`
+            : `\n💡 Use /register <wallet> to link your Solana wallet for fantasy points.`;
+
           await sendMessage(chatId,
-            `✅ Subscribed to *${matchName}*!\n\nYou'll receive live notifications for goals, cards, and match events.\n\n${HELP_TEXT}`,
+            `✅ Subscribed to *${matchName}*!\n\nYou'll receive live notifications for goals, cards, and match events.${walletNote}\n\n${HELP_TEXT}`,
             { parse_mode: 'Markdown' }
           );
           break;
