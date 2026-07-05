@@ -213,11 +213,25 @@ export default function ContestsPage() {
               {[
                 { label: 'Entry Fee', value: '0.1 SOL', icon: '💰' },
                 { label: 'Prize Modes', value: 'Top 3, 50/50, WTA', icon: '🏆' },
-                { label: 'Network', value: 'Solana', icon: '🔗' },
+                { label: 'Network', value: 'Solana', icon: 'SOL' },
                 { label: 'Data', value: 'TxODDS Live', icon: '⚡' },
               ].map((item) => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: '1.2rem' }}>{item.icon}</span>
+                  {item.icon === 'SOL' ? (
+                    <svg width="22" height="18" viewBox="0 0 397.7 311.7" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                      <defs>
+                        <linearGradient id="solG1" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#9945FF"/>
+                          <stop offset="100%" stopColor="#14F195"/>
+                        </linearGradient>
+                      </defs>
+                      <path fill="url(#solG1)" d="M64.6 237.9a10.76 10.76 0 017.5-3.1h314.9c4.7 0 7.1 5.7 3.7 9.1l-62.7 62.7a10.76 10.76 0 01-7.5 3.1H4.6c-4.7 0-7.1-5.7-3.7-9.1z"/>
+                      <path fill="url(#solG1)" d="M64.6 3.1A10.76 10.76 0 0172.1 0h314.9c4.7 0 7.1 5.7 3.7 9.1L328 71.8a10.76 10.76 0 01-7.5 3.1H4.6c-4.7 0-7.1-5.7-3.7-9.1z"/>
+                      <path fill="url(#solG1)" d="M333.1 120.1a10.76 10.76 0 00-7.5-3.1H10.7c-4.7 0-7.1 5.7-3.7 9.1l62.7 62.7a10.76 10.76 0 007.5 3.1h314.9c4.7 0 7.1-5.7 3.7-9.1z"/>
+                    </svg>
+                  ) : (
+                    <span style={{ fontSize: '1.2rem' }}>{item.icon}</span>
+                  )}
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       {item.label}

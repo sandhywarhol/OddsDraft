@@ -2752,6 +2752,42 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             ← Back to Lobby
           </Link>
 
+          {/* Telegram notification banner — live matches only, top of page */}
+          {appMode === 'live' && !matchCompleted && (
+            <a
+              href={`https://t.me/OddsDraftBot?start=subscribe_${contestId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                background: 'linear-gradient(135deg, rgba(42,171,238,0.18), rgba(42,171,238,0.08))',
+                border: '1.5px solid rgba(42,171,238,0.5)',
+                borderRadius: 10, padding: '12px 18px', marginBottom: 20,
+                textDecoration: 'none', color: 'inherit',
+              }}
+            >
+              <svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="12" fill="#2AABEE"/>
+                <path d="M17.5 7.9l-2 9.4c-.15.63-.53.79-1.07.49l-2.94-2.16-1.42 1.37c-.16.16-.29.29-.59.29l.21-2.98 5.46-4.93c.24-.21-.05-.33-.37-.12L7.1 13.97 4.27 13.1c-.62-.19-.63-.62.13-.92L16.9 7.45c.52-.18.98.13.6.45z" fill="white"/>
+              </svg>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#2AABEE', letterSpacing: '0.01em' }}>
+                  Get live match notifications on Telegram
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
+                  Goals, red cards & key events sent instantly → <strong style={{ color: 'rgba(255,255,255,0.75)' }}>@OddsDraftBot</strong>
+                </div>
+              </div>
+              <div style={{
+                flexShrink: 0, background: '#2AABEE', color: '#fff',
+                fontWeight: 700, fontSize: '0.78rem', padding: '6px 14px',
+                borderRadius: 6, whiteSpace: 'nowrap',
+              }}>
+                Subscribe →
+              </div>
+            </a>
+          )}
+
           {/* Score Bug — suppressHydrationWarning because minute/score are initialised from
               localStorage (persistedIsLive) which is unavailable on the server */}
           {(() => {
@@ -2826,35 +2862,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             );
           })()}
 
-          {/* Telegram notification banner — live matches only */}
-          {appMode === 'live' && !matchCompleted && (
-            <a
-              href={`https://t.me/OddsDraftBot?start=subscribe_${contestId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: 'rgba(0,136,204,0.10)',
-                border: '1px solid rgba(0,136,204,0.35)',
-                borderRadius: 10, padding: '10px 16px', marginBottom: 16,
-                textDecoration: 'none', color: 'inherit',
-                transition: 'border-color 0.2s',
-              }}
-            >
-              <span style={{ fontSize: '1.3rem' }}>✈️</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#29b6f6' }}>
-                  Get live notifications on Telegram
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>
-                  Goals, cards & key events → @OddsDraftBot
-                </div>
-              </div>
-              <span style={{ fontSize: '0.75rem', color: '#29b6f6', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                Subscribe →
-              </span>
-            </a>
-          )}
 
           {/* Match completed banner — shown when authoritative source confirms match is finished */}
           {matchCompleted && appMode === 'live' && (
