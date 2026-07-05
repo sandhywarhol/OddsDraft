@@ -1144,6 +1144,35 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     return () => clearInterval(t);
   }, [appMode, wcFixture]);
 
+  // ── Time-based matchCompleted fallback ────────────────────────────────────
+  // For past matches where ESPN never returns completed=true and TxLINE never
+  // fires FullTime, detect completion from elapsed time (kickoff + 2.5h).
+  useEffect(() => {
+    if (appMode !== 'live' || !wcFixture?.kickoffAt) return;
+    const kickoffMs = new Date(wcFixture.kickoffAt).getTime();
+    const completedByMs = kickoffMs + 2.5 * 60 * 60 * 1000; // kickoff + 2.5h
+    const check = () => {
+      if (Date.now() >= completedByMs && !matchCompletedRef.current) {
+        setMatchCompleted(true);
+        if (lastGameStateRef.current !== 'FullTime') {
+          lastGameStateRef.current = 'FullTime';
+          setEvents(prev => {
+            if (prev.some(e => e.type === 'full_time')) return prev;
+            return [{ id: `synth-ft-clock-${Date.now()}`, minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' }, ...prev];
+          });
+          setMinute(90);
+        }
+      }
+    };
+    check(); // immediate check on mount — handles already-finished matches
+    if (Date.now() < completedByMs) {
+      const delay = completedByMs - Date.now();
+      const tid = setTimeout(check, delay);
+      return () => clearTimeout(tid);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appMode, wcFixture]);
+
   // ── LIVE MODE: TxLINE API polling ──────────────────────────────────────────
   useEffect(() => {
     if (appMode !== 'live' || !apiToken) return;
