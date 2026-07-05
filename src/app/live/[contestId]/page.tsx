@@ -2023,10 +2023,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       setEvents(prev => {
         if (prev.some(e => e.type === 'kick_off')) return prev;
         const ev = { id: `synth-ko-safenet-${Date.now()}`, minute: 1, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Kick off! The match has started.' };
-        setLatestEvent(ev);
-        setDialogStep(1);
-        setShowPopup(true);
-        playSFX('whistle');
+        // Only pop dialog and play SFX during live play — not for already-completed matches
+        if (!matchCompletedRef.current) {
+          setLatestEvent(ev);
+          setDialogStep(1);
+          setShowPopup(true);
+          playSFX('whistle');
+        }
         return [ev, ...prev];
       });
 
