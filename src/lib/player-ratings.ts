@@ -377,8 +377,7 @@ export const PLAYER_RATINGS: Record<string, number> = {
   'Andrew Jean-Baptiste': 77, 'Mechack Jérôme': 76, 'Florian Ayé': 76,
   'Steeven Saba': 77, 'Frantzdy Pierrot': 75,
   'Duckens Nazon': 78, 'Derrick Etienne': 77, 'Wilde-Donald Guerrier': 76,
-  'Kevin Lafrance': 76,
-  'Frantzdy Pierrot': 76, 'Nazon': 78, 'Kervens Belfort': 76,
+  'Kevin Lafrance': 76, 'Nazon': 78, 'Kervens Belfort': 76,
 
   // ===== CZECH REPUBLIC =====
   'Jiří Staněk': 82, 'Tomáš Vaclík': 81,
@@ -394,7 +393,7 @@ export const PLAYER_RATINGS: Record<string, number> = {
   'Sead Kolašinac': 81, 'Ermin Bičakčić': 79, 'Ognjen Vranješ': 78,
   'Amer Gojak': 80, 'Amar Dedić': 80,
   'Miralem Pjanić': 83, 'Luka Menalo': 78, 'Jasmin Mujezinović': 78,
-  'Ermedin Demirović': 83, 'Haris Seferović': 79,
+  'Ermedin Demirović': 83,
   'Edin Džeko': 84, 'Armin Hodžić': 78, 'Anel Ahmedhodžić': 80,
 
   // ===== QATAR =====
@@ -418,7 +417,7 @@ export const PLAYER_RATINGS: Record<string, number> = {
   'Eloy Room': 79, 'Wuilker Faríñez': 78,
   'Jurien Gaari': 77, 'Rangelo Janga': 77, 'Cuco Martina': 77,
   'Vurnon Anita': 78, 'Leandro Bacuna': 78,
-  'Jeanvion Amatikole': 76, 'Leandro Bacuna': 78, 'Rocky Dwarka': 76,
+  'Jeanvion Amatikole': 76, 'Rocky Dwarka': 76,
   'Giliano Wijnaldum': 79,
   'Kenzo Goudmijn': 78, 'Myron Boadu': 80, 'Curaçao': 76,
 
