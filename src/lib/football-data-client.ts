@@ -2,6 +2,8 @@
 // Free tier: https://www.football-data.org/client/register
 // Set FOOTBALL_DATA_API_KEY in your environment variables
 
+import { PLAYER_RATINGS, EXCLUDED_PLAYERS } from './player-ratings';
+
 const BASE = 'https://api.football-data.org/v4';
 
 const headers = () => ({
@@ -19,7 +21,7 @@ const POS_MAP: Record<string, string> = {
   Midfielder: 'MID',
 };
 
-// Default ratings by position (football-data.org has no ratings)
+// Default ratings by position (overridden by PLAYER_RATINGS for known players)
 const BASE_RATING: Record<string, number> = {
   GK: 78, DEF: 79, MID: 80, ATT: 81,
 };
@@ -121,21 +123,25 @@ export async function fetchWC2026Squads(): Promise<FDSquad[]> {
     const flag = FLAG[teamName] ?? FLAG[team.name] ?? '🏳️';
 
     const usedIds = new Set<string>();
-    const players: FDPlayer[] = (team.squad ?? []).map((p: any) => {
-      const rawPos = p.position ?? '';
-      const pos = POS_MAP[rawPos] ?? 'MID';
-      const id = makeId(teamName, p.name ?? '', p.shirtNumber ?? null, usedIds);
-      usedIds.add(id);
-      return {
-        id,
-        name: p.name ?? '',
-        team: teamName,
-        teamFlag: flag,
-        position: pos,
-        jerseyNumber: p.shirtNumber ?? null,
-        rating: BASE_RATING[pos] ?? 78,
-      };
-    });
+    const players: FDPlayer[] = (team.squad ?? [])
+      .filter((p: any) => !EXCLUDED_PLAYERS.has(p.name ?? ''))
+      .map((p: any) => {
+        const rawPos = p.position ?? '';
+        const pos = POS_MAP[rawPos] ?? 'MID';
+        const name = p.name ?? '';
+        const id = makeId(teamName, name, p.shirtNumber ?? null, usedIds);
+        usedIds.add(id);
+        const rating = PLAYER_RATINGS[name] ?? BASE_RATING[pos] ?? 78;
+        return {
+          id,
+          name,
+          team: teamName,
+          teamFlag: flag,
+          position: pos,
+          jerseyNumber: p.shirtNumber ?? null,
+          rating,
+        };
+      });
 
     return { team: teamName, players };
   });
