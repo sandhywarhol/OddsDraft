@@ -638,7 +638,7 @@ export default function CardsPage() {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '100px 16px 80px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '100px 24px 80px' }}>
 
         {/* Header */}
         <div style={{
@@ -657,7 +657,7 @@ export default function CardsPage() {
             zIndex: 0,
             backgroundImage: 'url("/card skill.png")',
             backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundPosition: 'top',
             opacity: 1,
             pointerEvents: 'none',
           }} />
@@ -669,7 +669,7 @@ export default function CardsPage() {
             zIndex: 1,
             backgroundImage: 'url("/card skill.png")',
             backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundPosition: 'top',
             filter: 'blur(3px)',
             opacity: 1,
             pointerEvents: 'none',

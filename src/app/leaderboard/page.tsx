@@ -121,7 +121,7 @@ export default function LeaderboardPage() {
       <Navbar />
 
       <main style={{ padding: '48px 0 80px' }}>
-        <div className="container" style={{ margin: '0 auto', padding: '0 16px' }}>
+        <div className="container" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
           {/* Header */}
           <div style={{
             marginBottom: 40,

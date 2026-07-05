@@ -445,50 +445,64 @@ export default function TeamsPage() {
             background: 'linear-gradient(90deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 60%)',
           }} />
 
-          <div style={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <img 
-                src="/fifa_world_cup_2026_logo.webp" 
-                alt="World Cup 2026" 
-                style={{ height: '80px', objectFit: 'contain' }} 
-              />
-              <div>
-                <h1 style={{ fontSize: 'clamp(1.6rem, 2.5vw, 2.2rem)', fontWeight: 800, margin: 0, color: '#ffd700' }}>
-                  Qualified Teams
-                </h1>
-                <p style={{ color: 'rgba(255,255,255,0.85)', margin: '4px 0 0 0', fontSize: '0.9rem' }}>
-                  Click a team card below to view their squad lineup and player statistics.
-                </p>
-              </div>
-            </div>
-
-            {/* txLINE Synchronization status bar for Live Mode */}
-            {appMode === 'live' && (
-              <div 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 12, 
-                  background: 'rgba(0,0,0,0.6)', 
-                  padding: '10px 16px', 
-                  borderRadius: 8, 
-                  border: `1px solid ${syncComplete ? 'rgba(0, 232, 122, 0.3)' : 'rgba(0, 229, 255, 0.3)'}`,
-                  boxShadow: `0 0 15px ${syncComplete ? 'rgba(0, 232, 122, 0.05)' : 'rgba(0, 229, 255, 0.05)'}`
-                }}
-              >
-                <span style={{ 
-                  width: 8, 
-                  height: 8, 
-                  borderRadius: '50%', 
-                  background: syncComplete ? '#00e87a' : '#00e5ff',
-                  boxShadow: `0 0 8px ${syncComplete ? '#00e87a' : '#00e5ff'}`,
-                  animation: isSyncing ? 'blink-text 1s infinite' : 'none'
-                }} />
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: syncComplete ? '#00e87a' : '#00e5ff', fontFamily: 'monospace' }}>
-                  {isSyncing ? 'SYNCHRONIZING SQUADS FEED...' : 'SQUAD DATA SYNCHRONIZED'}
+          <div style={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20, width: '100%' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <span style={{
+                  background: '#ffd700',
+                  color: '#000000',
+                  padding: '3px 8px',
+                  fontSize: '0.68rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  borderRadius: 0
+                }}>
+                  Qualified
                 </span>
               </div>
-            )}
+              <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 8, lineHeight: 1.1 }}>
+                Qualified Teams
+              </h1>
+              <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
+                Click a team card below to view their squad lineup and player statistics.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 16 }}>
+              {/* txLINE Synchronization status bar for Live Mode */}
+              {appMode === 'live' && (
+                <div 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 12, 
+                    background: 'rgba(0,0,0,0.6)', 
+                    padding: '10px 16px', 
+                    borderRadius: 8, 
+                    border: `1px solid ${syncComplete ? 'rgba(0, 232, 122, 0.3)' : 'rgba(0, 229, 255, 0.3)'}`,
+                    boxShadow: `0 0 15px ${syncComplete ? 'rgba(0, 232, 122, 0.05)' : 'rgba(0, 229, 255, 0.05)'}`
+                  }}
+                >
+                  <span style={{ 
+                    width: 8, 
+                    height: 8, 
+                    borderRadius: '50%', 
+                    background: syncComplete ? '#00e87a' : '#00e5ff',
+                    boxShadow: `0 0 8px ${syncComplete ? '#00e87a' : '#00e5ff'}`,
+                    animation: isSyncing ? 'blink-text 1s infinite' : 'none'
+                  }} />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: syncComplete ? '#00e87a' : '#00e5ff', fontFamily: 'monospace' }}>
+                    {isSyncing ? 'SYNCHRONIZING SQUADS FEED...' : 'SQUAD DATA SYNCHRONIZED'}
+                  </span>
+                </div>
+              )}
+              <img 
+                src="/fifa_world_cup_2026_logo.webp" 
+                alt="FIFA World Cup 2026 Logo" 
+                style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0 }}
+              />
+            </div>
           </div>
         </div>
 
