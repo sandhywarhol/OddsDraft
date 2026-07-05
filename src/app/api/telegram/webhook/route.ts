@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendMessage } from '@/lib/telegram-bot';
+import { sendMessage, answerCallbackQuery, toWIB } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 const supabase = createClient(
@@ -24,6 +24,34 @@ Commands:
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    // ── Inline button taps ────────────────────────────────────────────────────
+    if (body.callback_query) {
+      const cq = body.callback_query;
+      const chatId: number = cq.message.chat.id;
+      const data: string = cq.data ?? '';
+
+      if (data.startsWith('sub_')) {
+        const contestId = data.replace('sub_', '');
+        const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+        await supabase.from('telegram_subscriptions').upsert({ chat_id: chatId, contest_id: contestId });
+        const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+        await answerCallbackQuery(cq.id, `✅ Subscribed to ${matchName}!`);
+        await sendMessage(chatId, `✅ You'll receive live notifications for *${matchName}*.\n\nUse /matches to manage more subscriptions.`, { parse_mode: 'Markdown' });
+      } else if (data.startsWith('unsub_')) {
+        const contestId = data.replace('unsub_', '');
+        const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+        await supabase.from('telegram_subscriptions').delete().eq('chat_id', chatId).eq('contest_id', contestId);
+        const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+        await answerCallbackQuery(cq.id, `🔕 Unsubscribed from ${matchName}`);
+        await sendMessage(chatId, `🔕 Unsubscribed from *${matchName}*.`, { parse_mode: 'Markdown' });
+      } else {
+        await answerCallbackQuery(cq.id);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Text commands ─────────────────────────────────────────────────────────
     const message = body.message;
     if (!message?.text) return NextResponse.json({ ok: true });
 
@@ -102,22 +130,39 @@ export async function POST(req: NextRequest) {
             const ko = f.kickoffAt ? new Date(f.kickoffAt).getTime() : 0;
             return ko > now - 3 * 3600 * 1000; // within last 3h or future
           })
-          .slice(0, 10);
+          .slice(0, 8);
 
         if (upcoming.length === 0) {
           await sendMessage(chatId, 'No upcoming matches found.');
           break;
         }
 
+        // Fetch which matches this user is already subscribed to
+        const { data: subs } = await supabase
+          .from('telegram_subscriptions')
+          .select('contest_id')
+          .eq('chat_id', chatId);
+        const subscribedIds = new Set((subs ?? []).map((s: { contest_id: string }) => s.contest_id));
+
         const lines = upcoming.map(f => {
-          const ko = f.kickoffAt ? new Date(f.kickoffAt).toUTCString().slice(5, 22) : 'TBD';
-          return `• ${f.homeTeam} vs ${f.awayTeam}\n  ID: \`${f.fixtureId}\` | ${ko}`;
+          const ko = f.kickoffAt ? toWIB(f.kickoffAt) : 'TBD';
+          const isLive = Date.now() > new Date(f.kickoffAt).getTime() && Date.now() < new Date(f.kickoffAt).getTime() + 2 * 3600 * 1000;
+          const status = isLive ? ' 🔴 LIVE' : '';
+          return `${f.homeFlag} *${f.homeTeam} vs ${f.awayTeam}* ${f.awayFlag}${status}\n  🕐 ${ko}`;
+        });
+
+        const inlineKeyboard = upcoming.map(f => {
+          const isSubscribed = subscribedIds.has(f.fixtureId);
+          return [{
+            text: isSubscribed ? `🔕 Unsubscribe — ${f.homeTeam} vs ${f.awayTeam}` : `🔔 Subscribe — ${f.homeTeam} vs ${f.awayTeam}`,
+            callback_data: isSubscribed ? `unsub_${f.fixtureId}` : `sub_${f.fixtureId}`,
+          }];
         });
 
         await sendMessage(
           chatId,
-          `🗓 *Upcoming Matches:*\n\n${lines.join('\n\n')}\n\nUse /subscribe <ID> to get live notifications.`,
-          { parse_mode: 'Markdown' }
+          `🗓 *Upcoming & Live Matches* (times in WIB)\n\n${lines.join('\n\n')}`,
+          { parse_mode: 'Markdown', reply_markup: { inline_keyboard: inlineKeyboard } }
         );
         break;
       }

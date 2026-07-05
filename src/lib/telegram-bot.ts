@@ -1,10 +1,16 @@
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
 const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
+type InlineKeyboardButton = { text: string; callback_data?: string; url?: string };
+type SendOptions = {
+  parse_mode?: 'Markdown' | 'HTML';
+  reply_markup?: { inline_keyboard: InlineKeyboardButton[][] };
+};
+
 export async function sendMessage(
   chatId: number | string,
   text: string,
-  options: { parse_mode?: 'Markdown' | 'HTML' } = {}
+  options: SendOptions = {}
 ) {
   if (!BOT_TOKEN) return null;
   const res = await fetch(`${TG_API}/sendMessage`, {
@@ -15,13 +21,33 @@ export async function sendMessage(
   return res.json();
 }
 
+export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
+  if (!BOT_TOKEN) return null;
+  const res = await fetch(`${TG_API}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text, show_alert: false }),
+  });
+  return res.json();
+}
+
 export async function setWebhook(webhookUrl: string) {
   const res = await fetch(`${TG_API}/setWebhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: webhookUrl, allowed_updates: ['message'] }),
+    body: JSON.stringify({ url: webhookUrl, allowed_updates: ['message', 'callback_query'] }),
   });
   return res.json();
+}
+
+// Convert UTC ISO string to WIB (UTC+7) display string
+export function toWIB(isoUtc: string): string {
+  const d = new Date(new Date(isoUtc).getTime() + 7 * 3600 * 1000);
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${dd} ${months[d.getUTCMonth()]} ${hh}:${mm} WIB`;
 }
 
 export async function getWebhookInfo() {
