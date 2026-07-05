@@ -4,7 +4,8 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES, type Player, type DemoFixture, getPlayersByTeam } from '@/lib/players';
+import { DEMO_FIXTURES, type Player, type DemoFixture } from '@/lib/players';
+import { getStaticPlayersByTeam } from '@/lib/wc2026-players-static';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
 import { calculateFantasyPoints } from '@/lib/fantasy-engine';
@@ -164,16 +165,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const [playerSearch, setPlayerSearch] = useState('');
   const [activeTeam, setActiveTeam] = useState<'home' | 'away'>('home');
 
-  // Dynamic player pool: fetched from Supabase via /api/players, falls back to static data
   const [dynamicPlayers, setDynamicPlayers] = useState<import('@/lib/players').Player[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
 
-  // Helper: same interface as static getPlayersByTeam, but prefers Supabase data
   const getPlayers = (team: string): import('@/lib/players').Player[] => {
-    const pool = dynamicPlayers.length > 0 ? dynamicPlayers : [];
-    const fromDb = pool.filter(p => p.team === team);
-    if (fromDb.length > 0) return fromDb;
-    return getPlayersByTeam(team); // static fallback
+    const fromApi = dynamicPlayers.filter(p => p.team === team);
+    if (fromApi.length > 0) return fromApi;
+    return getStaticPlayersByTeam(team) as import('@/lib/players').Player[];
   };
 
   useEffect(() => {
@@ -183,7 +181,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       .then((data: import('@/lib/players').Player[]) => {
         if (Array.isArray(data) && data.length > 0) setDynamicPlayers(data);
       })
-      .catch(() => { /* stay on static fallback */ })
+      .catch(() => {})
       .finally(() => setPlayersLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixture.homeTeam, fixture.awayTeam]);

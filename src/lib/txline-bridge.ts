@@ -3,7 +3,8 @@
 // into the internal event format used by the live page.
 
 import axios from 'axios';
-import { WORLD_CUP_PLAYERS, getPlayerById } from './players';
+import { getPlayerById } from './players';
+import { WC2026_PLAYERS } from './wc2026-players-static';
 import { mapEventToFantasyType } from './txodds';
 
 const IS_PROD_TXLINE =
@@ -154,7 +155,7 @@ export async function resolveTxLineFixtureId(
 // Strategy: exact match → last-name match → substring match.
 export function matchPlayerName(txlineName: string, teamName: string): string | null {
   const normTx = norm(txlineName);
-  const candidates = WORLD_CUP_PLAYERS.filter(
+  const candidates = WC2026_PLAYERS.filter(
     p => norm(p.team) === norm(teamName) || norm(p.team).includes(norm(teamName)) || norm(teamName).includes(norm(p.team))
   );
 
