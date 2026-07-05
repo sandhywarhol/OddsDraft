@@ -11,12 +11,11 @@ const supabase = createClient(
 const HELP_TEXT = `
 🏆 *OddsDraft Bot*
 
-Commands:
-/matches — live & upcoming matches (tap to subscribe)
-/timezone <offset> — set your timezone, e.g. /timezone +7 or /timezone -4
+/matches — live & upcoming matches _(tap to subscribe)_
+/timezone +7 — set your timezone _(e.g. +7, -4, +3)_
 /register <wallet> — link your Solana wallet
-/points <matchId> — see your fantasy points
-/leaderboard <matchId> — top 5 leaderboard
+/points <matchId> — your fantasy points
+/leaderboard <matchId> — top 5 ranking
 /help — show this message
 `.trim();
 
