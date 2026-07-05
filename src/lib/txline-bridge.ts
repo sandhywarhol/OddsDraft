@@ -297,13 +297,28 @@ export async function buildPlayerIdMap(
 
       // ── TxLINE format: PlayerId may be in Data field of goal/card events ──
       const data = update.Data?.New ?? update.Data ?? {};
+      const participant = data.Participant ?? update.Participant ?? 1;
+      const teamName = participant === 2 ? awayTeam : homeTeam;
+
       const pid = String(data.PlayerId ?? data.Player1Id ?? '');
       const pName = data.PlayerName ?? '';
       if (pid && pName && !map[pid]) {
-        const participant = data.Participant ?? 1;
-        const teamName = participant === 2 ? awayTeam : homeTeam;
         const ourId = matchPlayerName(pName, teamName);
         if (ourId) map[pid] = ourId;
+      }
+
+      // Substitution events use PlayerOut/PlayerIn (with or without "Id" suffix)
+      const outId = String(data.PlayerOutId ?? data.PlayerOut ?? data.Player1Id ?? '');
+      const outName = data.PlayerOutName ?? data.Player1Name ?? '';
+      if (outId && outName && !map[outId]) {
+        const ourId = matchPlayerName(outName, teamName);
+        if (ourId) map[outId] = ourId;
+      }
+      const inId = String(data.PlayerInId ?? data.PlayerIn ?? data.Player2Id ?? '');
+      const inName = data.PlayerInName ?? data.Player2Name ?? '';
+      if (inId && inName && !map[inId]) {
+        const ourId = matchPlayerName(inName, teamName);
+        if (ourId) map[inId] = ourId;
       }
     }
 
@@ -413,14 +428,19 @@ export function convertTxLineUpdates(
       const team = isHome ? homeTeam : awayTeam;
       const teamFlag = isHome ? homeFlag : awayFlag;
 
-      // Fall back to TxLINE name if no mapping found
+      // Events that don't need an individual player name — show empty string not 'Unknown'
+      const isTeamAction = fantasyType === 'corner_kick' || fantasyType === 'var_review'
+        || fantasyType === 'kick_off' || fantasyType === 'half_time' || fantasyType === 'full_time'
+        || fantasyType === 'substitution' || fantasyType === 'sub_appearance';
       const player = raw.playerName
         || (playerInfo?.name ?? '')
-        || 'Unknown';
+        || (isTeamAction ? '' : 'Unknown');
 
-      // Drop nameless 0-point events — they're noise (corner kicks, unattributed subs, etc.)
+      // Drop nameless 0-point events that ARE expected to have a player (e.g. unattributed goals).
+      // Substitutions, corner kicks, and var reviews are valid even without a player name.
       const basePoints = BASE_POINTS[fantasyType] ?? 0;
-      if (player === 'Unknown' && basePoints === 0) continue;
+      const isPlayerExpected = !isTeamAction;
+      if (player === 'Unknown' && basePoints === 0 && isPlayerExpected) continue;
 
       const event: LiveEvent = {
         id: `live-${update.seq ?? Date.now()}-${raw.type}-${raw.minute}-${txPlayerId}`,

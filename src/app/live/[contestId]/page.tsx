@@ -1265,10 +1265,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const minute = Math.max(0, Math.floor(clkSecs / 60));
         const participant = rawData.Participant ?? u.Participant ?? 1;
 
-        // Goals/cards with no PlayerId are intermediate TxLINE events (3-stage delivery)
-        // Only process the final stage that includes the PlayerId
-        if ((action === 'goal' || action === 'yellow_card' || action === 'red_card') && !rawData.PlayerId) return [];
-
         // Detect own goals from GoalType field
         if (action === 'goal' && rawData.GoalType === 'Own') {
           return [{ type: 'own_goal', minute, period: '', participant, playerId: rawData.PlayerId,
@@ -1276,13 +1272,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
 
         // Substitution: two events — sub out (substitution) and sub in (sub_appearance)
+        // TxLINE field names vary: PlayerOutId or PlayerOut (no suffix), same for In
         if (action === 'substitution') {
+          const outId = rawData.PlayerOutId ?? rawData.PlayerOut ?? rawData.Player1Id;
+          const outName = rawData.PlayerOutName ?? rawData.Player1Name ?? undefined;
+          const inId = rawData.PlayerInId ?? rawData.PlayerIn ?? rawData.Player2Id;
+          const inName = rawData.PlayerInName ?? rawData.Player2Name ?? undefined;
           const events: any[] = [];
-          if (rawData.PlayerOutId) events.push({ type: 'substitution', minute, period: '', participant,
-            playerId: rawData.PlayerOutId, playerName: rawData.PlayerOutName,
+          if (outId) events.push({ type: 'substitution', minute, period: '', participant,
+            playerId: outId, playerName: outName,
             assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined });
-          if (rawData.PlayerInId) events.push({ type: 'sub_appearance', minute, period: '', participant,
-            playerId: rawData.PlayerInId, playerName: rawData.PlayerInName,
+          if (inId) events.push({ type: 'sub_appearance', minute, period: '', participant,
+            playerId: inId, playerName: inName,
+            assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined });
+          // If TxLINE sent a sub event but we couldn't find player IDs, emit a generic marker
+          if (events.length === 0) events.push({ type: 'substitution', minute, period: '', participant,
+            playerId: undefined, playerName: undefined,
             assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined });
           return events;
         }
@@ -1293,6 +1298,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             participant: participant === 1 ? 2 : 1, // opposing team's GK
             playerId: undefined, playerName: undefined,
             assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
+        }
+
+        // penalty_outcome: TxLINE sends Data.Outcome = "Missed" for saved/missed penalties
+        // and "Scored" for converted ones. Default mapping is 'goal' so only override for misses.
+        if (action === 'penalty_outcome' || action === 'penaltyoutcome') {
+          const outcome = (rawData.Outcome ?? '').toLowerCase();
+          if (outcome === 'missed' || outcome === 'saved') {
+            return [{ type: 'penalty_miss', minute, period: '', participant,
+              playerId: undefined, playerName: undefined,
+              assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
+          }
         }
 
         // Free kick, corner, kickoff, injury — show in feed but no fantasy points
@@ -1477,9 +1493,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
         // raw is a merged state object with _allEvents = array of individual events.
         // Use merged state for score/clock/gameState; individual events for the feed.
-        const allIndividualEvents: any[] = Array.isArray((raw as any)?._allEvents)
+        // TxLINE delivers each event twice: Confirmed=false (tentative) then Confirmed=true
+        // (confirmed). Filter unconfirmed events to prevent duplicates and avoid showing
+        // VAR-reversed events that haven't been confirmed yet.
+        const allIndividualEvents: any[] = (Array.isArray((raw as any)?._allEvents)
           ? (raw as any)._allEvents
-          : (Array.isArray(raw) ? raw : [raw]);
+          : (Array.isArray(raw) ? raw : [raw]))
+          .filter((e: any) => e.Confirmed !== false);
         const updates = allIndividualEvents.map(normalizeUpdate);
         if (updates.length === 0) { setTxlineStatus('waiting'); return; }
         setTxlineStatus('live');
@@ -3094,7 +3114,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                           <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>
-                            {event.player || (event.type === 'kick_off' ? 'KICK OFF' : event.type === 'half_time' ? 'HALF TIME' : 'FULL TIME')}
+                            {event.player || ({
+                              kick_off:    'KICK OFF',
+                              half_time:   'HALF TIME',
+                              full_time:   'FULL TIME',
+                              extra_time:  'EXTRA TIME',
+                              goal_conceded: 'GOAL CONCEDED',
+                              corner_kick: 'CORNER KICK',
+                              var_review:  'VAR REVIEW',
+                              substitution: 'SUBSTITUTION',
+                              sub_appearance: 'SUBSTITUTION',
+                              penalty_won: 'PENALTY WON',
+                              penalty_missed: 'PENALTY MISSED',
+                              penalty_missed_shootout: 'PENALTY MISSED',
+                              clean_sheet: 'CLEAN SHEET',
+                              goalkeeper_save: 'SAVE',
+                            } as Record<string, string>)[event.type] || event.type.replace(/_/g, ' ').toUpperCase()}
                           </span>
                           <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                             {event.minute}&apos;
