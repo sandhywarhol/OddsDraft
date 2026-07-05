@@ -9,6 +9,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { User, LogOut, ChevronDown, Volume2, VolumeX } from 'lucide-react';
+import SponsorsMarquee from '@/components/SponsorsMarquee';
 
 export default function Navbar() {
   const { appMode, toggleAppMode, apiToken, isSubscribing, subscribeAndActivate, setManualApiToken } = useTxLine();
@@ -114,7 +115,8 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="navbar">
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 'var(--z-sticky)' }}>
+      <nav className="navbar" style={{ position: 'relative', zIndex: 'auto' }}>
       {/* Solid background and shiny effect container */}
       <div className="navbar__bg">
         <div className="navbar__shine" />
@@ -396,7 +398,9 @@ export default function Navbar() {
           </div>
         </div>
       )}
-    </nav>
+      </nav>
+      <SponsorsMarquee />
+    </div>
   );
 }
 

@@ -146,7 +146,7 @@ export default function LeaderboardPage() {
               background: 'rgba(244,207,126,0.07)', border: '1px solid rgba(244,207,126,0.3)',
               borderRadius: 8, display: 'flex', alignItems: 'center', gap: 16,
             }}>
-              <img src={userAvatar} alt="avatar" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--bg-surface)', flexShrink: 0 }} />
+              <img src={userAvatar || undefined} alt="avatar" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--bg-surface)', flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, color: 'var(--color-accent)', marginBottom: 2 }}>
                   {userDisplayName} <span style={{ fontSize: '0.72rem', background: 'rgba(244,207,126,0.2)', border: '1px solid rgba(244,207,126,0.4)', padding: '1px 6px', borderRadius: 4, marginLeft: 6 }}>YOU</span>

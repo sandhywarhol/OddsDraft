@@ -28,11 +28,11 @@ type FilterRarity = 'all' | Rarity;
 
 const POSITION_FILTERS: { label: string; value: FilterPos }[] = [
   { label: 'All', value: 'all' },
-  { label: '🧤 GK',  value: 'Goalkeeper' },
-  { label: '🛡️ DEF', value: 'Defender' },
-  { label: '🎮 MID', value: 'Midfielder' },
-  { label: '⚡ WIN', value: 'Winger' },
-  { label: '⚽ STR', value: 'Striker' },
+  { label: 'GK',  value: 'Goalkeeper' },
+  { label: 'DEF', value: 'Defender' },
+  { label: 'MID', value: 'Midfielder' },
+  { label: 'WIN', value: 'Winger' },
+  { label: 'STR', value: 'Striker' },
 ];
 
 // Card detail overlay — enlarged card + full info + equip shortcut
@@ -607,10 +607,17 @@ export default function CardsPage() {
     .filter(({ card }) => filterRarity === 'all' || card.rarity === filterRarity)
     .sort((a, b) => {
       if (sortKey === 'newest') {
-        return new Date(b.instance.obtainedAt).getTime() - new Date(a.instance.obtainedAt).getTime();
+        const timeDiff = new Date(b.instance.obtainedAt).getTime() - new Date(a.instance.obtainedAt).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        // fallback to rarity
+        const rDiff = RARITY_ORDER.indexOf(b.card.rarity) - RARITY_ORDER.indexOf(a.card.rarity);
+        if (rDiff !== 0) return rDiff;
+        return a.card.name.localeCompare(b.card.name);
       }
       if (sortKey === 'rarity') {
-        return RARITY_ORDER.indexOf(b.card.rarity) - RARITY_ORDER.indexOf(a.card.rarity);
+        const rDiff = RARITY_ORDER.indexOf(b.card.rarity) - RARITY_ORDER.indexOf(a.card.rarity);
+        if (rDiff !== 0) return rDiff;
+        return a.card.name.localeCompare(b.card.name);
       }
       return a.card.name.localeCompare(b.card.name);
     });
@@ -631,44 +638,96 @@ export default function CardsPage() {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px 80px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '100px 16px 80px' }}>
 
-        {/* Hero */}
+        {/* Header */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(255,215,0,0.08) 0%, rgba(156,39,176,0.08) 100%)',
-          border: '1px solid rgba(255,215,0,0.15)',
-          borderRadius: 20,
-          padding: '28px 28px',
-          marginBottom: 28,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-          flexWrap: 'wrap',
+          marginBottom: 40,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20,
+          position: 'relative',
+          padding: '54px 40px',
+          border: '2px solid #ffd700',
+          overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd700', letterSpacing: 3, marginBottom: 6, textTransform: 'uppercase' }}>
-              Fantasy Skill Cards
+          {/* Sharp Background Image (Base) */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage: 'url("/card skill.png")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 1,
+            pointerEvents: 'none',
+          }} />
+
+          {/* Blurred Background Image Overlay (Left to Center only) */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            backgroundImage: 'url("/card skill.png")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(3px)',
+            opacity: 1,
+            pointerEvents: 'none',
+            WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 65%)',
+            maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 65%)',
+          }} />
+
+          {/* Light gradient overlay to ensure text readability without being too dark */}
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+            background: 'linear-gradient(90deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 60%)',
+          }} />
+
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <span style={{
+                background: '#ffd700',
+                color: '#000000',
+                padding: '3px 8px',
+                fontSize: '0.68rem',
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                borderRadius: 0
+              }}>
+                Fantasy Skill Cards
+              </span>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', marginBottom: 4 }}>My Collection</div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
+            <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 8, lineHeight: 1.1 }}>
+              My Collection
+            </h1>
+            <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
               Earn card packs after each match and equip cards to your lineup for bonus points.
-            </div>
+            </p>
           </div>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 900, color: '#ffd700' }}>{allCards.length}</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 1 }}>TOTAL CARDS</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 900, color: '#9c27b0' }}>{rareCount}</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 1 }}>LEGENDARY+</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 900, color: '#2196f3' }}>
-                {Object.keys(RARITY_ORDER).length}
-              </div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 1 }}>RARITIES</div>
+          <img 
+            src="/fifa_world_cup_2026_logo.webp" 
+            alt="FIFA World Cup 2026 Logo" 
+            style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'relative', zIndex: 2 }}
+          />
+        </div>
+
+        {/* Stats Info */}
+        <div className="card card--glass" style={{ marginBottom: 32, padding: 'var(--space-4) var(--space-6)' }}>
+          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+              {[ 
+                { label: 'Total Cards', value: allCards.length },
+                { label: 'Legendary+', value: rareCount },
+                { label: 'Rarities', value: Object.keys(RARITY_ORDER).length }
+              ].map((item) => (
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>{item.label}</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{item.value}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

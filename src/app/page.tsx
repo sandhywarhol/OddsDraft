@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { DEMO_FIXTURES } from '@/lib/players';
+import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function HomePage() {
@@ -159,7 +160,7 @@ export default function HomePage() {
   return (
     <div style={{ minHeight: '100vh', background: 'transparent', overflowX: 'hidden' }}>
       <Navbar />
-      
+
       {/* Content Wrapper for Zoom Motion */}
       <div style={{
         transform: wrapperTransform,
@@ -205,6 +206,7 @@ export default function HomePage() {
           50% { opacity: 1; }
           100% { opacity: 0.4; }
         }
+
       `}</style>
 
       {/* Background Blur Overlay (Below zoomed element) */}
@@ -622,7 +624,19 @@ function HeroSection() {
 }
 
 function LiveTicker() {
-  const { appMode, apiToken, isSubscribing, subscribeAndActivate, liveFixtures } = useTxLine();
+  const { appMode, apiToken, isSubscribing, subscribeAndActivate, liveFixtures, allFixtures } = useTxLine();
+  const [finishedScores, setFinishedScores] = useState<Record<string, { home: number; away: number }>>({});
+
+  useEffect(() => {
+    if (appMode === 'demo') return;
+    fetch('/api/scores/wc2026')
+      .then(r => r.json())
+      .then((data: Record<string, { home: number; away: number }>) => {
+        setFinishedScores(prev => ({ ...prev, ...data }));
+      })
+      .catch(() => {});
+  }, [appMode]);
+
   const { connected } = useWallet();
   const demoLiveMatch = DEMO_FIXTURES.find((f) => f.status === 'live');
   
@@ -646,12 +660,137 @@ function LiveTicker() {
     );
   }
   if (!isDemo && !hasLiveTxLineData) {
+    const finishedFixtures = (allFixtures || []).filter((f: any) => {
+      const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
+      const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
+      const intState = typeof rawState === 'number' ? rawState : null;
+      return [9, 10, 11].includes(intState as number) || ['fulltime', 'finished', 'postgame', 'abandoned'].some(s => strState.includes(s));
+    });
+    
+    // Sort by most recent start time and take 3
+    const recentFinished = finishedFixtures
+      .sort((a, b) => (b.startTime || b.StartTime || 0) - (a.startTime || a.StartTime || 0))
+      .slice(0, 3);
+
+    let displayFinished = recentFinished.length > 0 ? recentFinished.map(f => {
+      const home = f.homeTeam?.name || f.HomeTeamName || 'Home';
+      const away = f.awayTeam?.name || f.AwayTeamName || 'Away';
+      const homeFlag = f.homeFlag || f.homeTeam?.flag || '';
+      const awayFlag = f.awayFlag || f.awayTeam?.flag || '';
+      const scoreHome = f.score?.home ?? f.Score?.Home ?? 0;
+      const scoreAway = f.score?.away ?? f.Score?.Away ?? 0;
+      return { home, away, homeFlag, awayFlag, scoreHome, scoreAway };
+    }) : [];
+
+    if (displayFinished.length === 0) {
+      const scheduleFinished = WC2026_FIXTURES
+        .filter(f => {
+          if (getFixtureStatus(f) !== 'finished') return false;
+          // Only show matches finished within the last 24 hours (1 hari)
+          const kickoffMs = new Date(f.kickoffAt).getTime();
+          const nowMs = Date.now();
+          return nowMs - kickoffMs <= 24 * 60 * 60 * 1000;
+        })
+        .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime())
+        .slice(0, 3);
+
+      displayFinished = scheduleFinished.map(f => {
+        let sh: string | number = '-';
+        let sa: string | number = '-';
+
+        if (finishedScores[f.fixtureId]) {
+          sh = finishedScores[f.fixtureId].home;
+          sa = finishedScores[f.fixtureId].away;
+        } else {
+          const af = (allFixtures || []).find((x: any) => String(x.FixtureId ?? x.fixtureId ?? x.id) === f.fixtureId);
+          if (af) {
+             const h = af.score?.home ?? af.Score?.Home ?? af.HomeScore ?? af.home_score;
+             const a = af.score?.away ?? af.Score?.Away ?? af.AwayScore ?? af.away_score;
+             if (h !== undefined) sh = Number(h);
+             if (a !== undefined) sa = Number(a);
+          }
+        }
+
+        return {
+          home: f.homeTeam,
+          away: f.awayTeam,
+          homeFlag: f.homeFlag,
+          awayFlag: f.awayFlag,
+          scoreHome: sh,
+          scoreAway: sa
+        };
+      });
+    }
+
     return (
-      <div id="live-ticker-section" style={{ background: '#1a1008', borderTop: '1px solid rgba(0, 229, 255, 0.2)', borderBottom: '1px solid rgba(0, 229, 255, 0.2)', padding: '12px 0', color: '#f8fafc' }}>
-        <div className="container">
-          <span style={{ color: '#00e5ff' }}>• LIVE txLINE: No matches currently in progress.</span>
+      <>
+        <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
+          <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
+            • LIVE txLINE: No matches currently in progress.
+          </span>
         </div>
-      </div>
+
+        {displayFinished.length > 0 && (
+          <div id="live-ticker-section" style={{ 
+            background: '#ffffff', 
+            borderTop: '1px solid #e2e8f0', 
+            borderBottom: '1px solid #e2e8f0', 
+            padding: '6px 0', 
+            color: '#0f172a', 
+            overflow: 'hidden',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
+          }}>
+            <div className="container">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <img 
+                    src="/2026_FIFA_World_Cup_emblem.svg" 
+                    alt="World Cup 2026" 
+                    style={{ height: '36px', objectFit: 'contain' }} 
+                  />
+                  <span style={{ 
+                    color: '#0f172a', 
+                    fontSize: '0.85rem', 
+                    fontWeight: 900, 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.15em',
+                  }}>
+                    FIFA WORLD CUP 2026 - RECENTLY FINISHED:
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  {displayFinished.map((match, idx) => (
+                    <div key={idx} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px',
+                      background: 'rgba(0, 0, 0, 0.65)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)'
+                    }}>
+                      <span style={{ fontSize: '1rem', filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }}>{match.homeFlag}</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.home}</span>
+                      <span style={{ 
+                        fontFamily: 'Bebas Neue, cursive', 
+                        fontSize: '1.1rem', 
+                        color: '#00e5ff', 
+                        margin: '0 2px',
+                        textShadow: '0 0 6px rgba(0, 229, 255, 0.6)'
+                      }}>
+                        {match.scoreHome} - {match.scoreAway}
+                      </span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.away}</span>
+                      <span style={{ fontSize: '1rem', filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }}>{match.awayFlag}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -889,14 +1028,6 @@ function FeaturesSection() {
       color: '#e2e8f0',
       tag: 'SYS_AI'
     },
-    {
-      title: 'Telegram Notifications',
-      desc: 'Subscribe to @OddsDraftBot for instant goal alerts, red cards, and match events on Telegram.',
-      icon: '✈️',
-      color: '#29b6f6',
-      tag: 'SYS_TG',
-      link: 'https://t.me/OddsDraftBot'
-    },
   ];
 
   return (
@@ -1036,6 +1167,8 @@ function CTASection() {
     </section>
   );
 }
+
+
 
 function Footer() {
   return (

@@ -69,6 +69,15 @@ export default function SkillCardDisplay({
         transform: selected ? 'scale(1.04)' : 'scale(1)',
       }}
     >
+      <style>{`
+        @keyframes card-sweep-shine {
+          0% { transform: translateX(-150%) skewX(-25deg); opacity: 0; }
+          15% { opacity: 0.6; }
+          30% { transform: translateX(200%) skewX(-25deg); opacity: 0; }
+          100% { transform: translateX(200%) skewX(-25deg); opacity: 0; }
+        }
+      `}</style>
+
       {/* The full card template */}
       <img
         src="/Opened Card.svg"
@@ -233,6 +242,25 @@ export default function SkillCardDisplay({
           SELECTED
         </div>
       )}
+
+      {/* ── SHINE / HOLO EFFECT ── */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+        borderRadius: '5%', // clip to card border roughly
+        zIndex: 5,
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0, bottom: 0,
+          width: '60%',
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)',
+          animation: 'card-sweep-shine 5s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+          animationDelay: `${(card.name.length % 5) * 0.5}s`, // pseudo-random delay based on name length to stagger the shines
+        }} />
+      </div>
 
       {/* ── Action buttons below card ─────────────────────────────────────────── */}
       {(onEquip || onUnequip) && (
