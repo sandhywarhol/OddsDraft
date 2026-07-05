@@ -39,16 +39,42 @@ const TxLineContext = createContext<TxLineContextProps>({
 
 export const useTxLine = () => useContext(TxLineContext);
 
+// Read localStorage safely (SSR guard)
+function lsGet(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key: string, value: string) {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(key, value); } catch { /* ignore */ }
+}
+
 export const TxLineProvider = ({ children }: { children: ReactNode }) => {
-  const [appMode, setAppMode] = useState<'demo' | 'live'>('demo');
+  const ENV_TOKEN = process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
+
+  // Initialise synchronously so render #1 already has the token — no async gap.
+  const [apiToken, setApiToken] = useState<string | null>(() => {
+    const saved = lsGet('txline_api_token') || ENV_TOKEN || null;
+    if (saved) lsSet('txline_api_token', saved);
+    return saved;
+  });
+
+  const [appMode, setAppMode] = useState<'demo' | 'live'>(() => {
+    const saved = lsGet('txline_app_mode');
+    const token = lsGet('txline_api_token') || ENV_TOKEN;
+    // Auto-live when env token is present (production) or user previously activated
+    const isLive = saved === 'live' || !!token;
+    if (isLive) lsSet('txline_app_mode', 'live');
+    return isLive ? 'live' : 'demo';
+  });
+
   const toggleAppMode = () => setAppMode(prev => {
     const next = prev === 'demo' ? 'live' : 'demo';
-    localStorage.setItem('txline_app_mode', next);
+    lsSet('txline_app_mode', next);
     return next;
   });
 
-  const [apiToken, setApiToken] = useState<string | null>(null);
-  const [guestJwt, setGuestJwt] = useState<string | null>(null);
+  const [guestJwt, setGuestJwt] = useState<string | null>(() => lsGet('txline_guest_jwt'));
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [liveFixtures, setLiveFixtures] = useState<any[]>([]);
   const [allFixtures, setAllFixtures] = useState<any[]>([]);
@@ -58,38 +84,14 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   const wallet = useWallet();
   const { connection } = useConnection();
 
-  // On mount, restore tokens from localStorage — fall back to env var if empty.
-  // NEXT_PUBLIC_TXODDS_API_TOKEN is set in Vercel env so users don't need to
-  // subscribe again after deployment.
+  // Persist apiToken changes (e.g. after subscription activation)
   useEffect(() => {
-    const envToken = process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
-    const savedToken = localStorage.getItem('txline_api_token') || envToken || null;
-    if (savedToken) {
-      setApiToken(savedToken);
-      // Persist to localStorage so subsequent reads are instant
-      localStorage.setItem('txline_api_token', savedToken);
-    }
-    const savedJwt = localStorage.getItem('txline_guest_jwt');
-    if (savedJwt) setGuestJwt(savedJwt);
-    // Auto-switch to live mode when a token is available (env token = always live)
-    const savedMode = localStorage.getItem('txline_app_mode');
-    if (savedToken && (savedMode === 'live' || envToken)) {
-      setAppMode('live');
-    }
-  }, []);
-
-  // Persist apiToken
-  useEffect(() => {
-    if (apiToken) {
-      localStorage.setItem('txline_api_token', apiToken);
-    }
+    if (apiToken) lsSet('txline_api_token', apiToken);
   }, [apiToken]);
 
-  // Persist guestJwt
+  // Persist guestJwt changes
   useEffect(() => {
-    if (guestJwt) {
-      localStorage.setItem('txline_guest_jwt', guestJwt);
-    }
+    if (guestJwt) lsSet('txline_guest_jwt', guestJwt);
   }, [guestJwt]);
 
   // Get or refresh the guest JWT (needed alongside X-Api-Token for data requests)
@@ -98,7 +100,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     console.log('[TxLINE] Fetching fresh guest JWT...');
     const jwt = await fetchGuestToken();
     setGuestJwt(jwt);
-    localStorage.setItem('txline_guest_jwt', jwt);
+    lsSet('txline_guest_jwt', jwt);
     return jwt;
   };
 
@@ -195,9 +197,9 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
 
   const setManualApiToken = (token: string) => {
     setApiToken(token);
-    localStorage.setItem('txline_api_token', token);
+    lsSet('txline_api_token', token);
     setAppMode('live');
-    localStorage.setItem('txline_app_mode', 'live');
+    lsSet('txline_app_mode', 'live');
   };
 
   const subscribeAndActivate = async () => {
@@ -205,13 +207,13 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
       setIsSubscribing(true);
 
       // Check if there's a pending txSig from a previous failed activation
-      let txSig = localStorage.getItem('txline_pending_txsig');
+      let txSig = lsGet('txline_pending_txsig');
 
       if (!txSig) {
         console.log('[TxLINE] Subscribing on-chain...');
         txSig = await subscribeToFreeTier(wallet, connection);
         console.log('[TxLINE] Subscription tx:', txSig);
-        localStorage.setItem('txline_pending_txsig', txSig);
+        lsSet('txline_pending_txsig', txSig);
       } else {
         console.log('[TxLINE] Reusing pending txSig from previous attempt:', txSig);
       }
@@ -222,8 +224,8 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
 
       setApiToken(token);
       setGuestJwt(jwt);
-      localStorage.setItem('txline_guest_jwt', jwt);
-      localStorage.removeItem('txline_pending_txsig');
+      lsSet('txline_guest_jwt', jwt);
+      try { localStorage.removeItem('txline_pending_txsig'); } catch { /* ignore */ }
     } catch (error: any) {
       // Log full details so we can diagnose the exact failure in browser DevTools
       console.error('[TxLINE] Failed to subscribe & activate:', error);
