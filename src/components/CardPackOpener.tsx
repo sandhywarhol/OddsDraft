@@ -151,7 +151,7 @@ export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackO
             cursor: phase === 'idle' ? 'pointer' : 'default',
           }} onClick={handleOpenPack}>
             <img
-              src="/Unopened Card.svg"
+              src="/card/Unopened Card.svg"
               alt="Card Pack"
               draggable={false}
               style={{

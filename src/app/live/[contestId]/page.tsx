@@ -2363,15 +2363,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       return () => clearTimeout(timer);
     }, [showPopup, latestEvent, dialogStep]);
 
-    // Card pack reward after full time
+    // Card pack reward after full time — fires on full_time event OR when matchCompleted becomes true
     useEffect(() => {
-      if (latestEvent?.type === 'full_time' && !showPopup) {
+      const shouldShow = (latestEvent?.type === 'full_time' && !showPopup) || matchCompleted;
+      if (shouldShow && appMode === 'live') {
         if (userLineupRef.current && !hasOpenedPack(contestId)) {
           const packTimer = setTimeout(() => setShowCardPack(true), 800);
           return () => clearTimeout(packTimer);
         }
       }
-    }, [latestEvent, showPopup, contestId]);
+    }, [latestEvent, showPopup, contestId, matchCompleted, appMode]);
 
     // Restart the demo match 2 minutes after full time (demo only — live matches don't loop)
     useEffect(() => {
@@ -2677,22 +2678,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       <div className="score-bug__minute" suppressHydrationWarning>
                         {appMode !== 'live'
                           ? (minute < 90 ? `${minute}'` : 'FT')
-                          : txlineStatus === 'live'
-                            ? (minute > 0 ? `${minute}'` : liveClockMinute > 0 ? `~${liveClockMinute}'` : `0'`)
-                            : (isFinished ? 'FT' : '—')}
+                          : matchCompleted
+                            ? 'FT'
+                            : txlineStatus === 'live'
+                              ? (minute > 0 ? `${minute}'` : liveClockMinute > 0 ? `~${liveClockMinute}'` : `0'`)
+                              : (isFinished ? 'FT' : '—')}
                       </div>
                       {appMode === 'live' ? (
                         <span
-                          className={txlineStatus === 'live' ? 'badge badge--live' : undefined}
-                          style={txlineStatus !== 'live' ? {
+                          className={(txlineStatus === 'live' && !matchCompleted) ? 'badge badge--live' : undefined}
+                          style={(txlineStatus !== 'live' || matchCompleted) ? {
                             fontSize: '0.65rem', padding: '2px 8px', borderRadius: 4, fontWeight: 700,
                             background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)',
                             border: '1px solid rgba(255,255,255,0.1)',
                           } : { fontSize: '0.65rem' }}
                         >
-                          {txlineStatus === 'live' ? (
+                          {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? (
                             <><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} /> LIVE</>
-                          ) : matchCompleted ? 'FINAL' : txlineStatus === 'connecting' ? 'CONNECTING…' : minutesToKickoff === null ? 'LIVE' : 'WAITING'}
+                          ) : txlineStatus === 'connecting' ? 'CONNECTING…' : minutesToKickoff === null ? 'LIVE' : 'WAITING'}
                         </span>
                       ) : (
                         <span className="badge badge--live" style={{ fontSize: '0.65rem' }}>
@@ -3022,18 +3025,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   Match Events
                   {appMode === 'live' ? (
                     <span
-                      className={(txlineStatus === 'live' || minutesToKickoff === null) ? 'badge badge--live' : undefined}
+                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
                       style={{
                         fontSize: '0.6rem',
                         padding: '2px 6px',
                         borderRadius: 4,
                         fontWeight: 700,
-                        background: (txlineStatus === 'live' || minutesToKickoff === null) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: (txlineStatus === 'live' || minutesToKickoff === null) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
-                        border: (txlineStatus === 'live' || minutesToKickoff === null) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
+                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
                       }}
                     >
-                      {txlineStatus === 'live' ? 'LIVE' : matchCompleted ? 'FINAL' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
                     </span>
                   ) : (
                     <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
@@ -3114,22 +3117,32 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                           <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>
-                            {event.player || ({
-                              kick_off:    'KICK OFF',
-                              half_time:   'HALF TIME',
-                              full_time:   'FULL TIME',
-                              extra_time:  'EXTRA TIME',
-                              goal_conceded: 'GOAL CONCEDED',
-                              corner_kick: 'CORNER KICK',
-                              var_review:  'VAR REVIEW',
-                              substitution: 'SUBSTITUTION',
-                              sub_appearance: 'SUBSTITUTION',
-                              penalty_won: 'PENALTY WON',
-                              penalty_missed: 'PENALTY MISSED',
-                              penalty_missed_shootout: 'PENALTY MISSED',
-                              clean_sheet: 'CLEAN SHEET',
-                              goalkeeper_save: 'SAVE',
-                            } as Record<string, string>)[event.type] || event.type.replace(/_/g, ' ').toUpperCase()}
+                            {(() => {
+                              const typeLabels: Record<string, string> = {
+                                goal:            'GOAL',
+                                own_goal:        'OWN GOAL',
+                                assist:          'ASSIST',
+                                goalkeeper_save: 'SAVE',
+                                penalty_save:    'PENALTY SAVED',
+                                penalty_won:     'PENALTY WON',
+                                penalty_missed:  'PENALTY MISSED',
+                                penalty_scored:  'PENALTY SCORED',
+                                penalty_missed_shootout: 'PENALTY MISSED',
+                                goal_conceded:   'GOAL CONCEDED',
+                                clean_sheet:     'CLEAN SHEET',
+                                corner_kick:     'CORNER KICK',
+                                var_review:      'VAR REVIEW',
+                                substitution:    'SUBSTITUTION',
+                                sub_appearance:  'SUBSTITUTION',
+                                kick_off:        'KICK OFF',
+                                half_time:       'HALF TIME',
+                                full_time:       'FULL TIME',
+                                extra_time:      'EXTRA TIME',
+                              };
+                              const label = typeLabels[event.type] ?? event.type.replace(/_/g, ' ').toUpperCase();
+                              const hasPlayer = event.player && event.player !== 'Unknown';
+                              return hasPlayer ? event.player : label;
+                            })()}
                           </span>
                           <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                             {event.minute}&apos;
