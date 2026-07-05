@@ -19,6 +19,30 @@ const HELP_TEXT = `
 /help — show this message
 `.trim();
 
+async function fetchAndSendPoints(chatId: number, contestId: string, walletAddress: string) {
+  const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+  const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${contestId}`);
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    const entry = data?.find((e: any) => e.wallet?.toLowerCase() === walletAddress.toLowerCase());
+    if (entry) {
+      await sendMessage(chatId,
+        `📊 *${matchName}*\n\nPoints: *${entry.points}*\nRank: #${entry.rank}${entry.prize ? `\nPrize: ${entry.prize}` : ''}`,
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await sendMessage(chatId,
+        `📊 *${matchName}*\n\nNo lineup found for your wallet.\nJoin the contest at odds\\-draft\\.vercel\\.app`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+  } catch {
+    await sendMessage(chatId, '❌ Could not fetch points right now. Try again later.');
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -36,6 +60,15 @@ export async function POST(req: NextRequest) {
         const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
         await answerCallbackQuery(cq.id, `✅ Subscribed to ${matchName}!`);
         await sendMessage(chatId, `✅ You'll receive live notifications for *${matchName}*.\n\nUse /matches to manage more subscriptions.`, { parse_mode: 'Markdown' });
+      } else if (data.startsWith('pts_')) {
+        const contestId = data.replace('pts_', '');
+        const { data: u } = await supabase.from('telegram_users').select('wallet_address').eq('chat_id', chatId).single();
+        if (!u?.wallet_address) {
+          await answerCallbackQuery(cq.id, '❌ Register your wallet first with /register');
+        } else {
+          await answerCallbackQuery(cq.id);
+          await fetchAndSendPoints(chatId, contestId, u.wallet_address);
+        }
       } else if (data.startsWith('unsub_')) {
         const contestId = data.replace('unsub_', '');
         const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
@@ -192,7 +225,6 @@ export async function POST(req: NextRequest) {
       }
 
       case '/points': {
-        if (!arg) { await sendMessage(chatId, '❌ Usage: /points <matchId>'); break; }
         const { data: user } = await supabase
           .from('telegram_users')
           .select('wallet_address')
@@ -200,26 +232,37 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (!user?.wallet_address) {
-          await sendMessage(chatId, '❌ Please register first: /register <wallet>');
+          await sendMessage(chatId, '❌ Please register your wallet first:\n/register <your_wallet_address>');
           break;
         }
-        // Points are stored in the leaderboard — fetch from our contest API
-        try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${arg}`);
-          if (res.ok) {
-            const data = await res.json();
-            const entry = data?.find((e: any) =>
-              e.wallet?.toLowerCase() === user.wallet_address.toLowerCase()
-            );
-            if (entry) {
-              await sendMessage(chatId, `📊 *Your Points — Match ${arg}*\n\nPoints: *${entry.points}*\nRank: #${entry.rank}\nPrize: ${entry.prize ?? '–'}`, { parse_mode: 'Markdown' });
-            } else {
-              await sendMessage(chatId, `📊 No lineup found for match \`${arg}\`.\nJoin at odds-draft.vercel.app`, { parse_mode: 'Markdown' });
-            }
+
+        // No matchId — show subscribed matches as inline buttons
+        if (!arg) {
+          const { data: userSubs } = await supabase
+            .from('telegram_subscriptions')
+            .select('contest_id')
+            .eq('chat_id', chatId);
+
+          if (!userSubs?.length) {
+            await sendMessage(chatId, '📊 You have no subscribed matches.\n\nUse /matches to subscribe to a match first.');
+            break;
           }
-        } catch {
-          await sendMessage(chatId, '❌ Could not fetch points right now. Try again later.');
+
+          const keyboard = userSubs.map((s: { contest_id: string }) => {
+            const f = WC2026_FIXTURES.find(x => x.fixtureId === s.contest_id);
+            const label = f ? `📊 ${f.homeTeam} vs ${f.awayTeam}` : `📊 Match ${s.contest_id}`;
+            return [{ text: label, callback_data: `pts_${s.contest_id}` }];
+          });
+
+          await sendMessage(chatId, '📊 *Select a match to see your points:*', {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: keyboard },
+          });
+          break;
         }
+
+        // matchId provided directly — fetch points
+        await fetchAndSendPoints(chatId, arg, user.wallet_address);
         break;
       }
 
