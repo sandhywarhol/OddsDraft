@@ -16,7 +16,7 @@ import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEve
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
-import { fetchLiveScoreUpdates, fetchScoreSnapshot, fetchGuestToken } from '@/lib/txline';
+import { mergeEvents } from '@/lib/txline';
 import PlayerAvatar from '@/components/PlayerAvatar';
 
 // Demo live events that replay at interval to simulate a live match
@@ -858,7 +858,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const lastGameStateRef = useRef<string | null>(null);
   const lastClockRunningRef = useRef<boolean | null>(null);
   const lastClockSecondsRef = useRef<number | null>(null);
-  const matchResultLoadedRef = useRef(false);
   const retroComputedRef = useRef(false);
   const showPopupRef = useRef(false);
   const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
@@ -1075,47 +1074,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verificationStatus]);
 
-  // When match is completed and events list only has synthetic/zero-point entries,
-  // proactively load full event history from match result API so the timeline is complete.
-  useEffect(() => {
-    if (!matchCompleted || appMode !== 'live') return;
-    const realEvents = events.filter(e => e.type !== 'full_time' && e.type !== 'half_time' && e.type !== 'kick_off');
-    if (realEvents.length > 0) return; // Already have real events — skip
-    if (matchResultLoadedRef.current) return; // Already attempted
-
-    matchResultLoadedRef.current = true;
-    fetch(`/api/match/result?fixtureId=${contestId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then((resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } | null) => {
-        if (!resultData) return;
-        const espnEvents = resultData.events ?? [];
-        if (espnEvents.length === 0) return;
-
-        const historyEvents: typeof events = espnEvents.map(ev => {
-          const min = parseInt(ev.minute) || 0;
-          const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
-          const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
-          const desc =
-            evType === 'goal'        ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
-            evType === 'own_goal'    ? `Own goal — ${ev.player}` :
-            evType === 'yellow_card' ? `Yellow card — ${ev.player}` :
-            evType === 'red_card'    ? `Red card — ${ev.player}` :
-            `${evType.replace(/_/g, ' ')} — ${ev.player}`;
-          return { id: `hist-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`, minute: min, team: ev.team, teamFlag, player: ev.player, playerId: '', type: evType, points: 0, description: desc };
-        });
-
-        setEvents(prev => {
-          const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
-          const fresh = historyEvents.filter(e => !existingKeys.has(`${e.type}-${e.minute}`));
-          if (fresh.length === 0) return prev;
-          // Insert sorted by minute descending (most recent first)
-          return [...fresh.sort((a, b) => b.minute - a.minute), ...prev];
-        });
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchCompleted]);
-
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -1159,8 +1117,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   }, [appMode, wcFixture]);
 
   // ── Time-based matchCompleted fallback ────────────────────────────────────
-  // For past matches where ESPN never returns completed=true and TxLINE never
-  // fires FullTime, detect completion from elapsed time (kickoff + 2.5h).
+  // For matches where TxLINE never fires FullTime,
+  // detect completion from elapsed time (kickoff + 2.5h).
   useEffect(() => {
     if (appMode !== 'live' || !wcFixture?.kickoffAt) return;
     const kickoffMs = new Date(wcFixture.kickoffAt).getTime();
@@ -1189,7 +1147,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   // ── LIVE MODE: TxLINE API polling ──────────────────────────────────────────
   useEffect(() => {
-    if (appMode !== 'live' || !apiToken) return;
+    if (appMode !== 'live') return;
 
     let isMounted = true;
 
@@ -1388,24 +1346,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
       const resolvedFixtureId = txlineFixtureIdRef.current ?? contestId;
 
-      // Ensure we have a JWT before making authenticated calls
-      if (!guestJwtRef.current) {
-        try {
-          const fresh = await fetchGuestToken();
-          guestJwtRef.current = fresh;
-          localStorage.setItem('txline_guest_jwt', fresh);
-        } catch { /* proceed without JWT */ }
-      }
-
       // Build player ID map (from lineups or snapshot events)
-      const pMap = await buildPlayerIdMap(apiToken!, resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, guestJwtRef.current);
+      const pMap = await buildPlayerIdMap(apiToken ?? '', resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, guestJwtRef.current);
       if (isMounted) {
         playerIdMapRef.current = pMap;
         console.log(`[LivePage] Player map — ${Object.keys(pMap).length} players matched`);
       }
 
       // Load all events that happened before we connected via the score snapshot
-      const snap = await fetchScoreSnapshot(apiToken!, resolvedFixtureId, guestJwtRef.current);
+      // Routed through server-side proxy — avoids browser token/IP issues with TxLINE
+      const snapRes = await fetch(`/api/txline/api/scores/snapshot/${resolvedFixtureId}`);
+      const snapRawArr = snapRes.ok ? await snapRes.json() : null;
+      const snap = Array.isArray(snapRawArr) && snapRawArr.length > 0 ? mergeEvents(snapRawArr) : snapRawArr;
       if (snap && isMounted) {
         const snapRaw = Array.isArray(snap) ? snap : [snap];
         const snapUpdates = snapRaw.map(normalizeUpdate);
@@ -1489,74 +1441,25 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           console.log('[LivePage] Snapshot: no events and no game state (match not started yet)');
         }
 
-        // ── Match event history (display only) ────────────────────────────────
-        // TxLINE is the primary data source for points (handled by convertTxLineUpdates).
-        // /api/match/result supplements the EVENT DISPLAY FEED only —
-        // goals and cards that TxLINE devnet may not send. No points are awarded here.
-        // Triggers whenever kickoff time is in the past (not limited to specific game states
-        // because TxLINE devnet always reports GameState:"scheduled" even during live play).
-        const kickoffMs = fixture.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
-        const matchHasStarted = kickoffMs > 0 && Date.now() >= kickoffMs;
-        if (matchHasStarted && !matchResultLoadedRef.current) {
-          matchResultLoadedRef.current = true;
-          try {
-            const res = await fetch(`/api/match/result?fixtureId=${contestId}`);
-            if (res.ok && isMounted) {
-              const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
-              const espnEvents = resultData.events ?? [];
-              console.log(`[LivePage] Match event history — ${espnEvents.length} events loaded for display`);
-
-              if (espnEvents.length > 0 && isMounted) {
-                const historyEvents: typeof matchEvents = [];
-
-                for (const ev of espnEvents) {
-                  const min = parseInt(ev.minute) || 0;
-                  const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
-                  const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
-                  const evId = `hist-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
-                  const desc =
-                    evType === 'goal'       ? `Goal! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''}` :
-                    evType === 'own_goal'   ? `Own goal — ${ev.player}` :
-                    evType === 'yellow_card'? `Yellow card — ${ev.player}` :
-                    evType === 'red_card'   ? `Red card — ${ev.player}` :
-                    `${evType} — ${ev.player}`;
-                  historyEvents.push({ id: evId, minute: min, team: ev.team, teamFlag, player: ev.player, playerId: '', type: evType, points: 0, description: desc });
-                }
-
-                if (historyEvents.length > 0 && isMounted) {
-                  setEvents(prev => {
-                    // Dedup: skip events whose type+minute already exist in TxLINE feed
-                    // (within ±1 min tolerance to account for clock rounding)
-                    const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
-                    const fresh = historyEvents.filter(e =>
-                      !existingKeys.has(`${e.type}-${e.minute}`) &&
-                      !existingKeys.has(`${e.type}-${e.minute - 1}`) &&
-                      !existingKeys.has(`${e.type}-${e.minute + 1}`)
-                    );
-                    if (fresh.length === 0) return prev;
-                    return [...fresh.slice().reverse(), ...prev];
-                  });
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('[LivePage] Failed to load match event history:', e);
-          }
-        }
       }
     };
 
     const poll = async () => {
       if (!txlineFixtureIdRef.current) return;
       try {
-        // Use ref so closure always reads the latest JWT even after context refreshes it
-        const jwt = guestJwtRef.current;
-        const raw = await fetchLiveScoreUpdates(apiToken!, txlineFixtureIdRef.current, jwt);
+        // Route through server-side Edge proxy — bypasses browser token/IP limitations
+        const updatesRes = await fetch(`/api/txline/api/scores/updates/${txlineFixtureIdRef.current}`);
+        const updatesRawArr = updatesRes.ok ? await updatesRes.json() : null;
+        const raw = Array.isArray(updatesRawArr) && updatesRawArr.length > 0
+          ? mergeEvents(updatesRawArr)
+          : (updatesRawArr ?? null);
         if (!isMounted) return;
 
         // null = 404 (fixture not live on TxLINE yet) — try snapshot fallback
         if (raw === null) {
-          const snap = await fetchScoreSnapshot(apiToken!, txlineFixtureIdRef.current!, guestJwtRef.current);
+          const snapRes = await fetch(`/api/txline/api/scores/snapshot/${txlineFixtureIdRef.current}`);
+          const snapRawArr = snapRes.ok ? await snapRes.json() : null;
+          const snap = Array.isArray(snapRawArr) && snapRawArr.length > 0 ? mergeEvents(snapRawArr) : snapRawArr;
           if (snap && isMounted) {
             const snapUpdates = Array.isArray(snap) ? snap : [snap];
             const latest = snapUpdates[snapUpdates.length - 1];
@@ -1927,15 +1830,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           }
         }
       } catch (err: any) {
-        // 401/403 = expired JWT — fetch a fresh one; next poll interval will retry
-        if (err?.response?.status === 401 || err?.response?.status === 403) {
-          try {
-            const fresh = await fetchGuestToken();
-            guestJwtRef.current = fresh;
-            localStorage.setItem('txline_guest_jwt', fresh);
-            console.log('[LivePage] Refreshed guest JWT after 401');
-          } catch { /* ignore refresh failure */ }
-        }
         if (isMounted) setTxlineStatus('waiting');
         console.error('[LivePage] poll error:', err);
       }
@@ -1949,7 +1843,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       clearInterval(interval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, apiToken]);
+  }, [appMode]);
 
   // ── LIVE MODE: Score from internal scoreboard (server-side) ──────────────────
   // TxLINE devnet returns Score:{} (empty) so we always poll our own /api/scores/wc2026
@@ -2001,86 +1895,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     return () => { isMounted = false; clearInterval(interval); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, contestId]);
-
-  // ── LIVE ESPN EVENT POLLING ───────────────────────────────────────────────
-  // Primary source of goals/cards for the event feed. Runs every 30s while live.
-  useEffect(() => {
-    if (appMode !== 'live' || !wcFixture) return;
-    if (minutesToKickoff !== null) return;
-
-    let isMounted = true;
-    const seenIds = new Set<string>();
-    // First call loads all current events into seenIds — don't pop dialog for those
-    let isFirstEspnPoll = true;
-
-    const pollEspn = async () => {
-      try {
-        const res = await fetch(`/api/match/result?fixtureId=${contestId}&_t=${Date.now()}`);
-        if (!res.ok || !isMounted) return;
-        const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
-        const espnEvents = resultData.events ?? [];
-
-        const suppressDialog = isFirstEspnPoll || matchCompletedRef.current;
-        isFirstEspnPoll = false;
-
-        if (espnEvents.length === 0) return;
-
-        const newEvs: typeof matchEvents = [];
-        for (const ev of espnEvents) {
-          const min = parseInt(ev.minute) || 0;
-          const teamFlag = ev.team === fixture.homeTeam ? fixture.homeFlag : fixture.awayFlag;
-          const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
-          const evId = `esp-${evType}-${min}-${ev.player.replace(/\s+/g, '')}`;
-          if (seenIds.has(evId)) continue;
-          seenIds.add(evId);
-          const desc =
-            evType === 'goal'        ? `⚽ GOAL! ${ev.player}${ev.assist ? ` (assist: ${ev.assist})` : ''} — ${ev.team}!` :
-            evType === 'own_goal'    ? `😬 Own goal — ${ev.player} (${ev.team})` :
-            evType === 'yellow_card' ? `🟨 Yellow card — ${ev.player} (${ev.team})` :
-            evType === 'red_card'    ? `🟥 Red card! ${ev.player} is sent off (${ev.team})` :
-            `${evType.replace(/_/g,' ')} — ${ev.player}`;
-          newEvs.push({ id: evId, minute: min, team: ev.team, teamFlag, player: ev.player, playerId: '', type: evType, points: 0, description: desc });
-        }
-
-        if (newEvs.length === 0 || !isMounted) return;
-
-        // Most significant new event for SFX + dialog (seenIds already deduped newEvs)
-        const goalEv = newEvs.find(e => e.type === 'goal' || e.type === 'own_goal');
-        const cardEv = newEvs.find(e => e.type === 'yellow_card' || e.type === 'red_card');
-        const triggerEv = goalEv ?? cardEv ?? newEvs[newEvs.length - 1];
-
-        if (!suppressDialog) {
-          if (goalEv) playSFX('goal');
-          else if (cardEv) playSFX('whistle');
-        }
-        setMinute(triggerEv.minute);
-
-        setEvents(prev => {
-          const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
-          const fresh = newEvs.filter(e =>
-            !existingKeys.has(`${e.type}-${e.minute}`) &&
-            !existingKeys.has(`${e.type}-${e.minute - 1}`) &&
-            !existingKeys.has(`${e.type}-${e.minute + 1}`) &&
-            !prev.some(p => p.id === e.id)
-          );
-          return fresh.length > 0 ? [...fresh.slice().reverse(), ...prev] : prev;
-        });
-
-        // Show commentator dialog only for events that arrive after the user opens the page
-        if (!showPopupRef.current && !suppressDialog) {
-          setLatestEvent(triggerEv);
-          setDialogStep(1);
-          setShowPopup(true);
-          showPopupRef.current = true;
-        }
-      } catch { /* silent */ }
-    };
-
-    pollEspn();
-    const interval = setInterval(pollEspn, 30000);
-    return () => { isMounted = false; clearInterval(interval); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minutesToKickoff, appMode, contestId, wcFixture]);
 
   // ── KICKOFF SAFETY NET ────────────────────────────────────────────────────
   // If TxLINE never sends a valid game state after kickoff time passes,
@@ -2140,9 +1954,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minutesToKickoff, appMode, wcFixture]);
 
-  // ── DEVNET FALLBACK: Retroactive fantasy point computation ────────────────
-  // When TxLINE sends no events (userPoints = 0 at full time), compute points
-  // from ESPN match result by matching player names to the user's lineup.
+  // ── Retroactive fantasy point computation ─────────────────────────────────
+  // Awards starting_xi, goal_conceded, and clean_sheet at full time
+  // for any players whose points weren't already tracked by TxLINE live events.
   // Only runs once per session when matchCompleted first becomes true.
   useEffect(() => {
     if (!matchCompleted || appMode !== 'live') return;
@@ -2150,31 +1964,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     if (!userLineupRef.current) return;
     retroComputedRef.current = true;
 
-    // Whether TxLINE already supplied some user points (goals, cards etc.)
-    // If yes: skip goal attribution (avoid double-count) but still award
-    // starting_xi and goal_conceded for players TxLINE didn't cover.
-    const txlineHadEvents = (leaderboardRef.current.find(e => e.isUser)?.points ?? 0) > 0;
-
-    const computeRetro = async () => {
+    const computeRetro = () => {
       try {
-        const res = await fetch(`/api/match/result?fixtureId=${contestId}`);
-        if (!res.ok) return;
-        const resultData: { events: Array<{ minute: string; type: string; player: string; assist?: string; team: string }> } = await res.json();
-        const espnEvents = resultData.events ?? [];
-
         const { players, captain, confidence } = userLineupRef.current;
-
-        // Match abbreviated ESPN name (e.g. "J. Rodríguez") to full lineup name
-        const nameMatch = (espnName: string, lineupName: string): boolean => {
-          const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-          const ep = norm(espnName).trim().split(/\s+/);
-          const lp = norm(lineupName).trim().split(/\s+/);
-          if (ep[ep.length - 1] !== lp[lp.length - 1]) return false;
-          if (ep.length >= 2 && ep[0].endsWith('.')) {
-            return ep[0].replace('.', '') === lp[0][0];
-          }
-          return true;
-        };
 
         let totalBonus = 0;
 
@@ -2192,54 +1984,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }] }));
         }
 
-        // Goal / card events from ESPN result — only when TxLINE had no events
-        // (avoids double-counting goals TxLINE already awarded)
-        for (const ev of espnEvents) {
-          if (txlineHadEvents) break;
-          const min = parseInt(ev.minute) || 0;
-          const evType = ev.type === 'penalty' ? 'goal' : ev.type as string;
-
-          // Match player name AND team to prevent Cape Verde scorer matching Argentine player
-          const matched = (players as any[]).find(p => p && nameMatch(ev.player, p.name) && p.team === ev.team);
-          // GKs cannot score regular goals
-          if (matched && evType === 'goal' && matched.position === 'GK') continue;
-          if (matched) {
-            let rawPts = calculateEventPoints(evType, matched.position);
-            const cardDef = equippedCardDefsRef.current[matched.id];
-            if (cardDef) rawPts += getCardBonusForEvent(cardDef, evType);
-            let delta = rawPts;
-            if (captain === matched.id) delta *= 2;
-            const stars = (confidence as Record<string, number>)?.[matched.id] ?? 3;
-            delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-            delta = Math.round(delta * 100) / 100;
-            if (delta !== 0) {
-              totalBonus += delta;
-              setPlayerPoints(prev => ({ ...prev, [matched.id]: Math.round(((prev[matched.id] ?? 0) + delta) * 100) / 100 }));
-              setPlayerHistory(prev => ({ ...prev, [matched.id]: [...(prev[matched.id] ?? []), { label: evType.replace(/_/g, ' '), pts: delta, minute: min }] }));
-            }
-          }
-
-          if (ev.assist) {
-            const assistP = (players as any[]).find(p => p && nameMatch(ev.assist!, p.name));
-            if (assistP) {
-              let rawPts = calculateEventPoints('assist', assistP.position);
-              const cardDef = equippedCardDefsRef.current[assistP.id];
-              if (cardDef) rawPts += getCardBonusForEvent(cardDef, 'assist');
-              let delta = rawPts;
-              if (captain === assistP.id) delta *= 2;
-              const stars = (confidence as Record<string, number>)?.[assistP.id] ?? 3;
-              delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-              delta = Math.round(delta * 100) / 100;
-              if (delta !== 0) {
-                totalBonus += delta;
-                setPlayerPoints(prev => ({ ...prev, [assistP.id]: Math.round(((prev[assistP.id] ?? 0) + delta) * 100) / 100 }));
-                setPlayerHistory(prev => ({ ...prev, [assistP.id]: [...(prev[assistP.id] ?? []), { label: 'assist', pts: delta, minute: min }] }));
-              }
-            }
-          }
-        }
-
-        // Goal conceded penalties — always run even when TxLINE had events,
+        // Goal conceded penalties — skip players who already have a goal_conceded entry
         // but skip players who already have a goal_conceded entry in their history
         // (meaning TxLINE already covered it for them).
         for (const p of (players as any[])) {

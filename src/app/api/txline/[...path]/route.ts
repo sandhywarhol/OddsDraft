@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 // NEXT_PUBLIC_TXLINE_ENV=production overrides the Solana network setting,
 // allowing production TxLINE data on devnet Solana (no real SOL needed).
 const useProdTxLine =
@@ -10,10 +12,38 @@ const TXLINE_ORIGIN = useProdTxLine
   ? 'https://txline.txodds.com'
   : 'https://txline-dev.txodds.com';
 
+// Server-side token — never exposed to browser. Falls back to public token.
+const SERVER_TOKEN =
+  process.env.TXODDS_API_TOKEN ??
+  process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ??
+  '';
+
+// Cache guest JWT in module scope (edge instance lifetime, typically minutes)
+let _cachedJwt: string | null = null;
+let _jwtExpiry = 0;
+
+async function getServerJwt(): Promise<string | null> {
+  if (_cachedJwt && Date.now() < _jwtExpiry) return _cachedJwt;
+  try {
+    const r = await fetch(`${TXLINE_ORIGIN}/auth/guest/start`, { method: 'POST' });
+    if (!r.ok) return null;
+    const d = await r.json();
+    _cachedJwt = d.token ?? null;
+    _jwtExpiry = Date.now() + 25 * 60 * 1000; // 25 min
+    return _cachedJwt;
+  } catch { return null; }
+}
+
 async function proxy(req: NextRequest, path: string[]) {
   const url = `${TXLINE_ORIGIN}/${path.join('/')}`;
-  const auth = req.headers.get('authorization');
-  const apiToken = req.headers.get('x-api-token');
+  const browserAuth = req.headers.get('authorization');
+  const browserToken = req.headers.get('x-api-token');
+
+  // Prefer server token for score data; browser credentials for auth/activation flows
+  const isAuthPath = path[0] === 'auth' || (path[0] === 'api' && path[1] === 'token');
+  const apiToken = isAuthPath ? (browserToken ?? SERVER_TOKEN) : (SERVER_TOKEN || (browserToken ?? ''));
+  const serverJwt = (!isAuthPath && SERVER_TOKEN) ? await getServerJwt() : null;
+  const auth = isAuthPath ? browserAuth : (browserAuth ?? (serverJwt ? `Bearer ${serverJwt}` : null));
 
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (auth) headers['Authorization'] = auth;

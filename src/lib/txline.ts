@@ -143,7 +143,7 @@ export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | nu
 // GET /api/scores/updates/{fixtureId} — live score updates (SSE stream via proxy)
 // Merges an array of TxLINE events into one state object for score/clock/gameState,
 // AND preserves the full event list under _allEvents for the event feed.
-function mergeEvents(events: any[]): Record<string, unknown> {
+export function mergeEvents(events: any[]): Record<string, unknown> {
   if (events.length === 0) return {};
   const merged: Record<string, unknown> = { ...events[events.length - 1] };
 

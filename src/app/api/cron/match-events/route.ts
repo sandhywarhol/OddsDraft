@@ -104,6 +104,25 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      // ── Write all new events to live_match_events (for browser fallback) ──
+      await supabase.from('live_match_events').upsert(
+        newEvents.map((ev, i) => {
+          const rawType = (ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+          const eventType = ACTION_MAP[rawType] ?? rawType;
+          return {
+            fixture_id: fixture.fixtureId,
+            event_id: eventIds[candidateEvents.indexOf(newEvents[i])],
+            minute: parseInt(ev.minute) || 0,
+            event_type: eventType,
+            player_name: ev.player ?? '',
+            team_name: ev.team ?? '',
+            home_score: scoreHome,
+            away_score: scoreAway,
+          };
+        }),
+        { onConflict: 'fixture_id,event_id' }
+      );
+
       let sent = 0;
       for (let i = 0; i < newEvents.length; i++) {
         const ev = newEvents[i];
