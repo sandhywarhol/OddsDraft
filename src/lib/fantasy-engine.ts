@@ -258,6 +258,11 @@ export function getPrizeForRank(rank: number, contestType: string, participantCo
   const pool = calculatePrizePool(participantCount, entryFeeSol);
   if (pool === 0 || rank < 1) return 0;
 
+  // Single participant always gets full refund regardless of contest type
+  if (participantCount === 1) {
+    return rank === 1 ? pool : 0;
+  }
+
   if (contestType === 'wta') {
     return rank === 1 ? pool : 0;
   }
@@ -267,7 +272,14 @@ export function getPrizeForRank(rank: number, contestType: string, participantCo
     return rank <= winnersCount ? Math.round((pool / winnersCount) * 10000) / 10000 : 0;
   }
 
-  // top3 (default)
+  // top3 — with 2 participants: 60/40 split instead of 50/30/20
+  if (participantCount === 2) {
+    if (rank === 1) return Math.round(pool * 0.6 * 10000) / 10000;
+    if (rank === 2) return Math.round(pool * 0.4 * 10000) / 10000;
+    return 0;
+  }
+
+  // top3 standard (3+ participants)
   if (rank === 1) return Math.round(pool * 0.5 * 10000) / 10000;
   if (rank === 2) return Math.round(pool * 0.3 * 10000) / 10000;
   if (rank === 3) return Math.round(pool * 0.2 * 10000) / 10000;

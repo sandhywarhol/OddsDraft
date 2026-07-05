@@ -1042,6 +1042,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     }
   };
 
+  // Auto-trigger verification when match completes — no manual click needed
+  useEffect(() => {
+    if (!matchCompleted || appMode !== 'live' || !publicKey) return;
+    if (verificationStatus !== 'pending') return;
+    // Small delay so events settle before verifying
+    const t = setTimeout(() => handleVerify(), 3000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchCompleted, appMode, publicKey]);
+
   // Trigger prize submission + check as soon as verification succeeds (live mode only)
   useEffect(() => {
     if (verificationStatus !== 'success') return;
