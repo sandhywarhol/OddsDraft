@@ -406,7 +406,26 @@ export default function Navbar() {
 
 function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute: () => void }) {
   const { connected, publicKey, disconnect } = useWallet();
+  const { subscribeAndActivate, isSubscribing } = useTxLine();
   const [isOpen, setIsOpen] = useState(false);
+  const [activateError, setActivateError] = useState('');
+  const [activateSuccess, setActivateSuccess] = useState(false);
+
+  const handleActivate = async () => {
+    setActivateError('');
+    setActivateSuccess(false);
+    setIsOpen(false);
+    try {
+      await subscribeAndActivate();
+      setActivateSuccess(true);
+      setTimeout(() => setActivateSuccess(false), 4000);
+    } catch (e: any) {
+      const msg = e?.message ?? '';
+      const isNoSol = msg.includes('prior credit') || msg.includes('insufficient') || msg.includes('debit an account');
+      setActivateError(isNoSol ? 'Insufficient SOL for gas fees.' : 'Activation failed. Try again.');
+      setTimeout(() => setActivateError(''), 5000);
+    }
+  };
   const [avatar, setAvatar] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -523,7 +542,20 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
             <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{isMuted ? 'Unmute Audio' : 'Mute Audio'}</span>
           </button>
           
-          <button 
+          <button
+            onClick={handleActivate}
+            disabled={isSubscribing}
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', color: '#00e5ff', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: isSubscribing ? 'wait' : 'pointer', width: '100%', textAlign: 'left', transition: 'background 0.2s', opacity: isSubscribing ? 0.6 : 1 }}
+            onMouseOver={(e) => { if (!isSubscribing) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+          >
+            <span style={{ fontSize: '0.9rem' }}>⚡</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+              {isSubscribing ? 'Activating...' : 'Activate Live Data'}
+            </span>
+          </button>
+
+          <button
             onClick={() => { disconnect(); setIsOpen(false); }}
             style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', transition: 'background 0.2s' }}
             onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-elevated)'}
@@ -532,6 +564,18 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
             <LogOut size={16} />
             <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Logout</span>
           </button>
+        </div>
+      )}
+
+      {/* Activate feedback toasts */}
+      {activateSuccess && (
+        <div style={{ position: 'fixed', top: 72, right: 24, background: '#0d1f0d', border: '1px solid #00e87a', borderRadius: 8, padding: '12px 16px', color: '#00e87a', fontSize: '0.82rem', fontWeight: 700, zIndex: 99999, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+          ✅ TxLINE activated! Live events now enabled.
+        </div>
+      )}
+      {activateError && (
+        <div style={{ position: 'fixed', top: 72, right: 24, background: '#1f0d0d', border: '1px solid #ff4d6d', borderRadius: 8, padding: '12px 16px', color: '#ff4d6d', fontSize: '0.82rem', fontWeight: 700, zIndex: 99999, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+          ❌ {activateError}
         </div>
       )}
     </div>
