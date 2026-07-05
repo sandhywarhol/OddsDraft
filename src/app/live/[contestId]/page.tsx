@@ -1173,6 +1173,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       // TxLINE uses GameState; TxODDS legacy uses Status; Clock.Running is ground truth
       // when GameState is "scheduled" but match has actually started (TxLINE devnet quirk)
       gameState: (() => {
+        // game_finalised / halftime_finalised actions are definitive — GameState field unreliable
+        const action = (u.Action ?? u.action ?? '').toLowerCase();
+        if (action === 'game_finalised') return 'FullTime';
+        if (action === 'halftime_finalised') return 'HalfTime';
+
         const raw = u.gameState ?? u.GameState ?? u.Status ?? u.MatchStatus;
         const rawStr = raw != null ? String(raw) : undefined;
         const clockRunning = u.Clock?.Running === true || u.clock?.running === true;
@@ -1190,6 +1195,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       score: (() => {
         if (u.score && typeof u.score.home === 'number') return u.score;
         if (u.Score) {
+          // TxLINE native format: Score.Participant1.Total.Goals / Score.Participant2.Total.Goals
+          // Participant1 is always home (Participant1IsHome: true in fixture data)
+          const p1 = u.Score.Participant1;
+          const p2 = u.Score.Participant2;
+          if (p1 || p2) {
+            const h = p1?.Total?.Goals ?? 0;
+            const a = p2?.Total?.Goals ?? 0;
+            return { home: h, away: a };
+          }
+          // Legacy flat format: Score.Home / Score.Away
           const h = u.Score.Home ?? u.Score.home;
           const a = u.Score.Away ?? u.Score.away;
           if (typeof h === 'number') return { home: h, away: typeof a === 'number' ? a : 0 };

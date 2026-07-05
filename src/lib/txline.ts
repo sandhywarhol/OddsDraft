@@ -141,9 +141,44 @@ export async function fetchLiveFixtures(apiToken: string, guestJwt?: string | nu
 }
 
 // GET /api/scores/updates/{fixtureId} — live score updates (SSE stream via proxy)
-// Proxy converts SSE events to a JSON array. We merge all events into one state
-// object so callers get the most complete snapshot: latest GameState/Clock/Score
-// from the last event, plus PlayerStats from whichever event has them.
+// Merges an array of TxLINE events into one unified state object:
+// - Action/GameState from the most authoritative event (game_finalised > others)
+// - Clock from the event with the highest Seconds (actual match time)
+// - Score from the last event that has Participant1/Participant2 score data
+// - PlayerStats from the most recent event that has them
+function mergeEvents(events: any[]): Record<string, unknown> {
+  if (events.length === 0) return {};
+  const merged: Record<string, unknown> = { ...events[events.length - 1] };
+
+  // Prefer game_finalised / halftime_finalised action for definitive state
+  const finalEv = events.find(e => /^(game_finalised|halftime_finalised)$/i.test(e?.Action ?? ''));
+  if (finalEv) { merged.Action = finalEv.Action; merged.GameState = finalEv.GameState; }
+
+  // Highest Clock.Seconds = most accurate live clock
+  let maxSecs = -1;
+  for (const ev of events) {
+    const s = ev?.Clock?.Seconds;
+    if (typeof s === 'number' && s > maxSecs) { maxSecs = s; merged.Clock = ev.Clock; }
+  }
+
+  // Last event with non-empty Participant1/Participant2 score has the most recent tally
+  for (let i = events.length - 1; i >= 0; i--) {
+    const sc = events[i]?.Score;
+    if (sc?.Participant1 || sc?.Participant2) { merged.Score = sc; break; }
+  }
+
+  // PlayerStats from most recent event that has them
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    if (ev?.PlayerStats || ev?.playerStats) {
+      merged.PlayerStats = ev.PlayerStats ?? ev.playerStats;
+      break;
+    }
+  }
+  return merged;
+}
+
+// GET /api/scores/updates/{fixtureId} — live score updates (SSE stream via proxy)
 export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string, guestJwt?: string | null) {
   try {
     const res = await axios.get(`${TXLINE_API_BASE}/api/scores/updates/${fixtureId}`, {
@@ -151,17 +186,7 @@ export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string,
       timeout: 15000,
     });
     if (!Array.isArray(res.data) || res.data.length === 0) return res.data ?? null;
-    // Start with the last event (most recent GameState/Clock/Score)
-    const merged: Record<string, unknown> = { ...res.data[res.data.length - 1] };
-    // Layer in PlayerStats from the most recent event that has it
-    for (let i = res.data.length - 1; i >= 0; i--) {
-      const ev = res.data[i];
-      if (ev?.PlayerStats || ev?.playerStats) {
-        merged.PlayerStats = ev.PlayerStats ?? ev.playerStats;
-        break;
-      }
-    }
-    return merged;
+    return mergeEvents(res.data);
   } catch (err: any) {
     if (err?.response?.status === 404) return null;
     throw err;
@@ -169,7 +194,6 @@ export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string,
 }
 
 // GET /api/scores/snapshot/{fixtureId} — full score snapshot (use for initial load)
-// Returns a merged object (same shape as fetchLiveScoreUpdates) from all accumulated events.
 export async function fetchScoreSnapshot(apiToken: string, fixtureId: string, guestJwt?: string | null) {
   try {
     const res = await axios.get(`${TXLINE_API_BASE}/api/scores/snapshot/${fixtureId}`, {
@@ -177,15 +201,7 @@ export async function fetchScoreSnapshot(apiToken: string, fixtureId: string, gu
       timeout: 10000,
     });
     if (!Array.isArray(res.data) || res.data.length === 0) return res.data ?? null;
-    const merged: Record<string, unknown> = { ...res.data[res.data.length - 1] };
-    for (let i = res.data.length - 1; i >= 0; i--) {
-      const ev = res.data[i];
-      if (ev?.PlayerStats || ev?.playerStats) {
-        merged.PlayerStats = ev.PlayerStats ?? ev.playerStats;
-        break;
-      }
-    }
-    return merged;
+    return mergeEvents(res.data);
   } catch (err: any) {
     if (err?.response?.status === 404) return null;
     throw err;
