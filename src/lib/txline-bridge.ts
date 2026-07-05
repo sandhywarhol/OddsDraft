@@ -418,6 +418,10 @@ export function convertTxLineUpdates(
         || (playerInfo?.name ?? '')
         || 'Unknown';
 
+      // Drop nameless 0-point events — they're noise (corner kicks, unattributed subs, etc.)
+      const basePoints = BASE_POINTS[fantasyType] ?? 0;
+      if (player === 'Unknown' && basePoints === 0) continue;
+
       const event: LiveEvent = {
         id: `live-${update.seq ?? Date.now()}-${raw.type}-${raw.minute}-${txPlayerId}`,
         minute: raw.minute,

@@ -208,8 +208,6 @@ export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: stri
     penalty_save:   'penalty_save',
     save:           'goalkeeper_save',
     assist:         'assist',
-    corner:         'corner_kick',
-    corner_kick:    'corner_kick',
     var:            'var_review',
     var_review:     'var_review',
     penalty:        'penalty_won',
