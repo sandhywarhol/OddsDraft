@@ -194,6 +194,34 @@ export default function ContestsPage() {
             </div>
           )}
 
+          {/* Telegram Subscribe Banner */}
+          <a
+            href="https://t.me/OddsDraftBot"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, marginBottom: 20, padding: '12px 18px',
+              background: 'linear-gradient(135deg, rgba(42,171,238,0.12) 0%, rgba(42,171,238,0.05) 100%)',
+              border: '1px solid rgba(42,171,238,0.35)', borderRadius: 10,
+              textDecoration: 'none', cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="12" fill="#2AABEE"/>
+                <path d="M17.5 7.9l-2 9.4c-.15.63-.53.79-1.07.49l-2.94-2.16-1.42 1.37c-.16.16-.29.29-.59.29l.21-2.98 5.46-4.93c.24-.21-.05-.33-.37-.12L7.1 13.97 4.27 13.1c-.62-.19-.63-.62.13-.92L16.9 7.45c.52-.18.98.13.6.45z" fill="white"/>
+              </svg>
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#2AABEE' }}>Get Live Match Notifications</div>
+                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.55)' }}>Subscribe on Telegram — goals, cards &amp; score updates</div>
+              </div>
+            </div>
+            <div style={{ padding: '6px 14px', background: '#2AABEE', borderRadius: 8, fontSize: '0.78rem', fontWeight: 700, color: '#fff', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              Subscribe
+            </div>
+          </a>
+
           {/* Header */}
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>

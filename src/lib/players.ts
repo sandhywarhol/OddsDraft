@@ -349,16 +349,19 @@ export const WORLD_CUP_PLAYERS: Player[] = [
   { id: 'alg-belaili', name: 'Youcef Belaïli', team: 'Algeria', teamFlag: '🇩🇿', position: 'ATT', jerseyNumber: 14, rating: 76 },
 
   // ===== NORWAY =====
-  { id: 'nor-nyland', name: 'Ørjan Nyland', team: 'Norway', teamFlag: '🇳🇴', position: 'GK', jerseyNumber: 1, rating: 75 },
-  { id: 'nor-ajer', name: 'Kristoffer Ajer', team: 'Norway', teamFlag: '🇳🇴', position: 'DEF', jerseyNumber: 5, rating: 78 },
-  { id: 'nor-ostigard', name: 'Leo Østigård', team: 'Norway', teamFlag: '🇳🇴', position: 'DEF', jerseyNumber: 4, rating: 76 },
-  { id: 'nor-pedersen', name: 'Morten Thorsby', team: 'Norway', teamFlag: '🇳🇴', position: 'MID', jerseyNumber: 6, rating: 76 },
+  { id: 'nor-nyland', name: 'Ørjan Nyland', team: 'Norway', teamFlag: '🇳🇴', position: 'GK', jerseyNumber: 1, rating: 76 },
+  { id: 'nor-oslo', name: 'Jørgen Strand Larsen', team: 'Norway', teamFlag: '🇳🇴', position: 'GK', jerseyNumber: 12, rating: 72 },
+  { id: 'nor-ajer', name: 'Kristoffer Ajer', team: 'Norway', teamFlag: '🇳🇴', position: 'DEF', jerseyNumber: 5, rating: 79 },
+  { id: 'nor-ostigard', name: 'Leo Østigård', team: 'Norway', teamFlag: '🇳🇴', position: 'DEF', jerseyNumber: 4, rating: 77 },
+  { id: 'nor-pedersen', name: 'Morten Thorsby', team: 'Norway', teamFlag: '🇳🇴', position: 'DEF', jerseyNumber: 3, rating: 76 },
+  { id: 'nor-ryerson', name: 'Julian Ryerson', team: 'Norway', teamFlag: '🇳🇴', position: 'DEF', jerseyNumber: 2, rating: 76 },
   { id: 'nor-odegaard', name: 'Martin Ødegaard', team: 'Norway', teamFlag: '🇳🇴', position: 'MID', jerseyNumber: 10, rating: 88 },
-  { id: 'nor-berge', name: 'Sander Berge', team: 'Norway', teamFlag: '🇳🇴', position: 'MID', jerseyNumber: 8, rating: 79 },
-  { id: 'nor-haaland', name: 'Erling Haaland', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 9, rating: 94 },
-  { id: 'nor-sorloth', name: 'Alexander Sørloth', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 11, rating: 81 },
-  { id: 'nor-king', name: 'Joshua King', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 7, rating: 77 },
-  { id: 'nor-nusa', name: 'Antonio Nusa', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 22, rating: 78 },
+  { id: 'nor-berge', name: 'Sander Berge', team: 'Norway', teamFlag: '🇳🇴', position: 'MID', jerseyNumber: 8, rating: 80 },
+  { id: 'nor-thorsby', name: 'Morten Thorsby', team: 'Norway', teamFlag: '🇳🇴', position: 'MID', jerseyNumber: 6, rating: 75 },
+  { id: 'nor-haaland', name: 'Erling Haaland', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 9, rating: 95 },
+  { id: 'nor-sorloth', name: 'Alexander Sørloth', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 11, rating: 82 },
+  { id: 'nor-nusa', name: 'Antonio Nusa', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 22, rating: 79 },
+  { id: 'nor-elyounoussi', name: 'Mohamed Elyounoussi', team: 'Norway', teamFlag: '🇳🇴', position: 'ATT', jerseyNumber: 7, rating: 77 },
 
   // ===== CANADA =====
   { id: 'can-borjan', name: 'Milan Borjan', team: 'Canada', teamFlag: '🇨🇦', position: 'GK', jerseyNumber: 18, rating: 76 },
