@@ -159,7 +159,10 @@ export async function POST(req: NextRequest) {
 
       case '/register': {
         if (!arg) {
-          await sendMessage(chatId, '❌ Usage: /register <your_wallet_address>');
+          await sendMessage(chatId,
+            `❌ *Wallet address required*\n\nUsage: /register <your_wallet_address>\n\nExample:\n\`/register 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU\`\n\n💡 Tip: Connect your wallet in the app and tap the Telegram Subscribe button on any live match — your wallet links automatically.`,
+            { parse_mode: 'Markdown' }
+          );
           break;
         }
         await supabase.from('telegram_users').upsert({
@@ -170,7 +173,7 @@ export async function POST(req: NextRequest) {
         });
         await sendMessage(
           chatId,
-          `✅ Registered!\nWallet: \`${arg}\`\n\nNow subscribe to a match:\n/subscribe <matchId>`,
+          `✅ *Wallet linked!*\n\nAddress: \`${arg}\`\n\nUse /points to check your fantasy points, or /matches to subscribe to upcoming games.`,
           { parse_mode: 'Markdown' }
         );
         break;
@@ -276,7 +279,16 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (!user?.wallet_address) {
-          await sendMessage(chatId, '❌ Please register your wallet first:\n/register <your_wallet_address>');
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
+          await sendMessage(chatId,
+            `🔗 *Wallet not linked yet*\n\n*Easiest way — auto link:*\n1. Open OddsDraft App\n2. Connect your Solana wallet\n3. On any live match page, tap the blue Telegram Subscribe button — your wallet links automatically\n\n*Or link manually:*\n/register <your_wallet_address>`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [[{ text: '🚀 Open OddsDraft App', url: appUrl }]],
+              },
+            }
+          );
           break;
         }
 
