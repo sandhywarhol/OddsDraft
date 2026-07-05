@@ -58,17 +58,27 @@ function normalizeTeamName(name: string): string {
   return TEAM_NAME_MAP[name] ?? name;
 }
 
-function makeId(team: string, name: string): string {
+function makeId(team: string, name: string, jerseyNumber?: number | null, usedIds?: Set<string>): string {
   const prefix = team.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
-  const slug = name
+  const parts = name
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')  // strip diacritics
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z ]/g, '')
     .trim()
-    .split(' ')
-    .pop() ?? 'player';
-  return `${prefix}-${slug}`;
+    .split(' ');
+  const last = parts.pop() ?? 'player';
+  let id = `${prefix}-${last}`;
+
+  // Resolve collision: append first initial, then jersey number
+  if (usedIds?.has(id)) {
+    const first = parts[0]?.[0] ?? '';
+    id = first ? `${prefix}-${first}${last}` : id;
+  }
+  if (usedIds?.has(id) && jerseyNumber != null) {
+    id = `${prefix}-${last}${jerseyNumber}`;
+  }
+  return id;
 }
 
 export interface FDPlayer {
@@ -105,11 +115,14 @@ export async function fetchWC2026Squads(): Promise<FDSquad[]> {
     const teamName = normalizeTeamName(team.name ?? team.shortName ?? '');
     const flag = FLAG[teamName] ?? FLAG[team.name] ?? '🏳️';
 
+    const usedIds = new Set<string>();
     const players: FDPlayer[] = (team.squad ?? []).map((p: any) => {
       const rawPos = p.position ?? '';
       const pos = POS_MAP[rawPos] ?? 'MID';
+      const id = makeId(teamName, p.name ?? '', p.shirtNumber ?? null, usedIds);
+      usedIds.add(id);
       return {
-        id: makeId(teamName, p.name ?? ''),
+        id,
         name: p.name ?? '',
         team: teamName,
         teamFlag: flag,
