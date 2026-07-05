@@ -2826,6 +2826,36 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             );
           })()}
 
+          {/* Telegram notification banner — live matches only */}
+          {appMode === 'live' && !matchCompleted && (
+            <a
+              href={`https://t.me/OddsDraftBot?start=subscribe_${contestId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'rgba(0,136,204,0.10)',
+                border: '1px solid rgba(0,136,204,0.35)',
+                borderRadius: 10, padding: '10px 16px', marginBottom: 16,
+                textDecoration: 'none', color: 'inherit',
+                transition: 'border-color 0.2s',
+              }}
+            >
+              <span style={{ fontSize: '1.3rem' }}>✈️</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#29b6f6' }}>
+                  Get live notifications on Telegram
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>
+                  Goals, cards & key events → @OddsDraftBot
+                </div>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#29b6f6', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                Subscribe →
+              </span>
+            </a>
+          )}
+
           {/* Match completed banner — shown when authoritative source confirms match is finished */}
           {matchCompleted && appMode === 'live' && (
             <div style={{

@@ -38,6 +38,18 @@ export async function POST(req: NextRequest) {
     switch (cmd) {
       case '/start':
       case '/help': {
+        // Deep link: /start subscribe_18188721 → auto-subscribe to that match
+        if (cmd === '/start' && arg?.startsWith('subscribe_')) {
+          const contestId = arg.replace('subscribe_', '');
+          const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+          await supabase.from('telegram_subscriptions').upsert({ chat_id: chatId, contest_id: contestId });
+          const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+          await sendMessage(chatId,
+            `✅ Subscribed to *${matchName}*!\n\nYou'll receive live notifications for goals, cards, and match events.\n\n${HELP_TEXT}`,
+            { parse_mode: 'Markdown' }
+          );
+          break;
+        }
         await sendMessage(chatId, HELP_TEXT, { parse_mode: 'Markdown' });
         break;
       }

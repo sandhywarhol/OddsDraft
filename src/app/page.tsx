@@ -889,6 +889,14 @@ function FeaturesSection() {
       color: '#e2e8f0',
       tag: 'SYS_AI'
     },
+    {
+      title: 'Telegram Notifications',
+      desc: 'Subscribe to @OddsDraftBot for instant goal alerts, red cards, and match events on Telegram.',
+      icon: '✈️',
+      color: '#29b6f6',
+      tag: 'SYS_TG',
+      link: 'https://t.me/OddsDraftBot'
+    },
   ];
 
   return (
@@ -904,68 +912,76 @@ function FeaturesSection() {
         </div>
 
         <div className="grid-three">
-          {features.map((feature, idx) => (
-            <div 
-              key={feature.title} 
-              id={`feature-${idx}`}
-              className="features-gaming-card"
-              style={{
-                background: 'rgba(15, 23, 42, 0.65)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                borderRadius: '8px',
-                padding: '24px',
-                position: 'relative',
-                overflow: 'hidden',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                cursor: 'pointer'
-              }}
-            >
-              {/* Card Header Border Glow Accent */}
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '60px',
-                height: '3px',
-                background: feature.color,
-                boxShadow: `0 0 8px ${feature.color}`
-              }} />
+          {features.map((feature, idx) => {
+            const card = (
+              <div
+                id={`feature-${idx}`}
+                className="features-gaming-card"
+                style={{
+                  background: 'rgba(15, 23, 42, 0.65)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                  borderRadius: '8px',
+                  padding: '24px',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  cursor: 'pointer'
+                }}
+              >
+                {/* Card Header Border Glow Accent */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '60px',
+                  height: '3px',
+                  background: feature.color,
+                  boxShadow: `0 0 8px ${feature.color}`
+                }} />
 
-              {/* Tag/Index System Indicator */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#64748b', letterSpacing: '0.1em' }}>
-                  {feature.tag} // 0{idx + 1}
-                </span>
-                <span style={{ 
-                  fontSize: '1.25rem',
-                  padding: '6px',
-                  borderRadius: '6px',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.05)'
-                }}>{feature.icon}</span>
+                {/* Tag/Index System Indicator */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#64748b', letterSpacing: '0.1em' }}>
+                    {feature.tag} // 0{idx + 1}
+                  </span>
+                  <span style={{
+                    fontSize: '1.25rem',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)'
+                  }}>{feature.icon}</span>
+                </div>
+
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 10, color: '#f8fafc' }}>
+                  {feature.title}
+                </h3>
+                <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.6, margin: 0 }}>
+                  {feature.desc}
+                </p>
+
+                {/* Hover effect styles */}
+                <style jsx>{`
+                  .features-gaming-card:hover {
+                    transform: translateY(-5px);
+                    border-color: ${feature.color}55 !important;
+                    box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 20px ${feature.color}15 !important;
+                    background: rgba(15, 23, 42, 0.85) !important;
+                  }
+                `}</style>
               </div>
-
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 10, color: '#f8fafc' }}>
-                {feature.title}
-              </h3>
-              <p style={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.6, margin: 0 }}>
-                {feature.desc}
-              </p>
-
-              {/* Hover effect styles */}
-              <style jsx>{`
-                .features-gaming-card:hover {
-                  transform: translateY(-5px);
-                  border-color: ${feature.color}55 !important;
-                  box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 20px ${feature.color}15 !important;
-                  background: rgba(15, 23, 42, 0.85) !important;
-                }
-              `}</style>
-            </div>
-          ))}
+            );
+            return (feature as { link?: string }).link ? (
+              <a key={feature.title} href={(feature as { link?: string }).link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+                {card}
+              </a>
+            ) : (
+              <div key={feature.title}>{card}</div>
+            );
+          })}
         </div>
       </div>
     </section>
