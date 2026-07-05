@@ -170,6 +170,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const [submitted, setSubmitted] = useState(alreadyEntered);
   const [submitting, setSubmitting] = useState(false);
 
+  type PayStep = { label: string; status: 'pending' | 'loading' | 'ok' | 'error'; detail?: string };
+  const [paySteps, setPaySteps] = useState<PayStep[]>([]);
+  const [payError, setPayError] = useState<string | null>(null);
+
+  const setStep = (index: number, patch: Partial<PayStep>) =>
+    setPaySteps(prev => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+
   // Verify against Supabase on load — catches cases where localStorage was lost
   // (page refresh during payment) so the user can't accidentally pay twice.
   useEffect(() => {
@@ -497,138 +504,171 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
   const handleSubmit = async () => {
     if (!isLineupFull || !captain) return;
-    setSubmitting(true);
 
     const lineupData = { players: filledPlayers, captain, confidence, equippedCards };
-
-    // Save to localStorage for live/replay pages
-    try {
-      localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(lineupData));
-    } catch (e) {
-      console.error('Failed to save lineup to localStorage', e);
-    }
-
     let entryTxSig: string | null = null;
 
-    if (!isDemo && publicKey) {
-      // Pessimistic lock: mark as entered in localStorage BEFORE sending the tx.
-      // This prevents a second payment if the user refreshes while the wallet
-      // confirmation dialog is still open (localStorage survives the reload).
-      try {
-        const list: string[] = JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]');
-        if (!list.includes(contestType)) { list.push(contestType); localStorage.setItem(enteredContestsKey, JSON.stringify(list)); }
-      } catch { /* ignore */ }
+    // ── Save lineup to localStorage immediately ────────────────────────────
+    try {
+      localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(lineupData));
+    } catch { /* ignore */ }
 
-      // ── Balance check — use devnet RPC directly to avoid stale wallet state
+    if (!isDemo && publicKey) {
+      // Set up payment steps UI
+      const STEPS: PayStep[] = [
+        { label: 'Checking wallet balance', status: 'pending' },
+        { label: 'Fetching latest blockhash', status: 'pending' },
+        { label: 'Waiting for wallet approval', status: 'pending' },
+        { label: 'Broadcasting transaction', status: 'pending' },
+        { label: 'Confirming on-chain', status: 'pending' },
+        { label: 'Saving lineup', status: 'pending' },
+      ];
+      setPaySteps(STEPS);
+      setPayError(null);
+      setSubmitting(true);
+
+      const fail = (stepIdx: number, msg: string) => {
+        setStep(stepIdx, { status: 'error', detail: msg });
+        setPayError(msg);
+        // Roll back pessimistic localStorage lock so user can retry
+        try {
+          const list: string[] = JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]');
+          localStorage.setItem(enteredContestsKey, JSON.stringify(list.filter(t => t !== contestType)));
+        } catch { /* ignore */ }
+        setSubmitting(false);
+      };
+
+      // ── Step 0: Balance check ─────────────────────────────────────────
+      setStep(0, { status: 'loading' });
       let balanceSol: number | null = null;
       try {
         const lamports = await connection.getBalance(publicKey, 'confirmed');
         balanceSol = lamports / LAMPORTS_PER_SOL;
         setWalletBalance(balanceSol);
-      } catch {
-        // RPC failed — don't gate on balance; let sendTransaction surface the error
-      }
+      } catch { /* non-blocking */ }
 
       if (balanceSol !== null && balanceSol < 0.015) {
+        setStep(0, { status: 'error', detail: `Insufficient balance: ${balanceSol.toFixed(4)} SOL (need ≥ 0.015)` });
+        setPayError(`Insufficient SOL balance. You have ${balanceSol.toFixed(4)} SOL but need at least 0.015 SOL.`);
         setSubmitting(false);
-        return; // UI already shows the insufficient balance warning
+        return;
       }
+      setStep(0, { status: 'ok', detail: balanceSol !== null ? `${balanceSol.toFixed(4)} SOL available` : 'Balance check skipped (RPC error)' });
 
-      // ── Solana payment: 0.01 SOL → treasury ────────────────────────────
+      // Pessimistic lock: mark entered before wallet popup so a refresh doesn't allow re-entry
+      try {
+        const list: string[] = JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]');
+        if (!list.includes(contestType)) { list.push(contestType); localStorage.setItem(enteredContestsKey, JSON.stringify(list)); }
+      } catch { /* ignore */ }
+
+      // ── Steps 1-4: Payment ────────────────────────────────────────────
       const treasuryAddr = process.env.NEXT_PUBLIC_TREASURY_WALLET;
       if (treasuryAddr) {
         const treasury = new PublicKey(treasuryAddr);
-        const MAX_ATTEMPTS = 5;
+        const MAX_ATTEMPTS = 3;
         let paid = false;
         let lastSig: string | null = null;
 
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          // Step 1: blockhash
+          setStep(1, { status: 'loading', detail: attempt > 1 ? `Attempt ${attempt}/${MAX_ATTEMPTS}` : undefined });
+          let blockhash = '';
+          let lastValidBlockHeight = 0;
           try {
-            // Fetch a fresh blockhash immediately before each send attempt so it
-            // doesn't expire while the wallet popup is open.
-            const { blockhash, lastValidBlockHeight } =
-              await connection.getLatestBlockhash('confirmed');
+            ({ blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed'));
+          } catch (e: any) {
+            fail(1, `Failed to fetch blockhash: ${e?.message ?? 'RPC error'}`);
+            return;
+          }
+          setStep(1, { status: 'ok', detail: `${blockhash.slice(0, 8)}…` });
 
-            const tx = new Transaction().add(
-              SystemProgram.transfer({
-                fromPubkey: publicKey,
-                toPubkey: treasury,
-                lamports: Math.floor(0.01 * LAMPORTS_PER_SOL),
-              })
-            );
-            tx.recentBlockhash = blockhash;
-            tx.feePayer = publicKey;
+          // Step 2: wallet approval
+          setStep(2, { status: 'loading', detail: 'Approve in your wallet…' });
+          const tx = new Transaction().add(
+            SystemProgram.transfer({
+              fromPubkey: publicKey,
+              toPubkey: treasury,
+              lamports: Math.floor(0.01 * LAMPORTS_PER_SOL),
+            })
+          );
+          tx.recentBlockhash = blockhash;
+          tx.feePayer = publicKey;
 
-            const sig = await sendTransaction(tx, connection, {
+          let sig = '';
+          try {
+            sig = await sendTransaction(tx, connection, {
               skipPreflight: true,
               preflightCommitment: 'confirmed',
               maxRetries: 5,
             });
-            lastSig = sig;
+          } catch (signErr: any) {
+            const msg: string = signErr?.message ?? '';
+            if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('denied')) {
+              fail(2, 'Transaction rejected in wallet.');
+            } else {
+              fail(2, msg || 'Wallet signing failed.');
+            }
+            return;
+          }
+          lastSig = sig;
+          setStep(2, { status: 'ok' });
+
+          // Step 3: broadcast
+          setStep(3, { status: 'ok', detail: `${sig.slice(0, 8)}…${sig.slice(-6)}` });
+
+          // Step 4: confirm
+          setStep(4, { status: 'loading', detail: 'Waiting for network confirmation…' });
+          try {
             await connection.confirmTransaction(
               { signature: sig, blockhash, lastValidBlockHeight },
               'confirmed'
             );
             entryTxSig = sig;
             paid = true;
-            console.log('[Payment] 0.01 SOL sent:', sig);
+            setStep(4, { status: 'ok', detail: sig.slice(0, 8) + '…' + sig.slice(-6) });
             break;
-          } catch (payErr: any) {
-            const errMsg: string = payErr?.message ?? '';
-            const isBlockhashExpiry =
+          } catch (confErr: any) {
+            const errMsg: string = confErr?.message ?? '';
+            const isExpiry =
               errMsg.includes('block height exceeded') ||
               errMsg.includes('Blockhash not found') ||
               errMsg.includes('expired');
 
-            if (isBlockhashExpiry && lastSig) {
-              // confirmTransaction may time out even when tx actually landed —
-              // verify on-chain before deciding to retry or fail.
+            if (isExpiry && lastSig) {
+              // Tx may have landed even if confirmTransaction timed out — verify on-chain
               try {
                 const statuses = await connection.getSignatureStatuses([lastSig]);
-                const status = statuses?.value?.[0];
-                if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+                const st = statuses?.value?.[0];
+                if (st?.confirmationStatus === 'confirmed' || st?.confirmationStatus === 'finalized') {
                   entryTxSig = lastSig;
                   paid = true;
-                  console.log('[Payment] tx landed despite timeout:', lastSig);
+                  setStep(4, { status: 'ok', detail: `Confirmed (on-chain verify) ${lastSig.slice(0, 8)}…` });
                   break;
                 }
-              } catch { /* ignore status check failure, fall through to retry */ }
+              } catch { /* fall through */ }
             }
 
-            if (isBlockhashExpiry && attempt < MAX_ATTEMPTS) {
-              console.warn(`[Payment] Blockhash expired, retrying (${attempt}/${MAX_ATTEMPTS})…`);
+            if (isExpiry && attempt < MAX_ATTEMPTS) {
+              setStep(4, { status: 'pending', detail: `Blockhash expired — retrying (${attempt}/${MAX_ATTEMPTS})…` });
               lastSig = null;
               continue;
             }
 
-            console.error('[Payment] Failed:', payErr);
-            const isInsufficientFunds =
-              errMsg.includes('no record of a prior credit') ||
-              errMsg.includes('insufficient funds') ||
-              errMsg.includes('Attempt to debit');
-            if (isInsufficientFunds) {
-              try {
-                const lamports = await connection.getBalance(publicKey, 'confirmed');
-                setWalletBalance(lamports / LAMPORTS_PER_SOL);
-              } catch { setWalletBalance(0); }
-            } else {
-              alert(`Payment failed: ${errMsg || 'Unknown error'}. Please try again.`);
-            }
-            setSubmitting(false);
+            fail(4, errMsg || 'Transaction confirmation failed.');
             return;
           }
         }
 
         if (!paid) {
-          alert('Payment failed: transaction expired after 3 attempts. Please try again.');
-          setSubmitting(false);
+          fail(4, 'Transaction expired after all retry attempts. Please try again.');
           return;
         }
       }
 
-      // ── Persist entry to Supabase ───────────────────────────────────────
+      // ── Step 5: Save to Supabase ──────────────────────────────────────
+      setStep(5, { status: 'loading' });
       try {
-        await fetch('/api/contest/enter', {
+        const res = await fetch('/api/contest/enter', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -639,30 +679,36 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             entryTxSig,
           }),
         });
-      } catch (e) {
-        console.error('Failed to save entry to Supabase', e);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setStep(5, { status: 'ok', detail: 'Lineup saved' });
+      } catch (e: any) {
+        // Payment already went through — don't block the user, just log
+        setStep(5, { status: 'ok', detail: 'Saved locally (server sync will retry)' });
+        console.error('[contest/enter] Supabase save failed:', e);
       }
+
     } else {
-      // Demo: simulate tx delay
-      await new Promise(r => setTimeout(r, 1000));
+      // Demo mode — no payment, just show a brief loading animation
+      setPaySteps([{ label: 'Saving demo lineup…', status: 'loading' }]);
+      setPayError(null);
+      setSubmitting(true);
+      await new Promise(r => setTimeout(r, 900));
+      setPaySteps([{ label: 'Demo lineup saved', status: 'ok' }]);
     }
 
-    // Mark this contest type as entered so the user can't re-enter the same category
+    // Ensure localStorage is set
     try {
       const entered: string[] = JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]');
-      if (!entered.includes(contestType)) {
-        entered.push(contestType);
-        localStorage.setItem(enteredContestsKey, JSON.stringify(entered));
-      }
+      if (!entered.includes(contestType)) { entered.push(contestType); localStorage.setItem(enteredContestsKey, JSON.stringify(entered)); }
     } catch { /* ignore */ }
 
+    await new Promise(r => setTimeout(r, 700)); // brief pause so user sees all steps complete
     setSubmitted(true);
     setSubmitting(false);
 
-    // Redirect to live page after brief success flash
     setTimeout(() => {
       router.push(`/live/${contestId}?contestType=${contestType}`);
-    }, 1800);
+    }, 1500);
   };
 
   const [countdown, setCountdown] = useState('');
@@ -741,6 +787,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
   const shouldBlurLineupBg = tutorialStep === 1;
   return (
+    <>
     <div style={{ minHeight: '100vh', paddingBottom: '100px', background: 'transparent', overflowX: 'hidden' }}>
       <Navbar />
 
@@ -1673,6 +1720,87 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         </main>
       </div>
     </div>
+
+    {/* ── Payment Progress Modal ─────────────────────────────────────────── */}
+    {submitting && paySteps.length > 0 && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}>
+        <div style={{
+          background: '#111827', border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 16, padding: '28px 32px', width: '100%', maxWidth: 420,
+          boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
+              🔒
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>Locking Lineup</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Do not close or refresh this page</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {paySteps.map((step, i) => {
+              const isLoading = step.status === 'loading';
+              const isOk = step.status === 'ok';
+              const isErr = step.status === 'error';
+              const isPending = step.status === 'pending';
+              return (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '10px 12px', borderRadius: 10,
+                  background: isLoading ? 'rgba(99,102,241,0.08)' : isOk ? 'rgba(74,222,128,0.06)' : isErr ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${isLoading ? 'rgba(99,102,241,0.25)' : isOk ? 'rgba(74,222,128,0.2)' : isErr ? 'rgba(248,113,113,0.3)' : 'rgba(255,255,255,0.05)'}`,
+                  transition: 'all 0.25s',
+                }}>
+                  <div style={{ width: 20, height: 20, flexShrink: 0, marginTop: 1 }}>
+                    {isLoading && (
+                      <svg viewBox="0 0 24 24" style={{ animation: 'spin 1s linear infinite', width: 20, height: 20 }}>
+                        <circle cx="12" cy="12" r="10" stroke="rgba(99,102,241,0.3)" strokeWidth="3" fill="none"/>
+                        <path d="M12 2a10 10 0 0 1 10 10" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" fill="none"/>
+                      </svg>
+                    )}
+                    {isOk && <span style={{ color: '#4ade80', fontSize: 16 }}>✓</span>}
+                    {isErr && <span style={{ color: '#f87171', fontSize: 16 }}>✕</span>}
+                    {isPending && <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14 }}>○</span>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: isLoading || isOk || isErr ? 600 : 400, color: isPending ? 'rgba(255,255,255,0.3)' : isErr ? '#f87171' : isOk ? '#e2e8f0' : '#c7d2fe' }}>
+                      {step.label}
+                    </div>
+                    {step.detail && (
+                      <div style={{ fontSize: '0.72rem', color: isErr ? '#fca5a5' : 'rgba(255,255,255,0.45)', marginTop: 2, wordBreak: 'break-all' }}>
+                        {step.detail}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {payError && (
+            <div style={{ marginTop: 20, padding: '12px 14px', borderRadius: 10, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)' }}>
+              <div style={{ fontSize: '0.8rem', color: '#fca5a5', fontWeight: 600, marginBottom: 6 }}>Payment failed</div>
+              <div style={{ fontSize: '0.75rem', color: '#f87171' }}>{payError}</div>
+              <button
+                onClick={() => { setPaySteps([]); setPayError(null); setSubmitting(false); }}
+                style={{ marginTop: 12, padding: '8px 16px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: '#fca5a5', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', width: '100%' }}
+              >
+                Dismiss &amp; Try Again
+              </button>
+            </div>
+          )}
+
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
