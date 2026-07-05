@@ -7,7 +7,7 @@ const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const BOT_COMMANDS = [
   { command: 'matches', description: 'Live & upcoming matches (tap to subscribe)' },
   { command: 'points', description: 'Your fantasy points for subscribed matches' },
-  { command: 'leaderboard', description: 'Top 5 ranking for a match' },
+  { command: 'leaderboard', description: 'Top 5 ranking (select match from list)' },
   { command: 'register', description: 'Link your Solana wallet' },
   { command: 'timezone', description: 'Set your timezone e.g. +7, -4, +3' },
   { command: 'help', description: 'Show all commands' },

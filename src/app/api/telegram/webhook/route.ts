@@ -13,11 +13,34 @@ const HELP_TEXT = `
 
 /matches — live & upcoming matches _(tap to subscribe)_
 /points — your fantasy points _(select match from list)_
-/leaderboard <matchId> — top 5 ranking
+/leaderboard — top 5 ranking _(select match from list)_
 /register <wallet> — link your Solana wallet
 /timezone +7 — set your timezone _(e.g. +7, \\-4, +3)_
 /help — show this message
 `.trim();
+
+async function fetchAndSendLeaderboard(chatId: number, contestId: string) {
+  const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+  const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${contestId}`);
+    if (!res.ok) throw new Error('API error');
+    const data: Array<{ wallet: string; points: number; rank: number; prize?: string }> = await res.json();
+    const top5 = data.slice(0, 5);
+    if (top5.length === 0) {
+      await sendMessage(chatId, `🏆 *${matchName}*\n\nNo leaderboard data yet.`, { parse_mode: 'Markdown' });
+      return;
+    }
+    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+    const lines = top5.map((e, i) => {
+      const short = `${e.wallet.slice(0, 4)}...${e.wallet.slice(-4)}`;
+      return `${medals[i]} ${short} — *${e.points} pts*${e.prize ? ` | ${e.prize}` : ''}`;
+    });
+    await sendMessage(chatId, `🏆 *Leaderboard — ${matchName}*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+  } catch {
+    await sendMessage(chatId, '❌ Could not fetch leaderboard right now.');
+  }
+}
 
 async function fetchAndSendPoints(chatId: number, contestId: string, walletAddress: string) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
@@ -60,6 +83,10 @@ export async function POST(req: NextRequest) {
         const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
         await answerCallbackQuery(cq.id, `✅ Subscribed to ${matchName}!`);
         await sendMessage(chatId, `✅ You'll receive live notifications for *${matchName}*.\n\nUse /matches to manage more subscriptions.`, { parse_mode: 'Markdown' });
+      } else if (data.startsWith('lb_')) {
+        const contestId = data.replace('lb_', '');
+        await answerCallbackQuery(cq.id);
+        await fetchAndSendLeaderboard(chatId, contestId);
       } else if (data.startsWith('pts_')) {
         const contestId = data.replace('pts_', '');
         const { data: u } = await supabase.from('telegram_users').select('wallet_address').eq('chat_id', chatId).single();
@@ -267,28 +294,32 @@ export async function POST(req: NextRequest) {
       }
 
       case '/leaderboard': {
-        if (!arg) { await sendMessage(chatId, '❌ Usage: /leaderboard <matchId>'); break; }
-        try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${arg}`);
-          if (res.ok) {
-            const data: Array<{ wallet: string; points: number; rank: number; prize?: string }> = await res.json();
-            const top5 = data.slice(0, 5);
-            if (top5.length === 0) {
-              await sendMessage(chatId, 'No leaderboard data yet for this match.');
-              break;
-            }
-            const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-            const lines = top5.map((e, i) => {
-              const short = `${e.wallet.slice(0, 4)}...${e.wallet.slice(-4)}`;
-              return `${medals[i]} ${short} — *${e.points} pts* ${e.prize ? `| ${e.prize}` : ''}`;
-            });
-            const fixture = WC2026_FIXTURES.find(f => f.fixtureId === arg);
-            const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : arg;
-            await sendMessage(chatId, `🏆 *Leaderboard — ${matchName}*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+        if (!arg) {
+          // Show subscribed matches as inline buttons
+          const { data: lbSubs } = await supabase
+            .from('telegram_subscriptions')
+            .select('contest_id')
+            .eq('chat_id', chatId);
+
+          if (!lbSubs?.length) {
+            await sendMessage(chatId, '🏆 You have no subscribed matches.\n\nUse /matches to subscribe first.');
+            break;
           }
-        } catch {
-          await sendMessage(chatId, '❌ Could not fetch leaderboard right now.');
+
+          const keyboard = lbSubs.map((s: { contest_id: string }) => {
+            const f = WC2026_FIXTURES.find(x => x.fixtureId === s.contest_id);
+            const label = f ? `🏆 ${f.homeTeam} vs ${f.awayTeam}` : `🏆 Match ${s.contest_id}`;
+            return [{ text: label, callback_data: `lb_${s.contest_id}` }];
+          });
+
+          await sendMessage(chatId, '🏆 *Select a match to see the leaderboard:*', {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: keyboard },
+          });
+          break;
         }
+
+        await fetchAndSendLeaderboard(chatId, arg);
         break;
       }
 
