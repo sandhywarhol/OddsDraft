@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS telegram_subscriptions (
   PRIMARY KEY (chat_id, contest_id)
 );
 
+CREATE TABLE IF NOT EXISTS notified_events (
+  fixture_id  TEXT,
+  event_id    TEXT,
+  notified_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (fixture_id, event_id)
+);
+
 -- Disable RLS for bot server access (hackathon — enable + add policies for production)
 ALTER TABLE telegram_users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_subscriptions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE notified_events DISABLE ROW LEVEL SECURITY;
