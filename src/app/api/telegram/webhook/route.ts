@@ -12,10 +12,10 @@ const HELP_TEXT = `
 🏆 *OddsDraft Bot*
 
 /matches — live & upcoming matches _(tap to subscribe)_
-/timezone +7 — set your timezone _(e.g. +7, -4, +3)_
-/register <wallet> — link your Solana wallet
-/points <matchId> — your fantasy points
+/points — your fantasy points _(select match from list)_
 /leaderboard <matchId> — top 5 ranking
+/register <wallet> — link your Solana wallet
+/timezone +7 — set your timezone _(e.g. +7, \\-4, +3)_
 /help — show this message
 `.trim();
 
