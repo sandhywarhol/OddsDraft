@@ -16,6 +16,35 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import { prefetchPlayerPhotos } from '@/lib/player-photos';
+// ── AI Recommendation badges ──────────────────────────────────────────────────
+// Rule-based picks derived from rating + position. Called per-player with the
+// full list so we can identify the single "top pick" relative to peers.
+type AIBadge = { label: string; color: string; bg: string };
+
+function getAIBadge(player: Player, peers: Player[]): AIBadge | null {
+  const { position, rating = 0 } = player;
+  // Captain Suggestion — best ATT or MID in the current list by rating
+  if (position === 'ATT' || position === 'MID') {
+    const topRating = Math.max(...peers.filter(p => p.position === 'ATT' || p.position === 'MID').map(p => p.rating ?? 0));
+    if (rating === topRating && rating >= 84) {
+      return { label: '⭐ Captain Pick', color: '#ffd700', bg: 'rgba(255,215,0,0.12)' };
+    }
+  }
+  // Safe Pick — GK or DEF with solid rating
+  if ((position === 'GK' || position === 'DEF') && rating >= 85) {
+    return { label: '🛡 Safe Pick', color: '#00e87a', bg: 'rgba(0,232,122,0.10)' };
+  }
+  // Undervalued — ATT/MID with decent rating but not the top pick
+  if ((position === 'ATT' || position === 'MID') && rating >= 82 && rating <= 85) {
+    return { label: '💎 Undervalued', color: '#a78bfa', bg: 'rgba(167,139,250,0.10)' };
+  }
+  // High Risk — lower-rated ATT (upside but unreliable)
+  if (position === 'ATT' && rating < 82) {
+    return { label: '⚡ High Risk', color: '#f87171', bg: 'rgba(248,113,113,0.10)' };
+  }
+  return null;
+}
+
 // Demo score events for showing fantasy points in action
 const DEMO_EVENTS = [
   { playerId: 'fra-mbappe', playerName: 'Mbappé', eventType: 'goal', minute: 23, points: 10 },
@@ -1463,6 +1492,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             />
                           </div>
 
+                          {availablePlayers.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                              <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#64748b', letterSpacing: '0.08em' }}>SYS_AI</span>
+                              <span style={{ fontSize: '0.65rem', color: '#64748b' }}>—</span>
+                              <span style={{ fontSize: '0.65rem', color: '#64748b' }}>badges auto-assigned by rating + position</span>
+                            </div>
+                          )}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
                             {availablePlayers.length === 0 && (
                               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: 16 }}>
@@ -1500,7 +1536,23 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                 <span style={{ fontSize: '1.2rem' }}>{player.teamFlag}</span>
                                 <div style={{ flex: 1 }}>
                                   <div style={{ fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', fontStyle: 'italic', fontFamily: 'Bebas Neue, cursive' }}>{player.name}</div>
-                                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{player.team} • {player.position}</div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{player.team} • {player.position}</span>
+                                    {(() => {
+                                      const badge = getAIBadge(player, availablePlayers);
+                                      if (!badge) return null;
+                                      return (
+                                        <span style={{
+                                          fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.03em',
+                                          padding: '1px 5px', borderRadius: 3,
+                                          color: badge.color, background: badge.bg,
+                                          border: `1px solid ${badge.color}55`,
+                                        }}>
+                                          {badge.label}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
                                 </div>
                                 <div style={{
                                   fontSize: '0.85rem',
