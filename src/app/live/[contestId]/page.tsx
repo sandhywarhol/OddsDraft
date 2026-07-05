@@ -1761,14 +1761,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           playSFX('whistle');
         }
 
-        // Update score from goal events
-        for (const ev of newEvents) {
-          if (ev.type === 'goal' || ev.type === 'own_goal') {
-            const isHome = ev.team === fixture.homeTeam;
-            setScore(s => ({ home: isHome ? s.home + 1 : s.home, away: !isHome ? s.away + 1 : s.away }));
-          }
-        }
-
         // Show popup if not already open
         if (!showPopupRef.current) {
           setLatestEvent(trigger);
@@ -1963,16 +1955,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (goalEv) playSFX('goal');
         else if (cardEv) playSFX('whistle');
         setMinute(triggerEv.minute);
-
-        // Update score immediately from goal events (don't wait for /api/scores/wc2026 poll)
-        if (goalEv) {
-          const isHome = goalEv.team === fixture.homeTeam;
-          setScore(s => {
-            const next = { home: isHome ? s.home + 1 : s.home, away: !isHome ? s.away + 1 : s.away };
-            scoreRef.current = next;
-            return next;
-          });
-        }
 
         setEvents(prev => {
           const existingKeys = new Set(prev.map(e => `${e.type}-${e.minute}`));
