@@ -169,6 +169,26 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     : false;
   const [submitted, setSubmitted] = useState(alreadyEntered);
   const [submitting, setSubmitting] = useState(false);
+
+  // Verify against Supabase on load — catches cases where localStorage was lost
+  // (page refresh during payment) so the user can't accidentally pay twice.
+  useEffect(() => {
+    if (submitted || isDemo || !publicKey) return;
+    fetch(`/api/contest/check-entry?fixtureId=${contestId}&walletAddress=${publicKey.toString()}&contestType=${contestType}`)
+      .then(r => r.json())
+      .then(({ entered }) => {
+        if (entered) {
+          // Mark localStorage too so future loads are instant
+          try {
+            const list: string[] = JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]');
+            if (!list.includes(contestType)) { list.push(contestType); localStorage.setItem(enteredContestsKey, JSON.stringify(list)); }
+          } catch { /* ignore */ }
+          setSubmitted(true);
+        }
+      })
+      .catch(() => { /* non-blocking — localStorage is the fallback */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicKey, isDemo]);
   const [airdropping, setAirdropping] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [equippedCards, setEquippedCards] = useState<Record<string, string>>({});
@@ -491,6 +511,14 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     let entryTxSig: string | null = null;
 
     if (!isDemo && publicKey) {
+      // Pessimistic lock: mark as entered in localStorage BEFORE sending the tx.
+      // This prevents a second payment if the user refreshes while the wallet
+      // confirmation dialog is still open (localStorage survives the reload).
+      try {
+        const list: string[] = JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]');
+        if (!list.includes(contestType)) { list.push(contestType); localStorage.setItem(enteredContestsKey, JSON.stringify(list)); }
+      } catch { /* ignore */ }
+
       // ── Balance check — use devnet RPC directly to avoid stale wallet state
       let balanceSol: number | null = null;
       try {
