@@ -3028,9 +3028,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       </div>
                       <div className="score-bug__minute" suppressHydrationWarning>
                         {(() => {
-                          const hasHT = events.some(e => e.type === 'half_time');
-                          const hasKOAfterHT = events.some(e => e.type === 'kick_off' && e.minute > 45);
-                          const atHalfTime = hasHT && !hasKOAfterHT && !matchCompleted;
+                          // Events are prepended (newest at index 0). If kick_off index < half_time index,
+                          // the second half has started. If half_time index is lower (more recent), we're at HT.
+                          const htIdx = events.findIndex(e => e.type === 'half_time');
+                          const koIdx = events.findIndex(e => e.type === 'kick_off');
+                          const atHalfTime = htIdx >= 0 && (koIdx < 0 || koIdx > htIdx) && !matchCompleted;
                           if (appMode !== 'live') return minute < 90 ? `${minute}'` : 'FT';
                           if (matchCompleted) return 'FT';
                           if (atHalfTime) return 'HT';

@@ -1148,13 +1148,11 @@ function FeaturesSection() {
           backgroundPosition: 'center',
           pointerEvents: 'none',
         }} />
-        {/* Dark overlay so text is readable */}
-        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
-        <div className="container" style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '60px 24px' }}>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.4)' }}>
+        <div className="container" style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '60px 24px' }}>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(255,215,0,0.5)' }}>
             Why OddsDraft?
           </h2>
-          <p style={{ color: 'rgba(255,255,255,0.8)', maxWidth: 500, margin: '0 auto', fontSize: '1.05rem' }}>
+          <p style={{ color: '#ffffff', maxWidth: 500, margin: '0 auto', fontSize: '1.05rem', fontWeight: 600, textShadow: '0 1px 6px rgba(0,0,0,0.9)' }}>
             The only fantasy platform built on live football data + on-chain rewards
           </p>
         </div>
@@ -1293,40 +1291,98 @@ function Footer() {
   return (
     <footer style={{
       position: 'relative',
-      borderTop: '2px solid #ffd700',
-      padding: '54px 0',
       color: '#fff',
       overflow: 'hidden',
-      boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
+      background: '#030810',
     }}>
-      {/* Footer background */}
+      {/* Top accent bar */}
+      <div style={{ height: 3, background: 'linear-gradient(90deg, transparent 0%, #29b6f6 20%, #ffd700 50%, #29b6f6 80%, transparent 100%)', boxShadow: '0 0 18px rgba(41,182,246,0.5)' }} />
+
+      {/* Grid background */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
-        background: 'linear-gradient(180deg, #0a1020 0%, #060d18 100%)',
+        backgroundImage: 'linear-gradient(rgba(41,182,246,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(41,182,246,0.04) 1px, transparent 1px)',
+        backgroundSize: '40px 40px',
+      }} />
+      {/* Glow radial */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
+        background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(41,182,246,0.06) 0%, transparent 70%)',
       }} />
 
-      <div className="container" style={{ position: 'relative', zIndex: 2 }}>
-        <div className="footer-inner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img src="/Logo OddsDraft.svg" alt="OddsDraft Logo" className="footer-logo" style={{ height: '40px', objectFit: 'contain' }} />
+      <div className="container" style={{ position: 'relative', zIndex: 2, padding: '48px 24px 36px' }}>
+        {/* Main row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 32, marginBottom: 32 }}>
+
+          {/* Logo + tagline */}
+          <div style={{ minWidth: 200 }}>
+            <div style={{ display: 'inline-block', background: '#030810', borderRadius: 8, padding: '6px 8px', border: '1px solid rgba(41,182,246,0.2)', marginBottom: 10 }}>
+              <img
+                src="/Logo OddsDraft.svg"
+                alt="OddsDraft Logo"
+                style={{ height: '36px', objectFit: 'contain', display: 'block', mixBlendMode: 'screen' }}
+              />
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5, maxWidth: 200 }}>
+              Fantasy Football.<br />On-chain. Real-time. World Cup '26.
+            </p>
           </div>
-          <div className="footer-text" style={{ fontSize: '0.85rem', opacity: 0.9 }}>
-            Powered by{' '}
-            <a
-              href="https://txline-docs.txodds.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: '#ffd700', textDecoration: 'underline', fontWeight: 600 }}
-            >
-              TxODDS
-            </a>
-            {' '}·{' '}
-            Solana
-            {' '}·{' '}
-            World Cup '26
+
+          {/* Center — power stats */}
+          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+            {[
+              { label: 'DATA SOURCE', value: 'TxODDS', sub: 'Live Football API' },
+              { label: 'BLOCKCHAIN', value: 'SOLANA', sub: 'Ultra-fast L1' },
+              { label: 'TOURNAMENT', value: 'WC 2026', sub: 'USA · CAN · MEX' },
+            ].map(({ label, value, sub }) => (
+              <div key={label} style={{ textAlign: 'center', minWidth: 80 }}>
+                <div style={{ fontSize: '0.55rem', color: '#29b6f6', fontWeight: 700, letterSpacing: '0.15em', marginBottom: 4 }}>{label}</div>
+                <div style={{ fontSize: '1rem', fontWeight: 900, color: '#ffd700', letterSpacing: '0.05em', fontFamily: 'Bebas Neue, cursive', lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Right — links */}
+          <div style={{ minWidth: 140 }}>
+            <div style={{ fontSize: '0.55rem', color: '#29b6f6', fontWeight: 700, letterSpacing: '0.15em', marginBottom: 10 }}>CONNECT</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <a href="https://t.me/OddsDraftBot" target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#29b6f6')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.02 9.522c-.149.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.88 14.376l-2.95-.924c-.642-.2-.654-.642.136-.95l11.52-4.44c.535-.194 1.003.13.976.186z"/></svg>
+                Telegram
+              </a>
+              <a href="https://txline-docs.txodds.com" target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#ffd700')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z"/></svg>
+                TxODDS Docs
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom divider */}
+        <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(41,182,246,0.2), rgba(255,215,0,0.2), rgba(41,182,246,0.2), transparent)', marginBottom: 20 }} />
+
+        {/* Bottom bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>
+            © 2026 OddsDraft · All rights reserved
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {['BETA', 'SOLANA', 'WC26'].map(tag => (
+              <span key={tag} style={{ fontSize: '0.55rem', fontWeight: 700, letterSpacing: '0.12em', padding: '2px 6px', border: '1px solid rgba(41,182,246,0.2)', borderRadius: 2, color: 'rgba(41,182,246,0.5)' }}>{tag}</span>
+            ))}
           </div>
         </div>
       </div>
+
+      {/* Bottom accent line */}
+      <div style={{ height: 2, background: 'linear-gradient(90deg, transparent, rgba(255,215,0,0.3), transparent)' }} />
     </footer>
   );
 }

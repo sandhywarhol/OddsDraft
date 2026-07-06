@@ -1892,7 +1892,7 @@ a {
   backdrop-filter: blur(6px) !important;
 }
 
-/* Modal container */
+/* Modal container — no pseudo-elements to avoid stacking context issues */
 .wallet-adapter-modal {
   background: linear-gradient(160deg, #060d1f 0%, #0a1428 60%, #050b18 100%) !important;
   border: 1px solid rgba(41, 182, 246, 0.35) !important;
@@ -1903,31 +1903,8 @@ a {
     0 24px 80px rgba(0, 0, 0, 0.8),
     inset 0 1px 0 rgba(255,255,255,0.04) !important;
   max-width: 400px !important;
-}
-
-/* Corner accent lines */
-.wallet-adapter-modal {
-  position: relative !important;
-}
-.wallet-adapter-modal::before {
-  content: '';
-  position: absolute;
-  top: 8px; left: 8px;
-  width: 24px; height: 24px;
-  border-top: 2px solid #29b6f6;
-  border-left: 2px solid #29b6f6;
-  pointer-events: none;
-  z-index: 10;
-}
-.wallet-adapter-modal::after {
-  content: '';
-  position: absolute;
-  bottom: 8px; right: 8px;
-  width: 24px; height: 24px;
-  border-bottom: 2px solid #29b6f6;
-  border-right: 2px solid #29b6f6;
-  pointer-events: none;
-  z-index: 10;
+  outline: 2px solid rgba(41, 182, 246, 0.12) !important;
+  outline-offset: 4px !important;
 }
 
 /* Title */
@@ -1974,7 +1951,8 @@ a {
   transition: all 0.18s ease !important;
   width: 100% !important;
   margin-bottom: 6px !important;
-  position: relative !important;
+  cursor: pointer !important;
+  pointer-events: all !important;
 }
 
 .wallet-adapter-modal-list .wallet-adapter-button:hover {
