@@ -1129,6 +1129,27 @@ function FeaturesSection() {
       color: '#e2e8f0',
       tag: 'SYS_AI'
     },
+    {
+      title: 'Telegram Notifications',
+      desc: 'Get live alerts for match events and points. Just subscribe to @oddsdraftbot!',
+      icon: '📱',
+      color: '#0088cc',
+      tag: 'SYS_BOT'
+    },
+    {
+      title: 'Collectible Skill Cards',
+      desc: 'Gather unique collectible cards to boost your points and gain an edge in contests.',
+      icon: '🃏',
+      color: '#fbbf24',
+      tag: 'SYS_CARDS'
+    },
+    {
+      title: 'Card Marketplace (Coming Soon)',
+      desc: 'Trade and sell your rare Skill Cards to other players in the open marketplace.',
+      icon: '🏪',
+      color: '#10b981',
+      tag: 'SYS_MARKET'
+    }
   ];
 
   return (

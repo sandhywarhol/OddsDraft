@@ -13,10 +13,12 @@ import {
   canCombine,
   type OwnedCard,
 } from '@/lib/card-collection';
+import { useWallet } from '@solana/wallet-adapter-react';
 import {
   RARITY_ORDER,
   RARITY_COLOR,
   RARITY_STARS,
+  SKILL_CARDS,
   type Rarity,
   type CardPosition,
   type SkillCard,
@@ -573,6 +575,7 @@ function CombineModal({
 }
 
 export default function CardsPage() {
+  const { connected } = useWallet();
   const [allCards, setAllCards] = useState<{ instance: OwnedCard; card: SkillCard }[]>([]);
   const [filterPos, setFilterPos] = useState<FilterPos>('all');
   const [filterRarity, setFilterRarity] = useState<FilterRarity>('all');
@@ -709,7 +712,25 @@ export default function CardsPage() {
         </div>
 
         {/* Stats Info */}
-        <div className="card card--glass" style={{ marginBottom: 32, padding: 'var(--space-4) var(--space-6)' }}>
+        {!connected ? (
+          <div style={{ textAlign: 'center', marginTop: 40 }}>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', marginBottom: 12 }}>
+              Connect Wallet to View Your Collection
+            </h2>
+            <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: 40, maxWidth: 460, margin: '0 auto 40px' }}>
+              Here is a preview of the Skill Cards you can collect. Log in and participate in contests to earn them!
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center' }}>
+              {SKILL_CARDS.slice(0, 8).map((card) => (
+                <div key={card.id} style={{ position: 'relative', overflow: 'hidden', borderRadius: 12 }}>
+                  <SkillCardDisplay card={card} width={240} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="card card--glass" style={{ marginBottom: 32, padding: 'var(--space-4) var(--space-6)' }}>
           <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
               {[ 
@@ -942,6 +963,8 @@ export default function CardsPage() {
               );
             })}
           </div>
+        )}
+          </>
         )}
       </div>
 

@@ -3918,59 +3918,88 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           const homePct = Math.round((h / total) * 100);
           const awayPct = 100 - homePct;
           return (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: highlight ? 700 : 500, marginBottom: 4, color: highlight ? '#fff' : 'rgba(255,255,255,0.75)' }}>
-                <span style={{ color: '#60a5fa' }}>{h}</span>
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.72rem' }}>{label}</span>
-                <span style={{ color: '#f87171' }}>{a}</span>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 6 }}>
+                <span style={{ color: 'var(--color-primary)', fontFamily: 'Bebas Neue, cursive', fontSize: '1.4rem', lineHeight: 1 }}>{h}</span>
+                <span style={{ color: highlight ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: 'Bebas Neue, cursive', fontSize: '1.1rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
+                <span style={{ color: 'var(--color-danger)', fontFamily: 'Bebas Neue, cursive', fontSize: '1.4rem', lineHeight: 1 }}>{a}</span>
               </div>
-              <div style={{ display: 'flex', height: 5, borderRadius: 3, overflow: 'hidden', background: 'rgba(255,255,255,0.08)' }}>
-                <div style={{ width: `${homePct}%`, background: '#3b82f6', transition: 'width 0.4s' }} />
-                <div style={{ width: `${awayPct}%`, background: '#ef4444', transition: 'width 0.4s' }} />
+              <div style={{ display: 'flex', height: 8, background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', transform: 'skewX(-10deg)' }}>
+                <div style={{ width: `${homePct}%`, background: 'var(--color-primary)', transition: 'width 0.5s ease-out' }} />
+                <div style={{ width: `${awayPct}%`, background: 'var(--color-danger)', transition: 'width 0.5s ease-out' }} />
               </div>
             </div>
           );
         };
 
         const isHT = events.some(e => e.type === 'half_time') && !events.some(e => e.type === 'full_time');
-        const label = matchCompleted || events.some(e => e.type === 'full_time') ? 'Full Time Statistics' : 'Half Time Statistics';
+        const label = matchCompleted || events.some(e => e.type === 'full_time') ? 'FULL TIME STATISTICS' : 'HALF TIME STATISTICS';
 
         return (
           <div
             onClick={() => setShowStatsModal(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(10, 13, 18, 0.85)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
           >
             <div
               onClick={e => e.stopPropagation()}
-              style={{ background: '#0f1929', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '28px 28px 24px', width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }}
+              style={{
+                background: 'var(--bg-surface)',
+                border: '2px solid var(--border-medium)',
+                boxShadow: 'var(--shadow-lg), inset 0 0 20px rgba(123, 162, 199, 0.05)',
+                clipPath: 'polygon(0 15px, 15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
+                padding: '32px 32px 28px',
+                width: '100%',
+                maxWidth: 480,
+                maxHeight: '85vh',
+                overflowY: 'auto',
+                position: 'relative'
+              }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <div>
-                  <div style={{ fontSize: '0.68rem', color: '#00e5ff', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 2 }}>📊 {label}</div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
-                    <><FlagImage flag={fixture.homeFlag} size={16} /> {home}</> <span style={{ color: '#ffd700' }}>{score.home}–{score.away}</span> <>{away} <FlagImage flag={fixture.awayFlag} size={16} /></>
+              {/* Scanline overlay (subtle) */}
+              <div style={{ position: 'absolute', inset: 0, background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(123, 162, 199, 0.03) 2px, rgba(123, 162, 199, 0.03) 4px)', pointerEvents: 'none' }} />
+
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16 }}>
+                  <div>
+                    <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.4rem', color: 'var(--text-primary)', letterSpacing: '0.15em' }}>📊 {label}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.4rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <FlagImage flag={fixture.homeFlag} size={20} /> <span style={{ paddingTop: 4 }}>{home}</span>
+                      </div>
+                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2.5rem', color: 'var(--color-accent)', lineHeight: 1 }}>
+                        {score.home}<span style={{ color: 'var(--text-muted)', margin: '0 4px' }}>-</span>{score.away}
+                      </div>
+                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.4rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ paddingTop: 4 }}>{away}</span> <FlagImage flag={fixture.awayFlag} size={20} />
+                      </div>
+                    </div>
                   </div>
+                  <button onClick={() => setShowStatsModal(false)} style={{ background: 'var(--bg-glass)', border: '1px solid var(--border-medium)', color: 'var(--text-secondary)', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transform: 'skewX(-10deg)', transition: 'all 0.2s' }}
+                    onMouseOver={e => (e.currentTarget.style.background = 'var(--color-primary)', e.currentTarget.style.color = '#fff')}
+                    onMouseOut={e => (e.currentTarget.style.background = 'var(--bg-glass)', e.currentTarget.style.color = 'var(--text-secondary)')}
+                  >
+                    <span style={{ transform: 'skewX(10deg)', fontSize: '1.2rem', lineHeight: 1, fontWeight: 700 }}>✕</span>
+                  </button>
                 </div>
-                <button onClick={() => setShowStatsModal(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '1.2rem', cursor: 'pointer', lineHeight: 1 }}>✕</button>
-              </div>
 
-              {/* Team headers */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: '0.75rem', fontWeight: 700 }}>
-                <span style={{ color: '#60a5fa' }}><><FlagImage flag={fixture.homeFlag} size={16} /> {home}</></span>
-                <span style={{ color: '#f87171' }}><>{away} <FlagImage flag={fixture.awayFlag} size={16} /></></span>
-              </div>
+                {/* Team headers */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <span style={{ color: 'var(--color-primary)', fontFamily: 'Bebas Neue, cursive', fontSize: '1.2rem', letterSpacing: '0.05em' }}>HOME</span>
+                  <span style={{ color: 'var(--color-danger)', fontFamily: 'Bebas Neue, cursive', fontSize: '1.2rem', letterSpacing: '0.05em' }}>AWAY</span>
+                </div>
 
-              <StatRow label="Goals" home={goals.home} away={goals.away} highlight />
-              <StatRow label="Corner Kicks" home={corners.home} away={corners.away} />
-              <StatRow label="Goalkeeper Saves" home={saves.home} away={saves.away} />
-              <StatRow label="Danger Attacks" home={danger.home} away={danger.away} />
-              <StatRow label="Yellow Cards" home={yellows.home} away={yellows.away} />
-              {(reds.home + reds.away > 0) && <StatRow label="Red Cards" home={reds.home} away={reds.away} />}
-              {(ownGoals.home + ownGoals.away > 0) && <StatRow label="Own Goals" home={ownGoals.home} away={ownGoals.away} />}
-              <StatRow label="Substitutions" home={subs.home} away={subs.away} />
+                <StatRow label="Goals" home={goals.home} away={goals.away} highlight />
+                <StatRow label="Corner Kicks" home={corners.home} away={corners.away} />
+                <StatRow label="Goalkeeper Saves" home={saves.home} away={saves.away} />
+                <StatRow label="Danger Attacks" home={danger.home} away={danger.away} />
+                <StatRow label="Yellow Cards" home={yellows.home} away={yellows.away} />
+                {(reds.home + reds.away > 0) && <StatRow label="Red Cards" home={reds.home} away={reds.away} />}
+                {(ownGoals.home + ownGoals.away > 0) && <StatRow label="Own Goals" home={ownGoals.home} away={ownGoals.away} />}
+                <StatRow label="Substitutions" home={subs.home} away={subs.away} />
 
-              <div style={{ marginTop: 16, fontSize: '0.68rem', color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>
-                Stats computed from TxLINE live event stream
+                <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'Bebas Neue, cursive', letterSpacing: '0.05em' }}>
+                  /// LIVE STREAM / TX-LINE DATA FEED ///
+                </div>
               </div>
             </div>
           </div>

@@ -1894,6 +1894,8 @@ a {
 .wallet-adapter-modal-wrapper {
   background: rgba(0, 0, 0, 0.88) !important;
   backdrop-filter: blur(6px) !important;
+  z-index: 99999 !important;
+  pointer-events: auto !important;
 }
 
 /* Modal container — no pseudo-elements to avoid stacking context issues */
