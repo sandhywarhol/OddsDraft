@@ -874,6 +874,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
   // Possession tracking for possession_bonus: count events per team, reset each half
   const possessionCountRef = useRef<Record<number, number>>({ 1: 0, 2: 0 });
+  // Throttle danger_attack events: track last timestamp (ms) per participant to avoid spam
+  const lastDangerEventRef = useRef<Record<number, number>>({ 1: 0, 2: 0 });
   const halftimePossAwardedRef = useRef(false);
   const fulltimePossAwardedRef = useRef(false);
   const extraTimeBonusAwardedRef = useRef(false);
@@ -1283,6 +1285,38 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           possessionCountRef.current[pNum] = (possessionCountRef.current[pNum] ?? 0) + 1;
         }
 
+        // Convert high_danger_possession / danger_possession → danger_attack feed event
+        // Rate-limited to max 1 per team per 90 seconds to avoid spam
+        if (action === 'high_danger_possession' || action === 'danger_possession') {
+          const pd = u.Data?.New ?? u.Data ?? {};
+          const pNum: number = pd.Participant ?? u.Participant ?? 1;
+          const now = Date.now();
+          const cooldownMs = action === 'high_danger_possession' ? 90_000 : 150_000;
+          if (now - (lastDangerEventRef.current[pNum] ?? 0) >= cooldownMs) {
+            lastDangerEventRef.current[pNum] = now;
+            const clkSec = u.Clock?.Seconds ?? pd.Clock?.Seconds ?? 0;
+            const dangerMin = Math.max(0, Math.floor(clkSec / 60));
+            const isHome = pNum === 1;
+            const dangerTeam = isHome ? fixture.homeTeam : fixture.awayTeam;
+            const dangerFlag = isHome ? fixture.homeFlag : fixture.awayFlag;
+            const isHighDanger = action === 'high_danger_possession';
+            return [{
+              id: `danger-${pNum}-${dangerMin}-${now}`,
+              minute: dangerMin,
+              team: dangerTeam,
+              teamFlag: dangerFlag,
+              player: '',
+              playerId: '',
+              type: 'danger_attack' as const,
+              points: 0,
+              description: isHighDanger
+                ? `${dangerTeam} in a highly dangerous position! TxLINE data signals a HIGH DANGER zone — a goal could come at any moment!`
+                : `${dangerTeam} pressing forward with purpose — TxLINE data shows an attack building in the danger zone.`,
+            }];
+          }
+          return [];
+        }
+
         // Parse lineup SSE push (sent ~1hr before kickoff) to update formation view
         if (action === 'lineups' && !lineupFetchedRef.current) {
           lineupFetchedRef.current = true;
@@ -1335,8 +1369,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           'coverage_update','comment','connected','disconnected','standby','weather',
           'venue','pitch','players_warming_up','players_on_the_pitch','jersey',
           'kickoff_team','status','lineups','clock_adjustment','possible','game_finalised',
-          'halftime_finalised','safe_possession','attack_possession','danger_possession',
-          'high_danger_possession','possession','throw_in','goal_kick','additional_time',
+          'halftime_finalised','safe_possession','attack_possession','possession',
+          'throw_in','goal_kick','additional_time',
           'action_amend','action_discarded','players_on_the_pitch',
         ]);
         if (!action || skipActions.has(action)) return [];
