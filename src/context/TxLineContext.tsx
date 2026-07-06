@@ -124,10 +124,9 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
             || liveStateStrings.some(s => strState.includes(s));
           // TxLINE sometimes reports "scheduled" even when match is running — use Clock as fallback
           const clockRunning = f.Clock?.Running === true || f.clock?.running === true;
-          // Also check kickoff time — if past kickoff and state=1 (scheduled), treat as potentially live
-          const startMs = f.StartTime ?? 0;
-          const kickoffPassed = startMs > 0 && Date.now() > startMs && Date.now() < startMs + 4.5 * 3600 * 1000;
-          return stateMatch || clockRunning || kickoffPassed;
+          // Do NOT use kickoff time as a live signal — a delayed match will still have
+          // past StartTime but TxLINE correctly keeps it as "Scheduled".
+          return stateMatch || clockRunning;
         });
 
         console.log(`[TxLINE] Fixtures: ${all.length} total, ${live.length} live`);

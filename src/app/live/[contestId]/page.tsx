@@ -1124,7 +1124,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     const kickoffMs = new Date(wcFixture.kickoffAt).getTime();
     const completedByMs = kickoffMs + 2.5 * 60 * 60 * 1000; // kickoff + 2.5h
     const check = () => {
-      if (Date.now() >= completedByMs && !matchCompletedRef.current) {
+      // Only trigger time-based completion if TxLINE confirmed the match actually started.
+      // A delayed match must not be auto-completed based on the original kickoff time.
+      const gs = lastGameStateRef.current;
+      const matchActuallyStarted = gs && !/^(scheduled|notstarted|not_started)$/i.test(String(gs));
+      if (Date.now() >= completedByMs && !matchCompletedRef.current && matchActuallyStarted) {
         setMatchCompleted(true);
         if (lastGameStateRef.current !== 'FullTime') {
           lastGameStateRef.current = 'FullTime';
@@ -1202,11 +1206,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const clockRunning = u.Clock?.Running === true || u.clock?.running === true;
         if (clockRunning && (!rawStr || /^(scheduled|notstarted|not_started)$/i.test(rawStr))) return 'FirstHalf';
         if (!rawStr) return undefined;
-        // If TxLINE still says "scheduled" after kickoff time, treat as FirstHalf
-        if (/^(scheduled|notstarted|not_started)$/i.test(rawStr)) {
-          const koMs = fixture.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
-          if (koMs > 0 && Date.now() > koMs) return 'FirstHalf';
-        }
+        // Trust TxLINE's explicit "Scheduled" — do NOT override based on local clock.
+        // Doing so causes false kick_off events when a match is delayed.
         return txoddsStatusToGameState(rawStr) ?? rawStr;
       })(),
       // Only extract score if it contains actual numeric data — Score:{} is truthy but empty
@@ -1926,6 +1927,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
     const awardKickoff = () => {
       if (kickoffFiredRef.current) return;
+      // If TxLINE explicitly says match is still Scheduled/NotStarted, the match is
+      // delayed — do not fire a synthetic kickoff based on the original clock time.
+      const gs = lastGameStateRef.current;
+      if (!gs || /^(scheduled|notstarted|not_started)$/i.test(String(gs))) return;
       kickoffFiredRef.current = true;
 
       // Synthesize kickoff event only if none exists yet
