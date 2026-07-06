@@ -12,22 +12,15 @@ import { User, LogOut, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import SponsorsMarquee from '@/components/SponsorsMarquee';
 
 export default function Navbar() {
-  const { appMode, toggleAppMode, apiToken, isSubscribing, subscribeAndActivate, setManualApiToken } = useTxLine();
+  const { appMode, toggleAppMode } = useTxLine();
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [tokenError, setTokenError] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
   const [walletToast, setWalletToast] = useState<{ balance: number } | null>(null);
   const [toastExiting, setToastExiting] = useState(false);
-  const [showTokenModal, setShowTokenModal] = useState(false);
-  const [manualInput, setManualInput] = useState('');
-  const [manualInputError, setManualInputError] = useState('');
-  const [modalError, setModalError] = useState('');
   const prevConnectedRef = useRef(false);
-  const pendingLiveRef = useRef(false);
   const pathname = usePathname();
   const { isMuted, toggleMute } = useAudio();
 
@@ -56,63 +49,6 @@ export default function Navbar() {
     }
   }, [connected, publicKey, connection]);
 
-  // After on-chain subscription completes, auto-switch to live
-  useEffect(() => {
-    if (apiToken && pendingLiveRef.current && appMode === 'demo') {
-      pendingLiveRef.current = false;
-      toggleAppMode();
-    }
-  }, [apiToken]);
-
-  const handleModeToggle = async () => {
-    if (appMode === 'live') {
-      toggleAppMode();
-      return;
-    }
-    if (apiToken) {
-      toggleAppMode();
-      return;
-    }
-    if (!connected) {
-      setErrorMsg('Connect wallet first');
-      setTokenError(true);
-      setTimeout(() => setTokenError(false), 3000);
-      return;
-    }
-    // On-chain subscription — SERVICE_LEVEL_ID=12 (free tier, no TxL tokens needed)
-    pendingLiveRef.current = true;
-    setTokenError(false);
-    try {
-      await subscribeAndActivate();
-      // useEffect above will call toggleAppMode once apiToken is set
-    } catch (e: any) {
-      pendingLiveRef.current = false;
-      // Check all possible locations where the SOL error message could live
-      const haystack = [
-        e?.message,
-        e?.cause?.message,
-        e?.transactionError?.message,
-        ...(e?.logs ?? []),
-      ].filter(Boolean).join(' ');
-      const isNoSol = haystack.includes('prior credit') || haystack.includes('insufficient') || haystack.includes('debit an account');
-      setModalError(isNoSol ? 'insufficient_sol' : '');
-      setShowTokenModal(true);
-    }
-  };
-
-  const handleManualActivate = () => {
-    const token = manualInput.trim();
-    if (!token) {
-      setManualInputError('Paste your TxLINE API token first');
-      return;
-    }
-    setManualApiToken(token);
-    setManualInput('');
-    setManualInputError('');
-    setShowTokenModal(false);
-    // pendingLiveRef ensures toggleAppMode fires once apiToken is set
-    pendingLiveRef.current = true;
-  };
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 'var(--z-sticky)' }}>
@@ -141,8 +77,7 @@ export default function Navbar() {
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
           
           <button
-            onClick={handleModeToggle}
-            disabled={isSubscribing}
+            onClick={toggleAppMode}
             style={{
               height: '24px',
               borderRadius: '12px',
@@ -150,28 +85,24 @@ export default function Navbar() {
               fontSize: '0.58rem',
               fontWeight: 700,
               letterSpacing: '0.05em',
-              background: tokenError
-                ? 'linear-gradient(145deg, #2a0d0d, #1a0808)'
-                : appMode === 'live'
-                  ? 'linear-gradient(145deg, #0d1b2a, #0a111a)'
-                  : 'linear-gradient(145deg, #2a0d1b, #1a0a11)',
-              color: tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              border: `1px solid ${tokenError ? 'rgba(255,107,107,0.4)' : appMode === 'live' ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
+              background: appMode === 'live'
+                ? 'linear-gradient(145deg, #0d1b2a, #0a111a)'
+                : 'linear-gradient(145deg, #2a0d1b, #1a0a11)',
+              color: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
+              border: `1px solid ${appMode === 'live' ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
               display: 'flex', alignItems: 'center', gap: 4,
               boxShadow: appMode === 'live' ? '0 0 6px rgba(0,229,255,0.2), inset 0 1px 1px rgba(255,255,255,0.05)' : '0 0 6px rgba(255,77,109,0.2), inset 0 1px 1px rgba(255,255,255,0.05)',
-              cursor: isSubscribing ? 'wait' : 'pointer', transition: 'all 0.3s ease',
-              opacity: isSubscribing ? 0.7 : 1,
+              cursor: 'pointer', transition: 'all 0.3s ease',
             }}
-            onMouseOver={(e) => { if (!isSubscribing) e.currentTarget.style.transform = 'scale(1.05)'; }}
-            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
           >
             <span style={{
               width: 4, height: 4, borderRadius: '50%',
-              background: tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              boxShadow: `0 0 4px ${tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
-              animation: isSubscribing ? 'pulse 1s infinite' : 'none',
+              background: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
+              boxShadow: `0 0 4px ${appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
             }} />
-            {isSubscribing ? '...' : tokenError ? (errorMsg || 'ERROR') : appMode === 'live' ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
+            {appMode === 'live' ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
           </button>
 
           {mounted ? (
@@ -240,105 +171,6 @@ export default function Navbar() {
         </div>
       )}
 
-      {/* Manual API Token Modal */}
-      {showTokenModal && (
-        <div
-          onClick={() => { setShowTokenModal(false); setModalError(''); }}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 100000,
-            background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '0 16px',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: '#0d1420', border: '1px solid rgba(0,229,255,0.25)',
-              borderRadius: 12, padding: '28px 24px', width: '100%', maxWidth: 420,
-              boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
-            }}
-          >
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', marginBottom: 6 }}>
-                Activate Live Mode
-              </div>
-              {modalError === 'insufficient_sol' ? (
-                <div style={{ fontSize: '0.78rem', lineHeight: 1.6 }}>
-                  <div style={{ color: '#ffaa00', fontWeight: 700, marginBottom: 6 }}>
-                    Your wallet needs devnet SOL to pay transaction fees.
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
-                    Get free devnet SOL, then click Retry — or paste your TxLINE API token directly below.
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: 700, textDecoration: 'underline' }}>
-                      Get devnet SOL →
-                    </a>
-                    <button
-                      onClick={() => { setShowTokenModal(false); setModalError(''); setTimeout(handleModeToggle, 100); }}
-                      style={{ fontSize: '0.72rem', color: '#00e5ff', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
-                    >
-                      Retry subscription
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>
-                  On-chain subscription failed. Paste your TxLINE API token below to activate Live Mode directly.
-                </div>
-              )}
-            </div>
-
-            <input
-              autoFocus
-              type="text"
-              placeholder="Paste TxLINE API token..."
-              value={manualInput}
-              onChange={e => { setManualInput(e.target.value); setManualInputError(''); }}
-              onKeyDown={e => { if (e.key === 'Enter') handleManualActivate(); }}
-              style={{
-                width: '100%', padding: '10px 14px', borderRadius: 8,
-                background: 'rgba(255,255,255,0.06)', border: `1px solid ${manualInputError ? '#ff4d4d' : 'rgba(255,255,255,0.15)'}`,
-                color: '#fff', fontSize: '0.8rem', fontFamily: 'monospace',
-                outline: 'none', boxSizing: 'border-box', marginBottom: manualInputError ? 6 : 16,
-              }}
-            />
-            {manualInputError && (
-              <div style={{ fontSize: '0.72rem', color: '#ff6b6b', marginBottom: 12 }}>{manualInputError}</div>
-            )}
-
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={handleManualActivate}
-                style={{
-                  flex: 1, padding: '10px 0', borderRadius: 8, border: 'none',
-                  background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-                  color: '#fff', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
-                }}
-              >
-                Activate
-              </button>
-              <button
-                onClick={() => { setShowTokenModal(false); setManualInput(''); setManualInputError(''); setModalError(''); }}
-                style={{
-                  padding: '10px 18px', borderRadius: 8,
-                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-                  color: 'rgba(255,255,255,0.5)', fontSize: '0.82rem', cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div style={{ marginTop: 14, fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', lineHeight: 1.5 }}>
-              Get your token from the TxLINE dashboard or contact the TxODDS hackathon team.
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Mobile Nav */}
       {mobileOpen && (
         <div style={{
@@ -369,8 +201,7 @@ export default function Navbar() {
 
           {/* Mode toggle */}
           <button
-            onClick={() => { handleModeToggle(); setMobileOpen(false); }}
-            disabled={isSubscribing}
+            onClick={() => { toggleAppMode(); setMobileOpen(false); }}
             style={{
               display: 'flex', alignItems: 'center', gap: 10,
               background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
@@ -379,11 +210,11 @@ export default function Navbar() {
           >
             <span style={{
               width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-              background: tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              boxShadow: `0 0 6px ${tokenError ? '#ff6b6b' : appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
+              background: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
+              boxShadow: `0 0 6px ${appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
             }} />
             <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {isSubscribing ? 'Connecting...' : appMode === 'live' ? 'Mode: LIVE — Switch to Demo' : 'Mode: DEMO — Switch to Live'}
+              {appMode === 'live' ? 'Mode: LIVE — Switch to Demo' : 'Mode: DEMO — Switch to Live'}
             </span>
           </button>
 
@@ -406,26 +237,7 @@ export default function Navbar() {
 
 function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute: () => void }) {
   const { connected, publicKey, disconnect } = useWallet();
-  const { subscribeAndActivate, isSubscribing } = useTxLine();
   const [isOpen, setIsOpen] = useState(false);
-  const [activateError, setActivateError] = useState('');
-  const [activateSuccess, setActivateSuccess] = useState(false);
-
-  const handleActivate = async () => {
-    setActivateError('');
-    setActivateSuccess(false);
-    setIsOpen(false);
-    try {
-      await subscribeAndActivate();
-      setActivateSuccess(true);
-      setTimeout(() => setActivateSuccess(false), 4000);
-    } catch (e: any) {
-      const msg = e?.message ?? '';
-      const isNoSol = msg.includes('prior credit') || msg.includes('insufficient') || msg.includes('debit an account');
-      setActivateError(isNoSol ? 'Insufficient SOL for gas fees.' : 'Activation failed. Try again.');
-      setTimeout(() => setActivateError(''), 5000);
-    }
-  };
   const [avatar, setAvatar] = useState<string>('');
   const [username, setUsername] = useState<string>('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -543,19 +355,6 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
           </button>
           
           <button
-            onClick={handleActivate}
-            disabled={isSubscribing}
-            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', color: '#00e5ff', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: isSubscribing ? 'wait' : 'pointer', width: '100%', textAlign: 'left', transition: 'background 0.2s', opacity: isSubscribing ? 0.6 : 1 }}
-            onMouseOver={(e) => { if (!isSubscribing) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-            onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            <span style={{ fontSize: '0.9rem' }}>⚡</span>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-              {isSubscribing ? 'Activating...' : 'Activate Live Data'}
-            </span>
-          </button>
-
-          <button
             onClick={() => { disconnect(); setIsOpen(false); }}
             style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', transition: 'background 0.2s' }}
             onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-elevated)'}
@@ -567,17 +366,6 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
         </div>
       )}
 
-      {/* Activate feedback toasts */}
-      {activateSuccess && (
-        <div style={{ position: 'fixed', top: 72, right: 24, background: '#0d1f0d', border: '1px solid #00e87a', borderRadius: 8, padding: '12px 16px', color: '#00e87a', fontSize: '0.82rem', fontWeight: 700, zIndex: 99999, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
-          ✅ TxLINE activated! Live events now enabled.
-        </div>
-      )}
-      {activateError && (
-        <div style={{ position: 'fixed', top: 72, right: 24, background: '#1f0d0d', border: '1px solid #ff4d6d', borderRadius: 8, padding: '12px 16px', color: '#ff4d6d', fontSize: '0.82rem', fontWeight: 700, zIndex: 99999, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
-          ❌ {activateError}
-        </div>
-      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { subscribeToFreeTier, activateApiAccess, fetchGuestToken, fetchAllFixtures } from '@/lib/txline';
+import { subscribeToFreeTier, activateApiAccess, fetchGuestToken } from '@/lib/txline';
 
 interface TxLineContextProps {
   appMode: 'demo' | 'live';
@@ -61,11 +61,10 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
 
   const [appMode, setAppMode] = useState<'demo' | 'live'>(() => {
     const saved = lsGet('txline_app_mode');
-    const token = lsGet('txline_api_token') || ENV_TOKEN;
-    // Auto-live when env token is present (production) or user previously activated
-    const isLive = saved === 'live' || !!token;
-    if (isLive) lsSet('txline_app_mode', 'live');
-    return isLive ? 'live' : 'demo';
+    // Default to live — proxy handles auth server-side, no client token needed
+    const isDemo = saved === 'demo';
+    if (!isDemo) lsSet('txline_app_mode', 'live');
+    return isDemo ? 'demo' : 'live';
   });
 
   const toggleAppMode = () => setAppMode(prev => {
@@ -94,30 +93,19 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     if (guestJwt) lsSet('txline_guest_jwt', guestJwt);
   }, [guestJwt]);
 
-  // Get or refresh the guest JWT (needed alongside X-Api-Token for data requests)
-  const ensureGuestJwt = async (): Promise<string> => {
-    if (guestJwt) return guestJwt;
-    console.log('[TxLINE] Fetching fresh guest JWT...');
-    const jwt = await fetchGuestToken();
-    setGuestJwt(jwt);
-    lsSet('txline_guest_jwt', jwt);
-    return jwt;
-  };
-
-  // Fetch live fixtures periodically if we have a token
+  // Fetch live fixtures periodically — always runs, proxy handles auth server-side
   useEffect(() => {
-    if (!apiToken) return;
-
     let isMounted = true;
     let consecutive403 = 0;
 
     const fetchFixtures = async () => {
       try {
         setIsLoadingFixtures(true);
-        const jwt = await ensureGuestJwt();
 
-        // Single call to /api/fixtures/snapshot — then derive live subset client-side
-        const raw = await fetchAllFixtures(apiToken, jwt);
+        // Use proxy so no client-side token is needed
+        const proxyRes = await fetch('/api/txline/fixtures/snapshot', { cache: 'no-store' });
+        if (!proxyRes.ok) throw Object.assign(new Error('fixtures fetch failed'), { response: { status: proxyRes.status } });
+        const raw = await proxyRes.json();
         const all: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
 
         consecutive403 = 0; // reset on success
@@ -147,20 +135,14 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
         setLiveFixtures(live);
         setFixturesAvailable(true);
       } catch (error: any) {
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          consecutive403++;
-          if (consecutive403 <= 2) {
-            // Might be an expired JWT — refresh once and let next poll retry
-            console.log(`[TxLINE] Auth error (${consecutive403}/2), refreshing guest JWT…`);
-            setGuestJwt(null);
-            localStorage.removeItem('txline_guest_jwt');
-          } else {
-            // Persistent 403 — this is a permissions issue, not an auth issue. Stop looping.
-            console.warn('[TxLINE] Persistent 403 after JWT refresh — fixture likely not in free tier. Stopping refresh loop.');
-          }
-        } else if (error.response?.status === 404) {
-          console.log('[TxLINE] /api/fixtures/snapshot returned 404');
+        const status = error.response?.status ?? 0;
+        if (status === 404) {
           setFixturesAvailable(false);
+        } else if (status >= 400) {
+          consecutive403++;
+          if (consecutive403 > 3) {
+            console.warn('[TxLINE] Repeated fixture errors, backing off');
+          }
         } else {
           console.log('[TxLINE] Error fetching fixtures:', error.message);
         }
@@ -177,10 +159,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
       isMounted = false;
       clearInterval(interval);
     };
-  // guestJwt intentionally excluded — it's a credential, not a trigger to restart the poll loop.
-  // Removing it from deps prevents an infinite refresh cycle when TxLINE returns 403.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiToken, appMode]);
+  }, [appMode]);
 
   const getGuestToken = async () => {
     try {
