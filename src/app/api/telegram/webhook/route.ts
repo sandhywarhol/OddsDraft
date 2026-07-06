@@ -12,12 +12,63 @@ const HELP_TEXT = `
 🏆 *OddsDraft Bot*
 
 /matches — live & upcoming matches _(tap to subscribe)_
+/recap — last 5 events for your subscribed match
 /points — your fantasy points _(select match from list)_
 /leaderboard — top 5 ranking _(select match from list)_
 /register <wallet> — link your Solana wallet
 /timezone +7 — set your timezone _(e.g. +7, -4, +3)_
 /help — show this message
 `.trim();
+
+const EVENT_EMOJI: Record<string, string> = {
+  goal: '⚽', penalty_outcome: '⚽', own_goal: '😬',
+  yellow_card: '🟨', red_card: '🟥',
+  penalty_save: '🧤', goalkeeper_save: '🧤',
+  half_time: '⏱', full_time: '🏁',
+  substitution: '🔄', corner_kick: '🚩', var_review: '📺',
+};
+
+async function fetchAndSendRecap(chatId: number, contestId: string) {
+  const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+  const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+
+  try {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
+    const res = await fetch(`${appUrl}/api/live/events?fixtureId=${contestId}`);
+    if (!res.ok) throw new Error('fetch failed');
+    const events: any[] = await res.json();
+
+    if (!events?.length) {
+      await sendMessage(chatId, `📋 *${matchName}*\n\nNo events recorded yet — the match may not have started.`, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // Show last 8 events, most recent first
+    const significant = events
+      .filter(e => ['goal','penalty_outcome','own_goal','yellow_card','red_card','penalty_save','half_time','full_time'].includes(e.event_type ?? e.type))
+      .slice(-8)
+      .reverse();
+
+    const all = significant.length ? significant : events.slice(-8).reverse();
+
+    const lines = all.map(e => {
+      const type = e.event_type ?? e.type ?? '';
+      const emoji = EVENT_EMOJI[type] ?? '📣';
+      const min = e.minute > 0 ? ` (${e.minute}')` : '';
+      const player = e.player_name ?? e.player ?? '';
+      const team = e.team_name ?? e.team ?? '';
+      const label = type.replace(/_/g, ' ').toUpperCase();
+      return `${emoji} *${label}*${min}${player ? ` — ${player}` : ''}${team ? ` \\(${team}\\)` : ''}`;
+    });
+
+    await sendMessage(chatId,
+      `📋 *Recent Events — ${matchName}*\n\n${lines.join('\n')}`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch {
+    await sendMessage(chatId, '❌ Could not fetch match events right now.');
+  }
+}
 
 async function fetchAndSendLeaderboard(chatId: number, contestId: string) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
@@ -103,6 +154,10 @@ export async function POST(req: NextRequest) {
         const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
         await answerCallbackQuery(cq.id, `🔕 Unsubscribed from ${matchName}`);
         await sendMessage(chatId, `🔕 Unsubscribed from *${matchName}*.`, { parse_mode: 'Markdown' });
+      } else if (data.startsWith('recap_')) {
+        const contestId = data.replace('recap_', '');
+        await answerCallbackQuery(cq.id);
+        await fetchAndSendRecap(chatId, contestId);
       } else {
         await answerCallbackQuery(cq.id);
       }
@@ -349,6 +404,36 @@ export async function POST(req: NextRequest) {
         }
 
         await fetchAndSendLeaderboard(chatId, arg);
+        break;
+      }
+
+      case '/recap': {
+        // Get user's subscribed matches
+        const { data: recapSubs } = await supabase
+          .from('telegram_subscriptions')
+          .select('contest_id')
+          .eq('chat_id', chatId);
+
+        if (!recapSubs?.length) {
+          await sendMessage(chatId, '📋 You have no subscribed matches.\n\nUse /matches to subscribe to a match first.');
+          break;
+        }
+
+        if (recapSubs.length === 1 || arg) {
+          const contestId = arg || recapSubs[0].contest_id;
+          await fetchAndSendRecap(chatId, contestId);
+        } else {
+          // Multiple subscriptions — show selection buttons
+          const keyboard = recapSubs.map((s: { contest_id: string }) => {
+            const f = WC2026_FIXTURES.find(x => x.fixtureId === s.contest_id);
+            const label = f ? `📋 ${f.homeTeam} vs ${f.awayTeam}` : `📋 Match ${s.contest_id}`;
+            return [{ text: label, callback_data: `recap_${s.contest_id}` }];
+          });
+          await sendMessage(chatId, '📋 *Select a match for the event recap:*', {
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: keyboard },
+          });
+        }
         break;
       }
 

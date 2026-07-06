@@ -6,6 +6,7 @@ const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 const BOT_COMMANDS = [
   { command: 'matches', description: 'Live & upcoming matches (tap to subscribe)' },
+  { command: 'recap', description: 'Last events for your subscribed match' },
   { command: 'points', description: 'Your fantasy points for subscribed matches' },
   { command: 'leaderboard', description: 'Top 5 ranking (select match from list)' },
   { command: 'register', description: 'Link your Solana wallet' },
