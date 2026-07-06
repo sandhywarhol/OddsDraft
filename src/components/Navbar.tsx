@@ -85,13 +85,13 @@ export default function Navbar() {
               fontSize: '0.58rem',
               fontWeight: 700,
               letterSpacing: '0.05em',
-              background: appMode === 'live'
+              background: (mounted && appMode === 'live')
                 ? 'linear-gradient(145deg, #0d1b2a, #0a111a)'
                 : 'linear-gradient(145deg, #2a0d1b, #1a0a11)',
-              color: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              border: `1px solid ${appMode === 'live' ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
+              color: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
+              border: `1px solid ${(mounted && appMode === 'live') ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
               display: 'flex', alignItems: 'center', gap: 4,
-              boxShadow: appMode === 'live' ? '0 0 6px rgba(0,229,255,0.2), inset 0 1px 1px rgba(255,255,255,0.05)' : '0 0 6px rgba(255,77,109,0.2), inset 0 1px 1px rgba(255,255,255,0.05)',
+              boxShadow: (mounted && appMode === 'live') ? '0 0 6px rgba(0,229,255,0.2), inset 0 1px 1px rgba(255,255,255,0.05)' : '0 0 6px rgba(255,77,109,0.2), inset 0 1px 1px rgba(255,255,255,0.05)',
               cursor: 'pointer', transition: 'all 0.3s ease',
             }}
             onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
@@ -99,10 +99,10 @@ export default function Navbar() {
           >
             <span style={{
               width: 4, height: 4, borderRadius: '50%',
-              background: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              boxShadow: `0 0 4px ${appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
+              background: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
+              boxShadow: `0 0 4px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}`,
             }} />
-            {appMode === 'live' ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
+            {(mounted && appMode === 'live') ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
           </button>
 
           {mounted ? (
@@ -210,11 +210,11 @@ export default function Navbar() {
           >
             <span style={{
               width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-              background: appMode === 'live' ? '#00e5ff' : '#ff4d6d',
-              boxShadow: `0 0 6px ${appMode === 'live' ? '#00e5ff' : '#ff4d6d'}`,
+              background: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
+              boxShadow: `0 0 6px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}`,
             }} />
             <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {appMode === 'live' ? 'Mode: LIVE — Switch to Demo' : 'Mode: DEMO — Switch to Live'}
+              {(mounted && appMode === 'live') ? 'Mode: LIVE — Switch to Demo' : 'Mode: DEMO — Switch to Live'}
             </span>
           </button>
 
