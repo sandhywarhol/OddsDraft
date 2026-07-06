@@ -78,14 +78,14 @@ function distributeByJersey(players: FormationPlayer[]): FormationPlayer[] {
 
 function buildRows(players: FormationPlayer[]) {
   const g = {
-    GK:  players.filter(p => posGroup(p.position) === 'GK'),
+    GK: players.filter(p => posGroup(p.position) === 'GK'),
     DEF: players.filter(p => posGroup(p.position) === 'DEF'),
     MID: players.filter(p => posGroup(p.position) === 'MID'),
     FWD: players.filter(p => posGroup(p.position) === 'FWD'),
   };
   const filled = Object.values(g).filter(arr => arr.length > 0).length;
   const processed = filled < 3 ? distributeByJersey(players) : players;
-  const gk  = processed.filter(p => posGroup(p.position) === 'GK');
+  const gk = processed.filter(p => posGroup(p.position) === 'GK');
   const def = processed.filter(p => posGroup(p.position) === 'DEF');
   const mid = processed.filter(p => posGroup(p.position) === 'MID');
   const fwd = processed.filter(p => posGroup(p.position) === 'FWD');
@@ -101,24 +101,41 @@ const PH = 420;
 const LINE_Y = { GK: 372, DEF: 298, MID: 210, FWD: 90 };
 
 // Full pitch geometry constants
-const ATK_Y  = 8;    // attacking goal line (top, with padding)
-const MID_Y  = 210;  // center/halfway line
-const DEF_Y  = 412;  // defending goal line (bottom, with padding)
-const CX     = PW / 2;
-// Defending half penalty box
-const PB_H = 120, PB_W = 170, PB_L = (PW - 170) / 2, PB_T = 292; // DEF_Y - 120
-// Defending 6-yard box
-const SY_H = 44,  SY_W = 85,  SY_L = (PW - 85)  / 2, SY_T = 368; // DEF_Y - 44
-// Defending penalty spot & arc
-const PS_DEF = 312; // DEF_Y - 100
-const PA_R = 100;
+const ATK_Y = 8;    // attacking goal line (top, with padding)
+const MID_Y = 210;  // center/halfway line
+const DEF_Y = 412;  // defending goal line (bottom, with padding)
+const CX = PW / 2;
+
+// Real-world proportional soccer field dimensions scaled to fit:
+const PB_H = 64;       // Penalty area depth (16.5m)
+const PB_W = 160;      // Penalty area width (40.32m)
+const PB_L = (PW - PB_W) / 2;
+const PB_T = DEF_Y - PB_H;
+
+const SY_H = 21;       // 6-yard box depth (5.5m)
+const SY_W = 72;       // 6-yard box width (18.32m)
+const SY_L = (PW - SY_W) / 2;
+const SY_T = DEF_Y - SY_H;
+
+const PS_DIST = 42;    // Penalty spot distance from goal line (11m)
+const PS_DEF = DEF_Y - PS_DIST;
+const PA_R = 36;       // Penalty arc radius (9.15m)
+
+// Center circle radius (9.15m)
+const CC_R = 36;
+
 const PA_DX = Math.sqrt(Math.max(0, PA_R * PA_R - (PS_DEF - PB_T) * (PS_DEF - PB_T)));
 
 function Pitch() {
-  const ls = { fill: 'none' as const, stroke: 'rgba(255,255,255,0.7)' as const, strokeWidth: 1.3, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
-  const lsDim = { fill: 'none' as const, stroke: 'rgba(255,255,255,0.4)' as const, strokeWidth: 0.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const ls = { fill: 'none' as const, stroke: 'rgba(255,255,255,0.6)' as const, strokeWidth: 1.2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  const lsDim = { fill: 'none' as const, stroke: 'rgba(255,255,255,0.35)' as const, strokeWidth: 0.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
     <>
+      {/* Attacking goal (top, outside goal line) */}
+      <rect x={126} y={0} width={28} height={8} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" />
+      {/* Defending goal (bottom, outside goal line) */}
+      <rect x={126} y={412} width={28} height={8} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" />
+
       {/* Attacking goal line (top) */}
       <line x1={6} y1={ATK_Y} x2={PW - 6} y2={ATK_Y} {...ls} />
 
@@ -133,39 +150,39 @@ function Pitch() {
       <line x1={PW - 6} y1={ATK_Y} x2={PW - 6} y2={DEF_Y} {...ls} />
 
       {/* Full center circle */}
-      <circle cx={CX} cy={MID_Y} r={100} fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={CX} cy={MID_Y} r={2.5} fill="rgba(255,255,255,0.65)" />
+      <circle cx={CX} cy={MID_Y} r={CC_R} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={1.1} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={CX} cy={MID_Y} r={2.0} fill="rgba(255,255,255,0.6)" />
 
       {/* Attacking half: Penalty area */}
-      <rect x={PB_L} y={ATK_Y} width={PB_W} height={PB_H} {...ls} opacity={0.5} />
+      <rect x={PB_L} y={ATK_Y} width={PB_W} height={PB_H} {...ls} />
       {/* Attacking half: 6-yard box */}
-      <rect x={SY_L} y={ATK_Y} width={SY_W} height={SY_H} {...lsDim} opacity={0.5} />
+      <rect x={SY_L} y={ATK_Y} width={SY_W} height={SY_H} {...lsDim} />
       {/* Attacking half: Penalty spot */}
-      <circle cx={CX} cy={ATK_Y + 100} r={1.8} fill="rgba(255,255,255,0.4)" opacity={0.5} />
+      <circle cx={CX} cy={ATK_Y + PS_DIST} r={1.8} fill="rgba(255,255,255,0.6)" />
       {/* Attacking half: Penalty arc */}
       {PA_DX > 0 && (
         <path
-          d={`M ${CX - PA_DX} ${ATK_Y + 120} A ${PA_R} ${PA_R} 0 0 1 ${CX + PA_DX} ${ATK_Y + 120}`}
-          fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" opacity={0.5}
+          d={`M ${CX - PA_DX} ${ATK_Y + PB_H} A ${PA_R} ${PA_R} 0 0 1 ${CX + PA_DX} ${ATK_Y + PB_H}`}
+          fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round"
         />
       )}
       {/* Attacking half: Corner arcs */}
       <path d={`M 6 ${ATK_Y + 8} A 8 8 0 0 1 14 ${ATK_Y}`}
-        fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />
+        fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round" />
       <path d={`M ${PW - 14} ${ATK_Y} A 8 8 0 0 1 ${PW - 6} ${ATK_Y + 8}`}
-        fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />
+        fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round" />
 
       {/* Defending half: Penalty area */}
       <rect x={PB_L} y={PB_T} width={PB_W} height={PB_H} {...ls} />
       {/* Defending half: 6-yard box */}
       <rect x={SY_L} y={SY_T} width={SY_W} height={SY_H} {...lsDim} />
       {/* Defending half: Penalty spot */}
-      <circle cx={CX} cy={PS_DEF} r={1.8} fill="rgba(255,255,255,0.65)" />
+      <circle cx={CX} cy={PS_DEF} r={1.8} fill="rgba(255,255,255,0.6)" />
       {/* Defending half: Penalty arc */}
       {PA_DX > 0 && (
         <path
           d={`M ${CX - PA_DX} ${PB_T} A ${PA_R} ${PA_R} 0 0 0 ${CX + PA_DX} ${PB_T}`}
-          fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={1.1} strokeLinecap="round" strokeLinejoin="round"
+          fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={1.0} strokeLinecap="round" strokeLinejoin="round"
         />
       )}
       {/* Defending half: Corner arcs */}
@@ -202,8 +219,8 @@ interface TeamCardProps {
 
 function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: TeamCardProps) {
   const starters = players.filter(p => p.starter !== false);
-  const bench    = players.filter(p => p.starter === false);
-  const rows     = buildRows(starters);
+  const bench = players.filter(p => p.starter === false);
+  const rows = buildRows(starters);
 
   type RowKey = 'gk' | 'def' | 'mid' | 'fwd';
   const rowKeys: RowKey[] = ['gk', 'def', 'mid', 'fwd'];
@@ -225,188 +242,266 @@ function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: 
       {/* All content sits above the background */}
       <div style={{ position: 'relative', zIndex: 2 }}>
 
-      {/* ── Header ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 14px',
-        background: 'rgba(0,0,0,0.72)',
-        borderBottom: `2px solid ${color}50`,
-      }}>
-        <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>{flag}</span>
-        <span style={{
-          fontWeight: 900, fontSize: '1rem', letterSpacing: '0.09em',
-          color: 'white', textTransform: 'uppercase', flex: 1,
-        }}>
-          {team}
-        </span>
-        {rows.formation && (
-          <span style={{
-            padding: '2px 11px', borderRadius: 5,
-            background: `${color}20`, border: `1px solid ${color}55`,
-            color, fontWeight: 800, fontSize: '0.95rem',
-            fontFamily: 'Bebas Neue, cursive', letterSpacing: '0.15em',
-          }}>
-            {rows.formation}
-          </span>
-        )}
-      </div>
-
-      {/* ── Body ── */}
-      <div style={{ display: 'flex', alignItems: 'stretch', height: 440 }}>
-
-        {/* Left: Subs + Coach */}
+        {/* ── Header ── */}
         <div style={{
-          width: '36%', flexShrink: 0,
-          background: 'rgba(0,0,0,0.5)',
-          borderRight: `1px solid ${color}30`,
-          display: 'flex', flexDirection: 'column',
-          padding: '10px 10px 10px 12px',
-          overflowY: 'auto', maxHeight: 420,
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 14px',
+          background: 'rgba(0,0,0,0.72)',
+          borderBottom: `2px solid ${color}50`,
         }}>
-          <div style={{
-            fontSize: '0.58rem', fontWeight: 800, color,
-            textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7,
+          <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>{flag}</span>
+          <span style={{
+            fontWeight: 900, fontSize: '1rem', letterSpacing: '0.09em',
+            color: 'white', textTransform: 'uppercase', flex: 1,
           }}>
-            Substitutes
-          </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {bench.length === 0 && (
-              <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.22)', fontStyle: 'italic' }}>—</span>
-            )}
-            {bench.map((p, i) => {
-              const inUser = !!(p.id && userSet.has(p.id));
-              return (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  borderLeft: inUser ? `2px solid #ffd700` : `2px solid transparent`,
-                  paddingLeft: 4,
-                }}>
-                  <span style={{
-                    minWidth: 18, textAlign: 'right', flexShrink: 0,
-                    fontSize: '0.65rem', fontWeight: 700,
-                    color: inUser ? '#ffd700' : `${color}cc`,
-                  }}>
-                    {p.jerseyNumber ?? '·'}
-                  </span>
-                  <span style={{
-                    fontSize: '0.6rem',
-                    color: inUser ? '#ffd700' : 'rgba(255,255,255,0.72)',
-                    fontWeight: inUser ? 700 : 500,
-                    textTransform: 'uppercase', letterSpacing: '0.02em',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {p.name.toUpperCase()}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          {coach && (
-            <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid rgba(255,255,255,0.1)` }}>
-              <div style={{ fontSize: '0.52rem', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 2 }}>
-                Head Coach
-              </div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'white', textTransform: 'uppercase', letterSpacing: '0.03em', lineHeight: 1.2 }}>
-                {coach}
-              </div>
-            </div>
+            {team}
+          </span>
+          {rows.formation && (
+            <span style={{
+              padding: '2px 11px', borderRadius: 5,
+              background: `${color}20`, border: `1px solid ${color}55`,
+              color, fontWeight: 800, fontSize: '0.95rem',
+              fontFamily: 'Bebas Neue, cursive', letterSpacing: '0.15em',
+            }}>
+              {rows.formation}
+            </span>
           )}
         </div>
 
-        {/* Right: Pitch — flat view, no perspective */}
-        <div style={{
-          flex: 1, minWidth: 0, position: 'relative',
-          overflow: 'hidden',
-        }}>
-          <svg
-            viewBox={`0 0 ${PW} ${PH}`}
-            style={{
-              position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-            }}
-            xmlns="http://www.w3.org/2000/svg"
-            preserveAspectRatio="xMidYMid slice"
-          >
-            <Pitch />
+        {/* ── Body ── */}
+        <div style={{ display: 'flex', alignItems: 'stretch', height: 440 }}>
 
-            {rowKeys.map(key => {
-              const group = rows[key] as FormationPlayer[];
-              if (!group.length) return null;
-              const lineY = LINE_Y[key.toUpperCase() as keyof typeof LINE_Y];
-              const positions = rowPos(group.length, lineY);
-              const grp = key.toUpperCase() as 'GK' | 'DEF' | 'MID' | 'FWD';
-
-              return group.map((player, i) => {
-                const isUser = !!(player.id && userSet.has(player.id));
-                const pts    = player.id ? playerPoints[player.id] : undefined;
-                const abbr  = posLabel(player.position, grp);
-                const sname = shortName(player.name).slice(0, 12); // Limit to 12 chars
-                // Stacked label: pos on top, name below — extra compact to avoid collisions
-                const lw = Math.max(40, Math.min(sname.length * 5.8 + 6, 64));
-                const lh = 22; // two-line height, very compact
-                const lx = positions[i].x - lw / 2;
-                const ly = positions[i].y - lh / 2;
-
+          {/* Left: Subs + Coach */}
+          <div style={{
+            flex: 1, minWidth: 0,
+            background: 'rgba(0,0,0,0.5)',
+            borderRight: `1px solid ${color}30`,
+            display: 'flex', flexDirection: 'column',
+            padding: '12px 14px',
+            overflowY: 'auto', maxHeight: '100%',
+          }}>
+            <div style={{
+              fontSize: '0.65rem', fontWeight: 800, color,
+              textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 10,
+            }}>
+              Substitutes
+            </div>
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', alignContent: 'start' }}>
+              {bench.length === 0 && (
+                <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.22)', fontStyle: 'italic' }}>—</span>
+              )}
+              {bench.map((p, i) => {
+                const inUser = !!(p.id && userSet.has(p.id));
                 return (
-                  <g key={`${key}-${i}`}>
-                    {/* Label background */}
-                    <rect x={lx} y={ly} width={lw} height={lh} rx={2}
-                      fill={isUser ? 'rgba(55,35,0,0.93)' : 'rgba(6,14,8,0.87)'}
-                      stroke={isUser ? '#ffd700' : 'rgba(255,255,255,0.16)'}
-                      strokeWidth={isUser ? 2 : 0.5}
-                    />
-                    {/* Position abbreviation — top line, small, colored */}
-                    <text x={positions[i].x} y={ly + 7}
-                      textAnchor="middle" dominantBaseline="middle"
-                      fontSize={5.5} fontWeight="700" letterSpacing="0.04em"
-                      fill={isUser ? '#ffd700' : color}
-                      fontFamily="Inter, sans-serif">
-                      {abbr}
-                    </text>
-                    {/* Thin divider */}
-                    <line x1={lx + 2} y1={ly + 12} x2={lx + lw - 2} y2={ly + 12}
-                      stroke="rgba(255,255,255,0.08)" strokeWidth={0.3} />
-                    {/* Player name — bottom line, very compact, white/gold */}
-                    <text x={positions[i].x} y={ly + 17.5}
-                      textAnchor="middle" dominantBaseline="middle"
-                      fontSize={5.2} fontWeight="800" letterSpacing="0.01em"
-                      fill={isUser ? '#ffd700' : 'white'}
-                      fontFamily="Inter, sans-serif">
-                      {sname}
-                    </text>
-                    {/* Checkmark or badge for user picks */}
-                    {isUser && (
-                      <g>
-                        <circle cx={lx + lw - 2.5} cy={ly + 2} r={3.5}
-                          fill="#ffd700" stroke="#3a2000" strokeWidth={0.5} />
-                        <text x={lx + lw - 2.5} y={ly + 3}
-                          textAnchor="middle" dominantBaseline="middle"
-                          fontSize={5} fontWeight="900" fill="#3a2000" fontFamily="Inter, sans-serif">
-                          ✓
-                        </text>
-                      </g>
-                    )}
-                    {/* Points badge */}
-                    {pts !== undefined && pts !== 0 && (
-                      <>
-                        <rect x={positions[i].x - 14} y={ly - 15} width={28} height={12} rx={3}
-                          fill={pts > 0 ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}
-                          stroke={pts > 0 ? '#4ade80' : '#f87171'} strokeWidth={0.6} />
-                        <text x={positions[i].x} y={ly - 9}
-                          textAnchor="middle" dominantBaseline="middle"
-                          fontSize={6.5} fontWeight="bold"
-                          fill={pts > 0 ? '#4ade80' : '#f87171'}
-                          fontFamily="Inter, sans-serif">
-                          {pts > 0 ? `+${pts.toFixed(1)}` : pts.toFixed(1)}
-                        </text>
-                      </>
-                    )}
-                  </g>
+                  <div key={i} style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                    background: inUser ? 'rgba(255, 215, 0, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+                    border: inUser ? '1px solid rgba(255, 215, 0, 0.25)' : '1px solid rgba(255, 255, 255, 0.04)',
+                    borderLeft: inUser ? '3px solid #ffd700' : `3px solid ${color}80`,
+                    borderRadius: 4,
+                    padding: '5px 8px',
+                    transition: 'all 0.15s ease-in-out',
+                  }}>
+                    <span style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      color: inUser ? '#ffd700' : `${color}`,
+                      minWidth: 14,
+                      textAlign: 'center',
+                      marginTop: 1,
+                    }}>
+                      {p.jerseyNumber ?? '•'}
+                    </span>
+                    <span style={{
+                      fontSize: '0.62rem',
+                      fontWeight: inUser ? 700 : 500,
+                      color: inUser ? '#ffd700' : 'rgba(255, 255, 255, 0.8)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.03em',
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.2',
+                    }}>
+                      {p.name.toUpperCase()}
+                    </span>
+                  </div>
                 );
-              });
-            })}
-          </svg>
+              })}
+            </div>
+            {coach && (
+              <div style={{
+                marginTop: 'auto',
+                paddingTop: 12,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                <div style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  background: `${color}20`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: `1px solid ${color}40`,
+                }}>
+                  <span style={{ fontSize: '0.75rem', lineHeight: 1 }}>👔</span>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.52rem', fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 1 }}>
+                    Head Coach
+                  </div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'white', textTransform: 'uppercase', letterSpacing: '0.03em', lineHeight: 1.1 }}>
+                    {coach}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Pitch — flat view, no perspective */}
+          <div style={{
+            width: 293, flexShrink: 0, position: 'relative',
+            overflow: 'hidden',
+          }}>
+            <svg
+              viewBox={`0 0 ${PW} ${PH}`}
+              style={{
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+              }}
+              xmlns="http://www.w3.org/2000/svg"
+              preserveAspectRatio="xMaxYMid meet"
+            >
+              <Pitch />
+
+              {rowKeys.map(key => {
+                const group = rows[key] as FormationPlayer[];
+                if (!group.length) return null;
+                const lineY = LINE_Y[key.toUpperCase() as keyof typeof LINE_Y];
+                const positions = rowPos(group.length, lineY);
+                const grp = key.toUpperCase() as 'GK' | 'DEF' | 'MID' | 'FWD';
+
+                return group.map((player, i) => {
+                  const isUser = !!(player.id && userSet.has(player.id));
+                  const pts = player.id ? playerPoints[player.id] : undefined;
+                  const abbr = posLabel(player.position, grp);
+                  const sname = shortName(player.name).slice(0, 12); // Limit to 12 chars
+
+                  // Larger card dimensions to accommodate larger fonts
+                  const lw = Math.max(48, Math.min(sname.length * 6.0 + 8, 64));
+                  const lh = 28;
+
+                  // Adjust positions for defenders (LB/RB) and wingers (LW/RW) to avoid collision and look tactical
+                  const pos = positions[i];
+                  let adjX = pos.x;
+                  let adjY = pos.y;
+
+                  // Horizontal adjustments to widen gaps
+                  if (group.length === 3) {
+                    if (i === 0) adjX -= 10;
+                    if (i === 2) adjX += 10;
+                  } else if (group.length === 4) {
+                    if (i === 0) adjX -= 12;
+                    if (i === 1) adjX -= 4;
+                    if (i === 2) adjX += 4;
+                    if (i === 3) adjX += 12;
+                  } else if (group.length === 5) {
+                    if (i === 0) adjX -= 14;
+                    if (i === 1) adjX -= 6;
+                    if (i === 3) adjX += 6;
+                    if (i === 4) adjX += 14;
+                  }
+
+                  if (grp === 'DEF') {
+                    if (group.length >= 4) {
+                      // Fullbacks (outermost) go higher up (smaller Y)
+                      if (i === 0 || i === group.length - 1) {
+                        adjY -= 20;
+                      }
+                    } else if (group.length === 3) {
+                      // Outer centerbacks go slightly higher
+                      if (i === 0 || i === group.length - 1) {
+                        adjY -= 12;
+                      }
+                    }
+                  } else if (grp === 'FWD') {
+                    if (group.length >= 3) {
+                      // Wingers (outermost) go higher up (smaller Y)
+                      if (i === 0 || i === group.length - 1) {
+                        adjY -= 20;
+                      }
+                    }
+                  }
+
+                  const lx = adjX - lw / 2;
+                  const ly = adjY - lh / 2;
+
+                  return (
+                    <g key={`${key}-${i}`}>
+                      {/* Label background */}
+                      <rect x={lx} y={ly} width={lw} height={lh} rx={3}
+                        fill={isUser ? 'rgba(55,35,0,0.95)' : 'rgba(10,18,12,0.92)'}
+                        stroke={isUser ? '#ffd700' : 'rgba(255,255,255,0.2)'}
+                        strokeWidth={isUser ? 1.5 : 0.6}
+                        filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.4))"
+                      />
+                      {/* Position abbreviation — top line, small, colored */}
+                      <text x={adjX} y={ly + 8.5}
+                        textAnchor="middle" dominantBaseline="middle"
+                        fontSize={7.2} fontWeight="800" letterSpacing="0.05em"
+                        fill={isUser ? '#ffd700' : color}
+                        fontFamily="Inter, sans-serif">
+                        {abbr}
+                      </text>
+                      {/* Thin divider */}
+                      <line x1={lx + 4} y1={ly + 14} x2={lx + lw - 4} y2={ly + 14}
+                        stroke="rgba(255,255,255,0.12)" strokeWidth={0.5} />
+                      {/* Player name — bottom line, very compact, white/gold */}
+                      <text x={adjX} y={ly + 21.5}
+                        textAnchor="middle" dominantBaseline="middle"
+                        fontSize={6.8} fontWeight="800" letterSpacing="0.02em"
+                        fill={isUser ? '#ffd700' : 'white'}
+                        fontFamily="Inter, sans-serif">
+                        {sname}
+                      </text>
+                      {/* Checkmark or badge for user picks */}
+                      {isUser && (
+                        <g>
+                          <circle cx={lx + lw - 1} cy={ly + 1} r={3.5}
+                            fill="#ffd700" stroke="#3a2000" strokeWidth={0.5} />
+                          <text x={lx + lw - 1} y={ly + 2}
+                            textAnchor="middle" dominantBaseline="middle"
+                            fontSize={5} fontWeight="900" fill="#3a2000" fontFamily="Inter, sans-serif">
+                            ✓
+                          </text>
+                        </g>
+                      )}
+                      {/* Points badge */}
+                      {pts !== undefined && pts !== 0 && (
+                        <>
+                          <rect x={adjX - 15} y={ly - 16} width={30} height={11} rx={2}
+                            fill={pts > 0 ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}
+                            stroke={pts > 0 ? '#4ade80' : '#f87171'} strokeWidth={0.6} />
+                          <text x={adjX} y={ly - 10.5}
+                            textAnchor="middle" dominantBaseline="middle"
+                            fontSize={6.5} fontWeight="bold"
+                            fill={pts > 0 ? '#4ade80' : '#f87171'}
+                            fontFamily="Inter, sans-serif">
+                            {pts > 0 ? `+${pts.toFixed(1)}` : pts.toFixed(1)}
+                          </text>
+                        </>
+                      )}
+                    </g>
+                  );
+                });
+              })}
+            </svg>
+          </div>
         </div>
-      </div>
       </div>{/* end zIndex wrapper */}
     </div>
   );
@@ -423,8 +518,8 @@ export default function LiveLineupFormation({
   const [activeTeam, setActiveTeam] = useState<'home' | 'away'>('away');
   const userSet = new Set(userLineupIds);
   const loading = homePlayers.length === 0 && awayPlayers.length === 0;
-  const isHome  = activeTeam === 'home';
-  const color   = isHome ? '#00e5ff' : '#ff6b6b';
+  const isHome = activeTeam === 'home';
+  const color = isHome ? '#00e5ff' : '#ff6b6b';
 
   return (
     <div className="card" style={{ marginBottom: 20 }}>
@@ -438,10 +533,10 @@ export default function LiveLineupFormation({
           background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: 3,
         }}>
           {(['away', 'home'] as const).map(team => {
-            const t  = team === 'home';
+            const t = team === 'home';
             const fc = t ? homeFlag : awayFlag;
             const tn = t ? homeTeam : awayTeam;
-            const c  = t ? '#00e5ff' : '#ff6b6b';
+            const c = t ? '#00e5ff' : '#ff6b6b';
             const active = activeTeam === team;
             return (
               <button key={team} onClick={() => setActiveTeam(team)} style={{
