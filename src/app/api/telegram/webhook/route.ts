@@ -65,8 +65,11 @@ async function fetchAndSendRecap(chatId: number, contestId: string) {
           full_time: 'full_time', fulltime: 'full_time',
           kick_off: 'kick_off', kickoff: 'kick_off',
         };
+        // Do NOT filter Confirmed here — snapshot is a point-in-time state, not a stream.
+        // During a live match, in-progress events may all be Confirmed: false in the snapshot;
+        // filtering them out leaves nothing. The Confirmed filter is only needed for the
+        // live SSE stream to prevent duplicate 2-stage events.
         events = allEvts
-          .filter((e: any) => e.Confirmed !== false)
           .map((e: any) => {
             const rawType = (e.Action ?? e.type ?? '').toLowerCase().replace(/\s+/g, '_');
             return {

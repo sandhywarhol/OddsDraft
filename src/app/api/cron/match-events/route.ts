@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendMessage, formatMatchEvent } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
+import { calculateEventPoints } from '@/lib/fantasy-engine';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -152,6 +153,81 @@ export async function GET(req: NextRequest) {
       await supabase.from('notified_events').upsert(
         newEventIds.map(id => ({ fixture_id: fixture.fixtureId, event_id: id }))
       );
+
+      // ── Fantasy points notifications ────────────────────────────────────────
+      // For scoring events (goal, card, etc.), find subscribers whose lineup
+      // contains the scoring player and send them a personal "you earned X pts" message.
+      const FANTASY_EVENTS = new Set(['goal', 'own_goal', 'red_card', 'yellow_card', 'penalty_save']);
+      const scoringEvents = newEvents.filter(ev => {
+        const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+        return FANTASY_EVENTS.has(ACTION_MAP[rt] ?? rt);
+      });
+
+      if (scoringEvents.length > 0 && subs.length > 0) {
+        const chatIds = subs.map((s: { chat_id: number }) => s.chat_id);
+
+        // chat_id → wallet_address
+        const { data: tgUsers } = await supabase
+          .from('telegram_users')
+          .select('chat_id, wallet_address')
+          .in('chat_id', chatIds);
+
+        if (tgUsers?.length) {
+          const wallets = tgUsers.map((u: any) => u.wallet_address).filter(Boolean);
+          const { data: entries } = await supabase
+            .from('contest_entries')
+            .select('wallet_address, lineup')
+            .eq('fixture_id', fixture.fixtureId)
+            .in('wallet_address', wallets);
+
+          if (entries?.length) {
+            const walletToChat = new Map(tgUsers.map((u: any) => [u.wallet_address, u.chat_id]));
+
+            for (const entry of entries) {
+              const chatId = walletToChat.get(entry.wallet_address);
+              if (!chatId || !entry.lineup?.players?.length) continue;
+
+              const msgs: string[] = [];
+              for (const ev of scoringEvents) {
+                const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+                const eventType = ACTION_MAP[rt] ?? rt;
+                const playerName = (ev.Player ?? ev.player ?? '').trim();
+                if (!playerName || playerName.toLowerCase() === 'unknown') continue;
+
+                // Fuzzy match by last name segment (≥3 chars)
+                const nameParts = playerName.toLowerCase().split(/\s+/).filter((p: string) => p.length >= 3);
+                const matched = entry.lineup.players.find((p: any) =>
+                  nameParts.some((part: string) => (p.name ?? '').toLowerCase().includes(part))
+                );
+                if (!matched) continue;
+
+                let pts = calculateEventPoints(eventType, matched.position ?? 'ATT');
+                if (pts === 0) continue;
+
+                const isCaptain = entry.lineup.captain === matched.id;
+                const stars = (entry.lineup.confidence ?? {})[matched.id] ?? 3;
+                const confMult = [1, 1.1, 1.2, 1.35, 1.5][Math.min(stars, 5) - 1] ?? 1.2;
+                pts = Math.round(pts * confMult * (isCaptain ? 2 : 1) * 10) / 10;
+
+                const ptsStr = pts > 0 ? `+${pts}` : `${pts}`;
+                const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤' };
+                const emoji = evEmoji[eventType] ?? '📊';
+                const min = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
+                const capNote = isCaptain ? ' *(C) ×2*' : '';
+                msgs.push(`${emoji} *${playerName}* — ${eventType.replace(/_/g, ' ').toUpperCase()} (${min}')\n*${ptsStr} pts*${capNote}`);
+              }
+
+              if (msgs.length > 0) {
+                await sendMessage(chatId,
+                  `🎮 *Fantasy Points Update*\n\n${msgs.join('\n\n')}\n\n_Open app to see your full score_`,
+                  { parse_mode: 'Markdown' }
+                );
+              }
+            }
+          }
+        }
+      }
+      // ── End fantasy points notifications ────────────────────────────────────
 
       results[fixture.fixtureId] = sent;
     } catch (err) {
