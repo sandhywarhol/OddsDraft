@@ -449,22 +449,13 @@ function CombineModal({
             {/* Source card ×2 */}
             {[0, 1].map(i => (
               <div key={i} style={{
-                width: 120, height: 170, borderRadius: 10,
-                background: `linear-gradient(135deg, ${rarityColor}22, rgba(0,0,0,0.6))`,
-                border: `2px solid ${rarityColor}66`,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
                 opacity: phase === 'combining' ? 0.4 : 1,
                 transition: 'opacity 0.6s ease',
-                boxShadow: `0 0 16px ${rarityColor}44`,
               }}>
-                <div style={{ fontSize: 28 }}>🃏</div>
-                <div style={{ fontSize: 10, fontWeight: 800, color: rarityColor, textTransform: 'uppercase', letterSpacing: 1 }}>
-                  {card.rarity}
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', textAlign: 'center', padding: '0 8px' }}>
-                  {card.name}
-                </div>
-                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{card.position}</div>
+                <SkillCardDisplay
+                  card={card}
+                  width={140}
+                />
               </div>
             ))}
 
@@ -484,30 +475,35 @@ function CombineModal({
 
             {/* Result slot */}
             <div style={{
-              width: 120, height: 170, borderRadius: 10,
-              background: phase === 'combining'
-                ? `linear-gradient(135deg, ${nextRarityColor}33, rgba(0,0,0,0.6))`
-                : 'rgba(255,255,255,0.04)',
-              border: `2px dashed ${phase === 'combining' ? nextRarityColor : 'rgba(255,255,255,0.15)'}`,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
-              transition: 'all 0.6s ease',
-              boxShadow: phase === 'combining' ? `0 0 24px ${nextRarityColor}55` : 'none',
-              animation: phase === 'combining' ? 'pulse 0.8s ease infinite' : undefined,
+              width: 140, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+              minHeight: 'auto',
             }}>
-              {phase === 'combining' ? (
-                <>
-                  <div style={{ fontSize: 28 }}>✨</div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: nextRarityColor, textTransform: 'uppercase', letterSpacing: 1 }}>
-                    {nextRarity}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontSize: 28, opacity: 0.3 }}>?</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Result</div>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: nextRarityColor, textTransform: 'uppercase' }}>{nextRarity}</div>
-                </>
-              )}
+              <div style={{
+                width: 140, height: Math.round(140 * (1012.5 / 810)), borderRadius: 12,
+                background: phase === 'combining'
+                  ? `linear-gradient(135deg, ${nextRarityColor}33, rgba(0,0,0,0.6))`
+                  : 'rgba(255,255,255,0.04)',
+                border: `2px dashed ${phase === 'combining' ? nextRarityColor : 'rgba(255,255,255,0.15)'}`,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+                transition: 'all 0.6s ease',
+                boxShadow: phase === 'combining' ? `0 0 24px ${nextRarityColor}55` : 'none',
+                animation: phase === 'combining' ? 'pulse 0.8s ease infinite' : undefined,
+              }}>
+                {phase === 'combining' ? (
+                  <>
+                    <div style={{ fontSize: 28 }}>✨</div>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: nextRarityColor, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      {nextRarity}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 28, opacity: 0.3 }}>?</div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>Result</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: nextRarityColor, textTransform: 'uppercase' }}>{nextRarity}</div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -894,7 +890,7 @@ export default function CardsPage() {
                     <SkillCardDisplay
                       card={card}
                       instance={instance}
-                      width={180}
+                      width={240}
                       onEquip={() => setEquipTarget({ instance, card })}
                     />
                     {isShimmering && (

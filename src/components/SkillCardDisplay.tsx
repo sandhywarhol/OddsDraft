@@ -89,8 +89,7 @@ export default function SkillCardDisplay({
           width: '100%',
           height: '100%',
           objectFit: 'contain',
-          borderRadius: '4%',
-          backgroundColor: '#f5f5f5',
+          borderRadius: '12px',
           userSelect: 'none',
           filter: equipped
             ? `drop-shadow(0 0 ${width * 0.06}px ${rarityColor})`
@@ -160,7 +159,7 @@ export default function SkillCardDisplay({
       {/* ── DESCRIPTION — flavor italic + colored effect numbers ── */}
       <div style={{
         position: 'absolute',
-        top: '87%',
+        top: '84%',
         left: '10%',
         width: '80%',
         height: '14%',
