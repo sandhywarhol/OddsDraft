@@ -89,6 +89,10 @@ export function formatMatchEvent(
       return `🏁 *FULL TIME!*\n${homeTeam} ${score?.home ?? 0}–${score?.away ?? 0} ${awayTeam}`;
     case 'var_review':
       return `📺 VAR Review in progress${min}`;
+    case 'penalty_won':
+      return `🎯 *Penalty!* ${playerName ? `Won by ${playerName}` : teamName}${min}`;
+    case 'penalty_missed':
+      return `❌ *Penalty missed!* ${playerName}${min}`;
     default:
       return `📣 ${eventType.replace(/_/g, ' ')} — ${playerName}${min}`;
   }

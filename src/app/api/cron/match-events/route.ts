@@ -16,6 +16,7 @@ const SIGNIFICANT = new Set([
   'goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save',
   'half_time', 'full_time',
   'yellow_card', 'substitution', 'corner_kick', 'var_review', 'extra_time',
+  'penalty_won', 'penalty_missed',
 ]);
 
 const ACTION_MAP: Record<string, string> = {
@@ -27,6 +28,10 @@ const ACTION_MAP: Record<string, string> = {
   penalty_save: 'penalty_save', penaltysave: 'penalty_save',
   half_time: 'half_time', halftime: 'half_time',
   full_time: 'full_time', fulltime: 'full_time',
+  // TxLINE raw event type names (from txodds.ts mapEventToFantasyType):
+  corner: 'corner_kick', corner_kick: 'corner_kick',
+  var: 'var_review', var_review: 'var_review',
+  penalty: 'penalty_won', penaltymiss: 'penalty_missed', penalty_miss: 'penalty_missed',
 };
 
 // GET /api/cron/match-events?secret=<CRON_SECRET>

@@ -3,6 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { sendMessage, answerCallbackQuery, formatKickoff } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
+import { calculateEventPoints } from '@/lib/fantasy-engine';
+import { matchPlayerName } from '@/lib/txline-bridge';
+import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -94,13 +97,21 @@ async function fetchAndSendRecap(chatId: number, contestId: string) {
       }
     }
 
-    const SIGNIFICANT_RECAP = ['goal','penalty_outcome','own_goal','yellow_card','red_card','penalty_save','half_time','full_time','kick_off','substitution','corner_kick','var_review'];
-    const filtered = (events ?? [])
+    const SIGNIFICANT_RECAP = ['goal','penalty_outcome','own_goal','yellow_card','red_card','penalty_save','half_time','full_time','kick_off','substitution','corner_kick','var_review','penalty_won','penalty_missed'];
+    // Deduplicate by (event_type, minute, player_name) to avoid TxLINE double-delivery artifacts
+    const seenKeys = new Set<string>();
+    const dedupedEvents = (events ?? []).filter(e => {
+      const key = `${e.event_type ?? e.type}-${e.minute}-${e.player_name ?? e.player ?? ''}`;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+    const filtered = dedupedEvents
       .filter(e => SIGNIFICANT_RECAP.includes(e.event_type ?? e.type ?? ''))
       .slice(-8)
       .reverse();
 
-    const display = filtered.length ? filtered : (events ?? []).slice(-8).reverse();
+    const display = filtered.length ? filtered : dedupedEvents.slice(-8).reverse();
 
     if (!display?.length) {
       await sendMessage(chatId,
@@ -168,23 +179,72 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
   const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
   try {
-    const res = await fetch(`${appUrl}/api/contest/leaderboard?fixture=${contestId}`);
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    const participants: Array<{ wallet_address: string; contest_type: string }> = data?.participants ?? [];
-    const entry = participants.find(p => p.wallet_address?.toLowerCase() === walletAddress.toLowerCase());
-    if (entry) {
-      const rank = participants.indexOf(entry) + 1;
-      await sendMessage(chatId,
-        `📊 *${matchName}*\n\n✅ You are entered _(${entry.contest_type})_\nEntry #${rank} of ${participants.length}\n\n_Fantasy points are tracked live in the app_\n[View Your Score ↗](${appUrl}/live/${contestId})`,
-        { parse_mode: 'Markdown' }
-      );
-    } else {
+    // Get user's lineup
+    const { data: entryRow } = await supabase
+      .from('contest_entries')
+      .select('lineup, contest_type')
+      .eq('fixture_id', contestId)
+      .eq('wallet_address', walletAddress)
+      .single();
+
+    if (!entryRow?.lineup?.players?.length) {
       await sendMessage(chatId,
         `📊 *${matchName}*\n\n❌ No lineup found for your wallet.\n\n[Join the contest ↗](${appUrl}/lineup/${contestId})`,
         { parse_mode: 'Markdown' }
       );
+      return;
     }
+
+    // Get all match events stored by cron
+    const { data: matchEvents } = await supabase
+      .from('live_match_events')
+      .select('event_type, player_name, team_name, minute')
+      .eq('fixture_id', contestId)
+      .order('minute', { ascending: true });
+
+    const SCORING_EVENTS = new Set(['goal', 'own_goal', 'red_card', 'yellow_card', 'penalty_save', 'assist', 'penalty_won', 'penalty_missed']);
+    const lineup = entryRow.lineup;
+    let totalPts = 0;
+    const breakdown: string[] = [];
+
+    for (const ev of (matchEvents ?? [])) {
+      if (!SCORING_EVENTS.has(ev.event_type)) continue;
+      const rawName = ev.player_name ?? '';
+      if (!rawName) continue;
+
+      // Try ID-based match first (DB already stores resolved names from cron)
+      const resolvedId = matchPlayerName(rawName, ev.team_name ?? '');
+      let matched = resolvedId
+        ? lineup.players.find((p: any) => p.id === resolvedId)
+        : null;
+      if (!matched) {
+        const parts = rawName.toLowerCase().split(/\s+/).filter((p: string) => p.length >= 3);
+        matched = lineup.players.find((p: any) =>
+          parts.some((part: string) => (p.name ?? '').toLowerCase().includes(part))
+        );
+      }
+      if (!matched) continue;
+
+      let pts = calculateEventPoints(ev.event_type, matched.position ?? 'ATT');
+      if (pts === 0) continue;
+
+      const isCaptain = lineup.captain === matched.id;
+      const stars = (lineup.confidence ?? {})[matched.id] ?? 3;
+      const confMult = [1, 1.1, 1.2, 1.35, 1.5][Math.min(stars, 5) - 1] ?? 1.2;
+      pts = Math.round(pts * confMult * (isCaptain ? 2 : 1) * 10) / 10;
+      totalPts += pts;
+
+      const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤', assist:'🎯', penalty_won:'🎯', penalty_missed:'❌' };
+      const capNote = isCaptain ? ' *(C)×2*' : '';
+      breakdown.push(`${evEmoji[ev.event_type] ?? '📣'} ${rawName} — ${ev.event_type.replace(/_/g,' ').toUpperCase()} (${ev.minute}') *+${pts}pts*${capNote}`);
+    }
+
+    const totalStr = totalPts > 0 ? `+${Math.round(totalPts * 10) / 10}` : `${Math.round(totalPts * 10) / 10}`;
+    const bdText = breakdown.length > 0 ? `\n\n${breakdown.join('\n')}` : '\n\n_No scoring events from your lineup yet_';
+    await sendMessage(chatId,
+      `📊 *${matchName}* _(${entryRow.contest_type})_\n\n*Total: ${totalStr} pts*${bdText}\n\n[Full live score ↗](${appUrl}/live/${contestId})`,
+      { parse_mode: 'Markdown' }
+    );
   } catch {
     await sendMessage(chatId, '❌ Could not fetch points right now. Try again later.');
   }
