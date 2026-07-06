@@ -59,22 +59,28 @@ export async function GET(req: NextRequest) {
       const scoreHome: number = (raw as any)?.Score?.Participant1?.Total?.Goals ?? 0;
       const scoreAway: number = (raw as any)?.Score?.Participant2?.Total?.Goals ?? 0;
 
+      // Filter confirmed events only — TxLINE sends every event twice
+      // (Confirmed=false then Confirmed=true). Process only confirmed to avoid duplicates.
+      const confirmedEvents = allEvents.filter(ev => ev.Confirmed !== false);
+
       // Filter only significant events we haven't notified about yet
-      const candidateEvents = allEvents.filter(ev => {
-        const rawType = (ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+      const candidateEvents = confirmedEvents.filter(ev => {
+        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const mapped = ACTION_MAP[rawType] ?? rawType;
         return SIGNIFICANT.has(mapped);
       });
 
       if (candidateEvents.length === 0) continue;
 
-      // Build event IDs to check against notified_events table
+      // Build event IDs using Seq (unique per TxLINE event) when available,
+      // otherwise fall back to type+minute (no player — player name varies between
+      // Confirmed=false and Confirmed=true stages causing false duplicates).
       const eventIds = candidateEvents.map(ev => {
-        const rawType = (ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const mapped = ACTION_MAP[rawType] ?? rawType;
-        const min = parseInt(ev.minute) || 0;
-        const player = (ev.player ?? '').replace(/\s+/g, '');
-        return `${mapped}-${min}-${player}`;
+        const min = parseInt(ev.Clock?.Seconds ? String(Math.floor(ev.Clock.Seconds / 60)) : ev.minute) || 0;
+        const seq = ev.Seq ?? ev.seq;
+        return seq ? `seq-${seq}` : `${mapped}-${min}`;
       });
 
       const { data: alreadyNotified } = await supabase
@@ -105,15 +111,16 @@ export async function GET(req: NextRequest) {
       // ── Write all new events to live_match_events (for browser fallback) ──
       await supabase.from('live_match_events').upsert(
         newEvents.map((ev, i) => {
-          const rawType = (ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+          const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
           const eventType = ACTION_MAP[rawType] ?? rawType;
+          const minSec = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
           return {
             fixture_id: fixture.fixtureId,
             event_id: eventIds[candidateEvents.indexOf(newEvents[i])],
-            minute: parseInt(ev.minute) || 0,
+            minute: minSec,
             event_type: eventType,
-            player_name: ev.player ?? '',
-            team_name: ev.team ?? '',
+            player_name: ev.Player ?? ev.player ?? '',
+            team_name: ev.Team ?? ev.team ?? '',
             home_score: scoreHome,
             away_score: scoreAway,
           };
@@ -124,11 +131,11 @@ export async function GET(req: NextRequest) {
       let sent = 0;
       for (let i = 0; i < newEvents.length; i++) {
         const ev = newEvents[i];
-        const rawType = (ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const eventType = ACTION_MAP[rawType] ?? rawType;
-        const minute = parseInt(ev.minute) || 0;
-        const playerName = ev.player ?? '';
-        const teamName = ev.team ?? '';
+        const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
+        const playerName = ev.Player ?? ev.player ?? '';
+        const teamName = ev.Team ?? ev.team ?? '';
 
         const text = formatMatchEvent(eventType, playerName, teamName, minute, fixture.homeTeam, fixture.awayTeam, { home: scoreHome, away: scoreAway });
 
