@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/match-events?secret=oddsdraft_cron_2026",
-      "schedule": "* * * * *"
-    }
-  ]
-}
+{}
