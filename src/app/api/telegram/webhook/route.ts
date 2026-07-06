@@ -31,34 +31,60 @@ const EVENT_EMOJI: Record<string, string> = {
 async function fetchAndSendRecap(chatId: number, contestId: string) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
-    const res = await fetch(`${appUrl}/api/live/events?fixtureId=${contestId}`);
-    if (!res.ok) throw new Error('fetch failed');
-    const events: any[] = await res.json();
+    // Try live_match_events first (populated by cron), fall back to TxLINE snapshot
+    let events: any[] = [];
 
+    const dbRes = await fetch(`${appUrl}/api/live/events?fixtureId=${contestId}`, { cache: 'no-store' });
+    if (dbRes.ok) events = await dbRes.json();
+
+    // If DB empty, pull directly from TxLINE score snapshot via proxy
     if (!events?.length) {
-      await sendMessage(chatId, `📋 *${matchName}*\n\nNo events recorded yet — the match may not have started.`, { parse_mode: 'Markdown' });
-      return;
+      const snapRes = await fetch(`${appUrl}/api/txline/scores/snapshot/${contestId}`, { cache: 'no-store' });
+      if (snapRes.ok) {
+        const snapRaw = await snapRes.json();
+        const allEvts: any[] = Array.isArray((snapRaw as any)?._allEvents)
+          ? (snapRaw as any)._allEvents
+          : (Array.isArray(snapRaw) ? snapRaw : []);
+        events = allEvts
+          .filter((e: any) => e.Confirmed !== false)
+          .map((e: any) => ({
+            event_type: (e.Action ?? e.type ?? '').toLowerCase().replace(/\s+/g, '_'),
+            minute: e.Clock?.Seconds ? Math.floor(e.Clock.Seconds / 60) : (e.minute ?? 0),
+            player_name: e.PlayerName ?? e.player ?? '',
+            team_name: e.Participant === 2 ? fixture?.awayTeam : fixture?.homeTeam,
+          }));
+      }
     }
 
-    // Show last 8 events, most recent first
-    const significant = events
-      .filter(e => ['goal','penalty_outcome','own_goal','yellow_card','red_card','penalty_save','half_time','full_time'].includes(e.event_type ?? e.type))
+    const SIGNIFICANT_RECAP = ['goal','penalty_outcome','own_goal','yellow_card','red_card','penalty_save','half_time','full_time','kick_off'];
+    const filtered = (events ?? [])
+      .filter(e => SIGNIFICANT_RECAP.includes(e.event_type ?? e.type ?? ''))
       .slice(-8)
       .reverse();
 
-    const all = significant.length ? significant : events.slice(-8).reverse();
+    const display = filtered.length ? filtered : (events ?? []).slice(-8).reverse();
 
-    const lines = all.map(e => {
+    if (!display?.length) {
+      await sendMessage(chatId,
+        `📋 *${matchName}*\n\nNo events yet — match may not have started or is scheduled.`,
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+
+    const lines = display.map(e => {
       const type = e.event_type ?? e.type ?? '';
       const emoji = EVENT_EMOJI[type] ?? '📣';
-      const min = e.minute > 0 ? ` (${e.minute}')` : '';
+      const min = (e.minute ?? 0) > 0 ? ` (${e.minute}')` : '';
       const player = e.player_name ?? e.player ?? '';
       const team = e.team_name ?? e.team ?? '';
       const label = type.replace(/_/g, ' ').toUpperCase();
-      return `${emoji} *${label}*${min}${player ? ` — ${player}` : ''}${team ? ` \\(${team}\\)` : ''}`;
+      const playerPart = player ? ` — ${player}` : '';
+      const teamPart = team ? ` \\(${team}\\)` : '';
+      return `${emoji} *${label}*${min}${playerPart}${teamPart}`;
     });
 
     await sendMessage(chatId,
@@ -66,7 +92,7 @@ async function fetchAndSendRecap(chatId: number, contestId: string) {
       { parse_mode: 'Markdown' }
     );
   } catch {
-    await sendMessage(chatId, '❌ Could not fetch match events right now.');
+    await sendMessage(chatId, '❌ Could not fetch match events right now. Try again in a moment.');
   }
 }
 

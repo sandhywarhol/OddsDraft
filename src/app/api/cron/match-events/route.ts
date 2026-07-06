@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { fetchLiveScoreUpdates, fetchGuestToken } from '@/lib/txline';
 import { sendMessage, formatMatchEvent } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 const SIGNIFICANT = new Set(['goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save', 'half_time', 'full_time']);
@@ -31,29 +30,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiToken = process.env.TXODDS_API_TOKEN ?? '';
-  if (!apiToken) return NextResponse.json({ error: 'No API token' }, { status: 500 });
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 
-  // Find matches that are currently live (started within last 2.5h, not yet finished)
+  // Find matches that are currently live (started within last 4h to handle delays)
   const now = Date.now();
   const liveFixtures = WC2026_FIXTURES.filter(f => {
     if (!f.kickoffAt) return false;
     const ko = new Date(f.kickoffAt).getTime();
-    return now > ko && now < ko + 2.5 * 3600 * 1000;
+    return now > ko - 10 * 60 * 1000 && now < ko + 4 * 3600 * 1000;
   });
 
   if (liveFixtures.length === 0) {
     return NextResponse.json({ ok: true, message: 'No live matches right now' });
   }
 
-  let guestJwt: string | null = null;
-  try { guestJwt = await fetchGuestToken(); } catch { /* continue without guest token */ }
-
   const results: Record<string, number> = {};
 
   for (const fixture of liveFixtures) {
     try {
-      const raw = await fetchLiveScoreUpdates(apiToken, fixture.fixtureId, guestJwt);
+      // Use server-side proxy — injects auth, no client token needed
+      const scoreRes = await fetch(`${appUrl}/api/txline/scores/updates/${fixture.fixtureId}`, { cache: 'no-store' });
+      if (!scoreRes.ok) continue;
+      const raw = await scoreRes.json();
       const allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
       if (allEvents.length === 0) continue;
 
