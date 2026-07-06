@@ -660,6 +660,15 @@ function LiveTicker() {
     );
   }
   if (!isDemo && !hasLiveTxLineData) {
+    // Check allFixtures for any in-progress match (GameState 2–8 = playing/HT/ET)
+    const liveFromAll = (allFixtures || []).filter((f: any) => {
+      const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
+      const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
+      const intState = typeof rawState === 'number' ? rawState : null;
+      return [2, 3, 4, 5, 6, 7, 8].includes(intState as number) ||
+        ['inprogress', 'live', 'playing', 'firsthalf', 'halftime', 'secondhalf', 'extratime'].some(s => strState.includes(s));
+    }).slice(0, 3);
+
     const finishedFixtures = (allFixtures || []).filter((f: any) => {
       const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
       const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
@@ -724,11 +733,37 @@ function LiveTicker() {
 
     return (
       <>
-        <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
-          <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
-            • LIVE txLINE: No matches currently in progress.
-          </span>
-        </div>
+        {liveFromAll.length > 0 ? (
+          <div style={{ background: 'rgba(0,20,10,0.85)', padding: '6px 0', borderBottom: '1px solid rgba(0,229,100,0.2)', textAlign: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <span style={{ color: '#00e564', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e564', display: 'inline-block', boxShadow: '0 0 6px #00e564' }} />
+                LIVE NOW
+              </span>
+              {liveFromAll.map((f: any, i: number) => {
+                const home = f.homeTeam?.name || f.HomeTeamName || f.Participant1 || 'Home';
+                const away = f.awayTeam?.name || f.AwayTeamName || f.Participant2 || 'Away';
+                const homeFlag = f.homeFlag || f.homeTeam?.flag || '';
+                const awayFlag = f.awayFlag || f.awayTeam?.flag || '';
+                const sh = f.score?.home ?? f.Score?.Home ?? f.HomeScore ?? 0;
+                const sa = f.score?.away ?? f.Score?.Away ?? f.AwayScore ?? 0;
+                const clock = f.clock?.matchTime || f.Clock?.MatchTime || '';
+                return (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,229,100,0.08)', border: '1px solid rgba(0,229,100,0.3)', borderRadius: 6, padding: '3px 10px', fontSize: '0.82rem', fontWeight: 600, color: '#f8fafc' }}>
+                    {homeFlag} {home} <span style={{ color: '#00e564', fontFamily: 'Bebas Neue, cursive', fontSize: '1rem' }}>{sh}–{sa}</span> {away} {awayFlag}
+                    {clock && <span style={{ color: '#00e564', fontSize: '0.75rem', marginLeft: 4 }}>{clock}'</span>}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
+            <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
+              • LIVE txLINE: No matches currently in progress.
+            </span>
+          </div>
+        )}
 
         {displayFinished.length > 0 && (
           <div id="live-ticker-section" style={{ 
@@ -1096,8 +1131,17 @@ function FeaturesSection() {
   ];
 
   return (
-    <section id="features-section" style={{ padding: '80px 0', background: 'transparent' }}>
-      <div className="container">
+    <section id="features-section" style={{ padding: '80px 0', background: 'transparent', position: 'relative', overflow: 'hidden' }}>
+      {/* footer.webp as background for this section */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 0,
+        backgroundImage: 'url("/footer.webp")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        opacity: 0.18,
+        pointerEvents: 'none',
+      }} />
+      <div className="container" style={{ position: 'relative', zIndex: 1 }}>
         <div style={{ textAlign: 'center', marginBottom: 60 }}>
           <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>
             Why OddsDraft?

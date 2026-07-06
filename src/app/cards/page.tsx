@@ -634,7 +634,7 @@ export default function CardsPage() {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '100px 24px 80px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 24px 80px' }}>
 
         {/* Header */}
         <div style={{
