@@ -88,8 +88,9 @@ export default function SkillCardDisplay({
           inset: 0,
           width: '100%',
           height: '100%',
-          objectFit: 'cover',
+          objectFit: 'contain',
           borderRadius: '4%',
+          backgroundColor: '#f5f5f5',
           userSelect: 'none',
           filter: equipped
             ? `drop-shadow(0 0 ${width * 0.06}px ${rarityColor})`
@@ -103,7 +104,7 @@ export default function SkillCardDisplay({
       <div style={{
         position: 'absolute',
         top: '63%',
-        left: '40%',
+        left: '48%',
         height: '5.5%',
         display: 'flex',
         alignItems: 'center',
@@ -132,7 +133,7 @@ export default function SkillCardDisplay({
       <div style={{
         position: 'absolute',
         top: '72%',
-        left: '40%',
+        left: '48%',
         height: '4%',
         display: 'flex',
         alignItems: 'center',
@@ -159,7 +160,7 @@ export default function SkillCardDisplay({
       {/* ── DESCRIPTION — flavor italic + colored effect numbers ── */}
       <div style={{
         position: 'absolute',
-        top: '86%',
+        top: '87%',
         left: '10%',
         width: '80%',
         height: '14%',
