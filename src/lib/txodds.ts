@@ -217,15 +217,19 @@ export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: stri
     corner:         'corner_kick',
     corner_kick:    'corner_kick',
     // Match flow events — synthesized from GameState but also handle if TxLINE sends them explicitly
-    kickoff:        'kick_off',
-    kick_off:       'kick_off',
-    halftime:       'half_time',
-    half_time:      'half_time',
-    secondhalf:     'kick_off',
-    fulltime:       'full_time',
-    full_time:      'full_time',
-    startingxi:     'starting_xi',
-    starting_xi:    'starting_xi',
+    kickoff:           'kick_off',
+    kick_off:          'kick_off',
+    halftime:          'half_time',
+    half_time:         'half_time',
+    secondhalf:        'kick_off',
+    fulltime:          'full_time',
+    full_time:         'full_time',
+    startingxi:        'starting_xi',
+    starting_xi:       'starting_xi',
+    hydration_break:   'hydration_break',
+    drinks_break:      'hydration_break',
+    waterbreak:        'hydration_break',
+    water_break:       'hydration_break',
   };
   return map[type] || null;
 }

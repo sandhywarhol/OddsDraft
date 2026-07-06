@@ -175,7 +175,60 @@ export function formatMatchEvent(p: MatchEventPayload): string {
     case 'starting_xi':
       return `📋 *${team} Starting XI confirmed*`;
 
+    case 'hydration_break':
+      return `💧 *Hydration / Drinks Break*${min ? ` ⏱ ${min}` : ''}`;
+
     default:
       return `📣 *${eventType.replace(/_/g, ' ')}*${team ? ` — ${team}` : ''}${playerName ? ` | ${playerName}` : ''}${min ? ` ⏱ ${min}` : ''}`;
   }
+}
+
+export interface MatchStatsPayload {
+  label: string;             // 'Half Time' | 'Full Time'
+  homeTeam: string;
+  awayTeam: string;
+  homeFlag?: string;
+  awayFlag?: string;
+  score: { home: number; away: number };
+  stats: {
+    goals:    [number, number];
+    corners:  [number, number];
+    yellows:  [number, number];
+    reds:     [number, number];
+    saves:    [number, number];
+    subs:     [number, number];
+    dangers:  [number, number];
+  };
+}
+
+export function formatMatchStats(p: MatchStatsPayload): string {
+  const hf = p.homeFlag ?? '';
+  const af = p.awayFlag ?? '';
+  const scoreStr = `${hf} *${p.homeTeam} ${p.score.home}–${p.score.away} ${p.awayTeam}* ${af}`;
+
+  const bar = (h: number, a: number) => {
+    const total = h + a || 1;
+    const hPct = Math.round((h / total) * 8);
+    const aPct = 8 - hPct;
+    return `${'█'.repeat(hPct)}${'░'.repeat(aPct)}`;
+  };
+
+  const row = (emoji: string, label: string, h: number, a: number) =>
+    `${emoji} ${label}: *${h}* ${bar(h, a)} *${a}*`;
+
+  const { goals, corners, yellows, reds, saves, subs, dangers } = p.stats;
+
+  return [
+    p.label === 'Half Time' ? `⏱ *HALF TIME STATISTICS*` : `🏁 *FULL TIME STATISTICS*`,
+    scoreStr,
+    '',
+    `_${p.homeTeam}  ░░░░░░░░░░  ${p.awayTeam}_`,
+    row('⚽', 'Goals   ', goals[0], goals[1]),
+    row('⛳', 'Corners ', corners[0], corners[1]),
+    row('🧤', 'Saves   ', saves[0], saves[1]),
+    row('⚡', 'Attacks ', dangers[0], dangers[1]),
+    row('🟨', 'Yellows ', yellows[0], yellows[1]),
+    reds[0] + reds[1] > 0 ? row('🟥', 'Reds    ', reds[0], reds[1]) : '',
+    row('🔄', 'Subs    ', subs[0], subs[1]),
+  ].filter(s => s !== undefined).join('\n');
 }

@@ -1629,7 +1629,7 @@ a {
   background: #fcf8eb;
   border: 5px solid #1a1008;
   border-radius: 0px;
-  padding: 36px 48px;
+  padding: 36px 48px 28px;
   box-shadow: 10px 10px 0px #1a1008;
   position: relative;
   cursor: pointer;
@@ -1638,6 +1638,8 @@ a {
   flex-direction: column;
   gap: 8px;
   animation: score-pop 300ms ease-out, dialog-glow 2s infinite;
+  max-height: 38vh;
+  overflow-y: auto;
 }
 
 .npc-jrpg-dialog-footer {
@@ -1757,17 +1759,19 @@ a {
 
   /* JRPG Dialogue Box positioning and sizing */
   .npc-jrpg-dialog-box {
-    position: absolute !important;
-    width: 90% !important;
-    padding: 28px 24px 20px !important;
+    position: relative !important;
+    width: 92% !important;
+    padding: 28px 20px 20px !important;
     margin-top: 0 !important;
     border-width: 4px !important;
     box-shadow: 6px 6px 0px #1a1008 !important;
     z-index: 1030 !important;
-    left: 50% !important;
+    left: auto !important;
     right: auto !important;
-    transform: translateX(-50%) !important;
-    bottom: 18vh !important;
+    transform: none !important;
+    bottom: auto !important;
+    max-height: 42vh !important;
+    overflow-y: auto !important;
   }
 
   .npc-jrpg-speaker-tag {

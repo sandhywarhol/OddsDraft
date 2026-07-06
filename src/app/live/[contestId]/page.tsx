@@ -1122,6 +1122,53 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // from elapsed time since kickoff so the display doesn't stick at 0'.
   const [liveClockMinute, setLiveClockMinute] = useState<number>(0);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const htStatsSentRef = useRef(false);
+  const ftStatsSentRef = useRef(false);
+
+  // Auto-send match statistics to Telegram at half time and full time
+  useEffect(() => {
+    if (appMode !== 'live') return;
+    const countByTeam = (type: string, team: 'home' | 'away') =>
+      events.filter(e => e.type === type && (team === 'home' ? e.team === fixture.homeTeam : e.team === fixture.awayTeam)).length;
+    const hasHT = events.some(e => e.type === 'half_time');
+    const hasFT = events.some(e => e.type === 'full_time') || matchCompleted;
+    const buildStats = () => ({
+      goals:   [countByTeam('goal', 'home'), countByTeam('goal', 'away')] as [number,number],
+      corners: [countByTeam('corner_kick', 'home'), countByTeam('corner_kick', 'away')] as [number,number],
+      yellows: [countByTeam('yellow_card', 'home'), countByTeam('yellow_card', 'away')] as [number,number],
+      reds:    [countByTeam('red_card', 'home'), countByTeam('red_card', 'away')] as [number,number],
+      saves:   [countByTeam('goalkeeper_save', 'home'), countByTeam('goalkeeper_save', 'away')] as [number,number],
+      subs:    [countByTeam('substitution', 'home'), countByTeam('substitution', 'away')] as [number,number],
+      dangers: [countByTeam('danger_attack', 'home'), countByTeam('danger_attack', 'away')] as [number,number],
+    });
+    if (hasHT && !htStatsSentRef.current) {
+      htStatsSentRef.current = true;
+      fetch('/api/telegram/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contestId, label: 'Half Time',
+          homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+          homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag,
+          score: scoreRef.current, stats: buildStats(),
+        }),
+      }).catch(() => {});
+    }
+    if (hasFT && !ftStatsSentRef.current) {
+      ftStatsSentRef.current = true;
+      fetch('/api/telegram/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contestId, label: 'Full Time',
+          homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+          homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag,
+          score: scoreRef.current, stats: buildStats(),
+        }),
+      }).catch(() => {});
+    }
+  }, [events, matchCompleted]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (appMode !== 'live' || !wcFixture) return;
     const update = () => {
