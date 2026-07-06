@@ -15,6 +15,7 @@ import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates } from '@/lib/txline-bridge';
 import { fetchLiveScoreUpdates } from '@/lib/txline';
 import CardPackOpener from '@/components/CardPackOpener';
+import FlagImage from '@/components/FlagImage';
 import { openCardPack, hasOpenedPack } from '@/lib/card-collection';
 
 // Fallback events (mirrors live page LIVE_EVENTS with all valid TxLINE event types)
@@ -1135,7 +1136,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', gap: 24, padding: '0 24px', textAlign: 'center' }}>
           <div style={{ fontSize: '3rem', animation: 'pulse 1.5s infinite' }}>🎬</div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>
-            {fixture.homeFlag} {fixture.homeTeam} vs {fixture.awayTeam} {fixture.awayFlag}
+            <><FlagImage flag={fixture.homeFlag} size={16} /> {fixture.homeTeam} vs {fixture.awayTeam} <FlagImage flag={fixture.awayFlag} size={16} /></>
           </h1>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 380, lineHeight: 1.7 }}>
             Fetching match events from TxLINE API...
@@ -1157,7 +1158,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', gap: 24, padding: '0 24px', textAlign: 'center' }}>
           <div style={{ fontSize: '3rem' }}>🎬</div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, maxWidth: 500 }}>
-            {wcFixture.homeFlag} {wcFixture.homeTeam} vs {wcFixture.awayTeam} {wcFixture.awayFlag}
+            <><FlagImage flag={wcFixture.homeFlag} size={16} /> {wcFixture.homeTeam} vs {wcFixture.awayTeam} <FlagImage flag={wcFixture.awayFlag} size={16} /></>
           </h1>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 420, lineHeight: 1.7 }}>
             No replay data available yet. The replay will be available once match events are recorded by TxLINE.
@@ -1300,7 +1301,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
           {/* Score Bug */}
           <div className="score-bug" style={{ marginBottom: 24 }}>
             <div className="score-bug__team">
-              <span className="score-bug__flag">{fixture.homeFlag}</span>
+              <span className="score-bug__flag"><FlagImage flag={fixture.homeFlag} size={36} /></span>
               <span className="score-bug__name">{fixture.homeTeam}</span>
             </div>
             <div className="score-bug__score-container">
@@ -1317,7 +1318,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               </span>
             </div>
             <div className="score-bug__team">
-              <span className="score-bug__flag">{fixture.awayFlag}</span>
+              <span className="score-bug__flag"><FlagImage flag={fixture.awayFlag} size={36} /></span>
               <span className="score-bug__name">{fixture.awayTeam}</span>
             </div>
           </div>
@@ -1441,7 +1442,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                           </span>
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {event.team ? `${event.teamFlag} ${event.team}` : event.description}
+                          {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
                         </div>
                       </div>
                       <div style={{

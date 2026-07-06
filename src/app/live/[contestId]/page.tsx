@@ -18,6 +18,7 @@ import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
 import { mergeEvents } from '@/lib/txline';
 import PlayerAvatar from '@/components/PlayerAvatar';
+import FlagImage from '@/components/FlagImage';
 import LiveLineupFormation, { type FormationPlayer } from '@/components/LiveLineupFormation';
 
 // Demo live events that replay at interval to simulate a live match
@@ -62,8 +63,7 @@ const LIVE_EVENTS = [
   { id: 'e7_concede_def', minute: 52, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'goal_conceded', points: -1, description: 'Romero unable to win the aerial duel — Giroud gets the run on him.' },
   { id: 'e7_1', minute: 54, team: '', teamFlag: '', player: '', type: 'var_review', points: 0, description: 'VAR reviewing a potential foul in the build-up to the goal — play stopped.' },
   { id: 'e_save_maig2', minute: 58, team: 'France', teamFlag: '🇫🇷', player: 'Maignan', playerId: 'fra-maignan', type: 'goalkeeper_save', points: 1, description: 'Maignan tips over Álvarez\'s powerful header at full stretch — outstanding!' },
-  { id: 'e7_2', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'substitution', points: 0, playerInId: 'fra-coman', playerOutId: 'fra-dembele', description: 'Substitution: Coman replaces Dembélé — Deschamps looking for fresh legs.' },
-  { id: 'e7_2_sub', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'sub_appearance', points: 1, description: 'Coman enters the pitch — immediate energy on the left flank.' },
+  { id: 'e7_2', minute: 60, team: 'France', teamFlag: '🇫🇷', player: 'Coman', playerId: 'fra-coman', type: 'substitution', points: 0, playerOut: 'Dembélé', description: 'Substitution: Coman replaces Dembélé — Deschamps looking for fresh legs.' },
   { id: 'e7_d2', minute: 65, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Argentina pressing desperately now — Messi driving forward with intent!' },
   { id: 'e_asst_mess', minute: 66, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'assist', points: 6, description: 'Álvarez lays off a perfectly weighted pass to find Messi in space.' },
   { id: 'e8', minute: 67, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! MESSI! A curling shot into the far corner — pure genius, 2-2!' },
@@ -2059,43 +2059,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setShowPopup(true);
         }
 
-        // Push Telegram notifications for all relevant events (fire-and-forget)
-        // Skip internal scoring-only events that have no meaningful telegram message
-        const telegramSkip = new Set(['goal_conceded', 'possession_bonus', 'sub_appearance', 'starting_xi', 'clean_sheet_start']);
-        if (!suppressDialog) {
-          for (const ev of newEvents) {
-            if (telegramSkip.has(ev.type)) continue;
-            // For substitution: find the matching sub_appearance event (same minute, same team) for playerIn
-            let playerOut: string | undefined;
-            let playerIn: string | undefined;
-            if (ev.type === 'substitution') {
-              // In TxLINE normalization: substitution.player = player going OUT
-              // The player coming IN is in a separate sub_appearance event
-              playerOut = ev.player || undefined;
-              const subIn = newEvents.find(e => e.type === 'sub_appearance' && e.minute === ev.minute && e.team === ev.team);
-              playerIn = subIn?.player || undefined;
-            }
-            fetch('/api/telegram/notify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contestId,
-                eventType: ev.type,
-                playerName: ev.type === 'substitution' ? (playerIn || ev.player || '') : (ev.player || ''),
-                playerOut: ev.type === 'substitution' ? playerOut : undefined,
-                teamName: ev.team || '',
-                teamFlag: ev.teamFlag || '',
-                minute: ev.minute,
-                homeTeam: fixture.homeTeam,
-                awayTeam: fixture.awayTeam,
-                homeFlag: fixture.homeFlag || '',
-                awayFlag: fixture.awayFlag || '',
-                score: scoreRef.current,
-                description: ev.description || '',
-              }),
-            }).catch(() => {});
-          }
-        }
+        // Telegram notifications are handled server-side by /api/cron/match-events
+        // to avoid duplicates (cron has deduplication via notified_events table).
 
         // Fantasy points + toasts for every event
         for (const ev of newEvents) {
@@ -2998,7 +2963,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             return (
               <div className="score-bug" style={{ marginBottom: 24 }} suppressHydrationWarning>
                 <div className="score-bug__team">
-                  <span className="score-bug__flag">{fixture.homeFlag}</span>
+                  <span className="score-bug__flag"><FlagImage flag={fixture.homeFlag} size={36} /></span>
                   <span className="score-bug__name">{fixture.homeTeam}</span>
                 </div>
                 <div className="score-bug__score-container">
@@ -3081,7 +3046,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   )}
                 </div>
                 <div className="score-bug__team">
-                  <span className="score-bug__flag">{fixture.awayFlag}</span>
+                  <span className="score-bug__flag"><FlagImage flag={fixture.awayFlag} size={36} /></span>
                   <span className="score-bug__name">{fixture.awayTeam}</span>
                 </div>
               </div>
@@ -3292,7 +3257,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center',
                                 gap: 3, whiteSpace: 'nowrap', overflow: 'hidden', zIndex: 2,
                               }}>
-                                <span>{p.teamFlag}</span>
+                                <FlagImage flag={p.teamFlag} size={16} />
                                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.team}</span>
                               </div>
                               {/* Position badge */}
@@ -3734,6 +3699,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                   full_time: 'FULL TIME', extra_time: 'EXTRA TIME',
                                 };
                                 const label = typeLabels[event.type] ?? event.type.replace(/_/g, ' ').toUpperCase();
+                                if (event.type === 'substitution' && (event.player || event.playerOut)) {
+                                  return (
+                                    <span style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3 }}>
+                                      {event.player && <span style={{ color: '#4ade80', fontSize: '0.72rem' }}>▲ {event.player}</span>}
+                                      {event.playerOut && <span style={{ color: '#f87171', fontSize: '0.72rem' }}>▼ {event.playerOut}</span>}
+                                    </span>
+                                  );
+                                }
                                 return (event.player && event.player !== 'Unknown') ? event.player : label;
                               })()}
                             </span>
@@ -3742,7 +3715,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             </span>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {event.team ? `${event.teamFlag} ${event.team}` : event.description}
+                            {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
                           </div>
                         </div>
                         <div style={{
@@ -3928,7 +3901,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 <div>
                   <div style={{ fontSize: '0.68rem', color: '#00e5ff', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 2 }}>📊 {label}</div>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
-                    {fixture.homeFlag} {home} <span style={{ color: '#ffd700' }}>{score.home}–{score.away}</span> {away} {fixture.awayFlag}
+                    <><FlagImage flag={fixture.homeFlag} size={16} /> {home}</> <span style={{ color: '#ffd700' }}>{score.home}–{score.away}</span> <>{away} <FlagImage flag={fixture.awayFlag} size={16} /></>
                   </div>
                 </div>
                 <button onClick={() => setShowStatsModal(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '1.2rem', cursor: 'pointer', lineHeight: 1 }}>✕</button>
@@ -3936,8 +3909,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               {/* Team headers */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: '0.75rem', fontWeight: 700 }}>
-                <span style={{ color: '#60a5fa' }}>{fixture.homeFlag} {home}</span>
-                <span style={{ color: '#f87171' }}>{away} {fixture.awayFlag}</span>
+                <span style={{ color: '#60a5fa' }}><><FlagImage flag={fixture.homeFlag} size={16} /> {home}</></span>
+                <span style={{ color: '#f87171' }}><>{away} <FlagImage flag={fixture.awayFlag} size={16} /></></span>
               </div>
 
               <StatRow label="Goals" home={goals.home} away={goals.away} highlight />

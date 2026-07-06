@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import type { MatchResult } from '@/app/api/match/result/route';
 import { hasOpenedPack, openCardPack } from '@/lib/card-collection';
 import CardPackOpener from '@/components/CardPackOpener';
+import FlagImage from '@/components/FlagImage';
 
 type FixtureScore = { home: number; away: number; completed?: boolean };
 
@@ -360,7 +361,7 @@ export default function ContestsPage() {
                               </div>
                               <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 12px', border: '1px solid #4f6382', boxShadow: 'inset 0 1px 1px rgba(0, 0, 0, 0.5)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                  <strong style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>{event.teamFlag} {event.player}</strong>
+                                  <strong style={{ fontSize: '0.85rem', color: '#e2e8f0' }}><FlagImage flag={event.teamFlag} size={14} /> {event.player}</strong>
                                   {event.points !== 0 && (
                                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: event.points > 0 ? '#00e87a' : '#ff4d6d' }}>
                                       {event.points > 0 ? '+' : ''}{event.points} pts
@@ -570,7 +571,7 @@ export default function ContestsPage() {
               {/* Score header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '2rem', marginBottom: 4 }}>{matchResult.fixture.homeFlag}</div>
+                  <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'center' }}><FlagImage flag={matchResult.fixture.homeFlag} size={32} /></div>
                   <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{matchResult.fixture.homeTeam}</div>
                 </div>
                 <div style={{ textAlign: 'center', padding: '0 16px' }}>
@@ -580,7 +581,7 @@ export default function ContestsPage() {
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Full Time</div>
                 </div>
                 <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '2rem', marginBottom: 4 }}>{matchResult.fixture.awayFlag}</div>
+                  <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'center' }}><FlagImage flag={matchResult.fixture.awayFlag} size={32} /></div>
                   <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{matchResult.fixture.awayTeam}</div>
                 </div>
               </div>
@@ -633,7 +634,7 @@ export default function ContestsPage() {
                             <span style={{ fontSize: '1rem', flexShrink: 0 }}>{icon}</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {isHome ? matchResult.fixture.homeFlag : matchResult.fixture.awayFlag}
+                                <FlagImage flag={isHome ? matchResult.fixture.homeFlag : matchResult.fixture.awayFlag} size={16} />
                                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.player}</span>
                                 {label && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400 }}>({label})</span>}
                               </div>
@@ -777,7 +778,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
           marginBottom: 20,
         }}>
           <div style={{ textAlign: 'center', flex: 1 }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: 6 }}>{fixture.homeFlag}</div>
+            <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center' }}><FlagImage flag={fixture.homeFlag} size={40} /></div>
             <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{fixture.homeTeam}</div>
             {isLive && (
               <div style={{
@@ -811,7 +812,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
           </div>
 
           <div style={{ textAlign: 'center', flex: 1 }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: 6 }}>{fixture.awayFlag}</div>
+            <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center' }}><FlagImage flag={fixture.awayFlag} size={40} /></div>
             <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{fixture.awayTeam}</div>
             {isLive && (
               <div style={{

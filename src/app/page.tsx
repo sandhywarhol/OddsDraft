@@ -5,6 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
+import FlagImage from '@/components/FlagImage';
 import { DEMO_FIXTURES } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { formatDistanceToNow } from 'date-fns';
@@ -750,7 +751,7 @@ function LiveTicker() {
                 const clock = f.clock?.matchTime || f.Clock?.MatchTime || '';
                 return (
                   <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,229,100,0.08)', border: '1px solid rgba(0,229,100,0.3)', borderRadius: 6, padding: '3px 10px', fontSize: '0.82rem', fontWeight: 600, color: '#f8fafc' }}>
-                    {homeFlag} {home} <span style={{ color: '#00e564', fontFamily: 'Bebas Neue, cursive', fontSize: '1rem' }}>{sh}–{sa}</span> {away} {awayFlag}
+                    <><FlagImage flag={homeFlag} size={16} /> {home}</> <span style={{ color: '#00e564', fontFamily: 'Bebas Neue, cursive', fontSize: '1rem' }}>{sh}–{sa}</span> <>{away} <FlagImage flag={awayFlag} size={16} /></>
                     {clock && <span style={{ color: '#00e564', fontSize: '0.75rem', marginLeft: 4 }}>{clock}'</span>}
                   </span>
                 );
@@ -805,7 +806,7 @@ function LiveTicker() {
                       padding: '4px 10px',
                       boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)'
                     }}>
-                      <span style={{ fontSize: '1rem', filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }}>{match.homeFlag}</span>
+                      <FlagImage flag={match.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
                       <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.home}</span>
                       <span style={{ 
                         fontFamily: 'Bebas Neue, cursive', 
@@ -817,7 +818,7 @@ function LiveTicker() {
                         {match.scoreHome} - {match.scoreAway}
                       </span>
                       <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.away}</span>
-                      <span style={{ fontSize: '1rem', filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }}>{match.awayFlag}</span>
+                      <FlagImage flag={match.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
                     </div>
                   ))}
                 </div>
@@ -846,13 +847,13 @@ function LiveTicker() {
                 DEMO LIVE
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                <span style={{ fontSize: '1.2rem' }}>{demoLiveMatch?.homeFlag}</span>
+                <FlagImage flag={demoLiveMatch?.homeFlag ?? ''} size={22} />
                 <span style={{ fontWeight: 700 }}>{demoLiveMatch?.homeTeam}</span>
                 <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em' }}>
                   {demoLiveMatch?.homeScore ?? 0} — {demoLiveMatch?.awayScore ?? 0}
                 </span>
                 <span style={{ fontWeight: 700 }}>{demoLiveMatch?.awayTeam}</span>
-                <span style={{ fontSize: '1.2rem' }}>{demoLiveMatch?.awayFlag}</span>
+                <FlagImage flag={demoLiveMatch?.awayFlag ?? ''} size={22} />
               </div>
             </div>
           </div>

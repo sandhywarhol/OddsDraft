@@ -16,6 +16,7 @@ import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import PlayerAvatar from '@/components/PlayerAvatar';
+import FlagImage from '@/components/FlagImage';
 import { prefetchPlayerPhotos } from '@/lib/player-photos';
 // ── AI Recommendation badges ──────────────────────────────────────────────────
 // Rule-based picks derived from rating + position. Called per-player with the
@@ -951,7 +952,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <div id="lineup-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>
-                    {fixture.homeFlag} {fixture.homeTeam} vs {fixture.awayTeam} {fixture.awayFlag}
+                    <><FlagImage flag={fixture.homeFlag} size={16} /> {fixture.homeTeam} vs {fixture.awayTeam} <FlagImage flag={fixture.awayFlag} size={16} /></>
                   </h1>
                   <span className="badge badge--upcoming" style={{ fontFamily: 'monospace', letterSpacing: '0.04em' }}>
                     ⏱ {countdown || timeToKickoff}
@@ -1190,14 +1191,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                     }}
                                   />
                                 ) : (
-                                  <span style={{
-                                    display: 'inline-block',
-                                    transform: 'scale(1.5)',
-                                    transformOrigin: 'center',
-                                    lineHeight: 1,
-                                  }}>
-                                    {player.teamFlag}
-                                  </span>
+                                  <FlagImage flag={player.teamFlag} size={16} />
                                 )}
                               </span>
                             </div>
@@ -1527,7 +1521,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       {filledPlayers.map((p) => (
                         <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: '0.8rem' }}>{p.teamFlag}</span>
+                            <FlagImage flag={p.teamFlag} size={16} />
                             <span style={{ fontSize: '0.85rem', fontWeight: p.id === captain ? 700 : 400 }}>
                               {p.name}
                               {p.id === captain && <span style={{ color: '#ffd700', marginLeft: 6, fontSize: '0.75rem', fontWeight: 700 }}>© CAPTAIN</span>}
@@ -1570,13 +1564,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                 className={`btn btn--sm ${activeTeam === 'home' ? 'btn--primary' : 'btn--ghost'}`}
                                 onClick={() => setActiveTeam('home')}
                               >
-                                {fixture.homeFlag} {fixture.homeTeam}
+                                <><FlagImage flag={fixture.homeFlag} size={16} /> {fixture.homeTeam}</>
                               </button>
                               <button
                                 className={`btn btn--sm ${activeTeam === 'away' ? 'btn--primary' : 'btn--ghost'}`}
                                 onClick={() => setActiveTeam('away')}
                               >
-                                {fixture.awayFlag} {fixture.awayTeam}
+                                <><FlagImage flag={fixture.awayFlag} size={16} /> {fixture.awayTeam}</>
                               </button>
                             </div>
                             <input
@@ -1637,7 +1631,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                   (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 2px #000000, inset 0 0 0 1px rgba(255,255,255,0.05)';
                                 }}
                               >
-                                <span style={{ fontSize: '1.2rem' }}>{player.teamFlag}</span>
+                                <FlagImage flag={player.teamFlag} size={22} />
                                 <div style={{ flex: 1 }}>
                                   <div style={{ fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', fontStyle: 'italic', fontFamily: 'Bebas Neue, cursive' }}>{player.name}</div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

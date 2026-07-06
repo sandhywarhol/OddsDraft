@@ -155,16 +155,49 @@ export async function GET(req: NextRequest) {
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const eventType = ACTION_MAP[rawType] ?? rawType;
         const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
-        const rawPlayerName = ev.Player ?? ev.player ?? '';
-        const teamName = ev.Team ?? ev.team ?? '';
-        // Resolve TxLINE abbreviated name (e.g. "Kane H.") to our display name ("Harry Kane")
+        const evData = ev.Data?.New ?? ev.Data ?? {};
+
+        // Determine team participant (1 = home, 2 = away)
+        const participant: number = evData.Participant ?? ev.Participant ?? 1;
+        const isHome = participant === 1;
+        const teamName = isHome ? fixture.homeTeam : fixture.awayTeam;
+        const teamFlag = isHome ? (fixture.homeFlag ?? '') : (fixture.awayFlag ?? '');
+
+        // Resolve primary player name
+        const rawPlayerName = evData.PlayerName ?? ev.Player ?? ev.player ?? '';
         const resolvedId = rawPlayerName ? matchPlayerName(rawPlayerName, teamName) : null;
         const resolvedPlayer = resolvedId ? WC2026_PLAYERS.find(p => p.id === resolvedId) : null;
         const playerName = resolvedPlayer?.name ?? rawPlayerName;
 
+        // For substitutions: resolve both the player going IN and OUT
+        let playerOut: string | undefined;
+        if (eventType === 'substitution') {
+          const outRaw = evData.PlayerOutName ?? evData.Player1Name ?? '';
+          const inRaw  = evData.PlayerInName  ?? evData.Player2Name ?? '';
+          const outId = outRaw ? matchPlayerName(outRaw, teamName) : null;
+          const inId  = inRaw  ? matchPlayerName(inRaw,  teamName) : null;
+          playerOut = (outId ? WC2026_PLAYERS.find(p => p.id === outId)?.name : null) ?? outRaw ?? undefined;
+          const playerIn = (inId ? WC2026_PLAYERS.find(p => p.id === inId)?.name : null) ?? inRaw ?? playerName ?? undefined;
+          const text = formatMatchEvent({
+            eventType,
+            playerName: playerIn ?? '',
+            playerOut,
+            teamName, teamFlag,
+            minute,
+            homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+            homeFlag: fixture.homeFlag ?? '', awayFlag: fixture.awayFlag ?? '',
+            score: { home: scoreHome, away: scoreAway },
+          });
+          await Promise.allSettled(subs.map(sub => sendMessage(sub.chat_id, text, { parse_mode: 'Markdown' })));
+          sent += subs.length;
+          continue;
+        }
+
         const text = formatMatchEvent({
-          eventType, playerName, teamName,
-          minute, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+          eventType, playerName, teamName, teamFlag,
+          minute,
+          homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+          homeFlag: fixture.homeFlag ?? '', awayFlag: fixture.awayFlag ?? '',
           score: { home: scoreHome, away: scoreAway },
         });
 

@@ -204,6 +204,7 @@ export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: stri
     own_goal:       'own_goal',
     substitution:   'substitution',
     sub:            'substitution',
+    sub_appearance: 'sub_appearance',
     penaltysave:    'penalty_save',
     penalty_save:   'penalty_save',
     save:           'goalkeeper_save',

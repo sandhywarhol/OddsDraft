@@ -75,6 +75,7 @@ export interface LiveEvent {
   points: number;
   description: string;
   goalType?: string;
+  playerOut?: string;     // substitution: player going OFF (player = player coming ON)
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -345,7 +346,7 @@ function describeEvent(type: string, player: string, team: string, minute: numbe
     case 'penalty_missed':          return `${m} Penalty missed by ${player} (${team})`;
     case 'penalty_scored':          return `${m} ${player} scores in the shootout!`;
     case 'penalty_missed_shootout': return `${m} ${player} misses in the shootout!`;
-    case 'substitution':            return `${m} Substitution — ${player} on for ${team}`;
+    case 'substitution':            return player ? `${m} Substitution — ${team}` : `${m} Substitution — ${team}`;
     case 'sub_appearance':          return `${m} ${player} enters the pitch for ${team}`;
     case 'corner_kick':             return `${m} Corner kick for ${team}`;
     case 'var_review':              return `${m} VAR Review in progress`;
@@ -500,5 +501,23 @@ export function convertTxLineUpdates(
     }
   }
 
-  return result;
+  // Merge sub_appearance events into their paired substitution event.
+  // substitution.player = player going OUT → becomes playerOut
+  // sub_appearance.player = player coming IN → becomes player on the substitution event
+  const mergedSubIds = new Set<string>();
+  for (const ev of result) {
+    if (ev.type === 'substitution') {
+      const subIn = result.find(
+        e => e.type === 'sub_appearance' && e.minute === ev.minute && e.team === ev.team
+      );
+      if (subIn) {
+        ev.playerOut = ev.player;     // who went OFF
+        ev.player = subIn.player;     // who came ON
+        ev.description = `${ev.minute}' Substitution — ${ev.team}`;
+        mergedSubIds.add(subIn.id);
+      }
+    }
+  }
+  // Drop the now-merged sub_appearance events
+  return result.filter(e => !mergedSubIds.has(e.id));
 }

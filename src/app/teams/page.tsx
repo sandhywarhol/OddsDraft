@@ -1,6 +1,7 @@
 'use client';
 
 import Navbar from '@/components/Navbar';
+import FlagImage from '@/components/FlagImage';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { useTxLine } from '@/context/TxLineContext';
 import { useState, useEffect } from 'react';
@@ -567,7 +568,7 @@ export default function TeamsPage() {
                       justifyContent: 'center',
                       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                     }}>
-                      <span style={{ fontSize: '1.8rem', lineHeight: 1 }}>{team.flag}</span>
+                      <FlagImage flag={team.flag} size={28} />
                     </div>
 
                     <h3 style={{ 
@@ -681,7 +682,7 @@ export default function TeamsPage() {
                 borderTopRightRadius: 15
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <span style={{ fontSize: '2.2rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}>{selectedTeam.flag}</span>
+                  <FlagImage flag={selectedTeam.flag} size={34} style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }} />
                   <div>
                     <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#000000', margin: 0 }}>
                       {getDisplayName(selectedTeam.name)}
