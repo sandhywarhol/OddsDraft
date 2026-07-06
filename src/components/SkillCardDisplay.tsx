@@ -9,7 +9,7 @@
 //   • Position text box       : top 73.5%, left 10%,   width 52%
 //   • Description text area   : top 80.5%, left 10%,   width 62%
 
-import { type SkillCard, RARITY_COLOR } from '@/lib/skill-cards';
+import { type SkillCard, RARITY_STARS, RARITY_COLOR } from '@/lib/skill-cards';
 import type { OwnedCard } from '@/lib/card-collection';
 
 interface SkillCardDisplayProps {
@@ -38,9 +38,23 @@ export default function SkillCardDisplay({
 }: SkillCardDisplayProps) {
   const height = Math.round(width * (1012.5 / 810));
   const rarityColor = RARITY_COLOR[card.rarity];
+  const stars = RARITY_STARS[card.rarity];
+  const posColor =
+    card.position === 'Goalkeeper' ? '#1565c0' :
+    card.position === 'Defender'   ? '#2e7d32' :
+    card.position === 'Midfielder' ? '#e65100' :
+    card.position === 'Winger'     ? '#00838f' : '#6a1b9a';
 
   // Font sizes scale with card width
   const fs = (base: number) => `${(base * width) / 200}px`;
+
+  // Colorize +number green and -number red inside effect text
+  const colorizeEffect = (text: string) =>
+    text.split(/(\+[\d.]+|-[\d.]+)/).map((chunk, i) => {
+      if (/^\+[\d.]+/.test(chunk)) return <span key={i} style={{ color: '#4ade80', fontWeight: 900 }}>{chunk}</span>;
+      if (/^-[\d.]+/.test(chunk))  return <span key={i} style={{ color: '#f87171', fontWeight: 900 }}>{chunk}</span>;
+      return chunk;
+    });
 
   return (
     <div
@@ -85,6 +99,113 @@ export default function SkillCardDisplay({
             : `drop-shadow(0 0 ${width * 0.04}px ${rarityColor}88)`,
         }}
       />
+
+      {/* ── RARITY LABEL ── */}
+      <div style={{
+        position: 'absolute',
+        top: '10%',
+        right: '19%',
+        height: '4.5%',
+        display: 'flex',
+        alignItems: 'center',
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}>
+        <span style={{
+          background: rarityColor,
+          color: '#fff',
+          fontSize: fs(3.5),
+          fontWeight: 900,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          padding: `${fs(0.6)} ${fs(1.8)}`,
+          borderRadius: 2,
+          boxShadow: `0 1px 4px rgba(0,0,0,0.35)`,
+          lineHeight: 1.1,
+        }}>
+          {stars}
+        </span>
+      </div>
+
+      {/* ── SKILL NAME ── */}
+      <div style={{
+        position: 'absolute',
+        top: '58.5%',
+        left: '20%',
+        height: '5.5%',
+        display: 'flex',
+        alignItems: 'center',
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}>
+        <span style={{
+          background: rarityColor,
+          color: '#fff',
+          fontSize: fs(card.name.length > 14 ? 5.5 : card.name.length > 10 ? 6 : 6.5),
+          fontWeight: 800,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          letterSpacing: '0.04em',
+          padding: `${fs(0.8)} ${fs(2.5)}`,
+          borderRadius: 2,
+          boxShadow: `0 1px 4px rgba(0,0,0,0.35)`,
+          lineHeight: 1.3,
+          whiteSpace: 'nowrap',
+          display: 'inline-block',
+        }}>
+          {card.name}
+        </span>
+      </div>
+
+      {/* ── POSITION ── */}
+      <div style={{
+        position: 'absolute',
+        top: '68.5%',
+        left: '20%',
+        height: '4%',
+        display: 'flex',
+        alignItems: 'center',
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}>
+        <span style={{
+          background: posColor,
+          color: '#fff',
+          fontSize: fs(5),
+          fontWeight: 900,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          padding: `${fs(0.8)} ${fs(2.5)}`,
+          borderRadius: 2,
+          boxShadow: `0 1px 4px rgba(0,0,0,0.35)`,
+          lineHeight: 1.4,
+        }}>
+          {card.position}
+        </span>
+      </div>
+
+      {/* ── DESCRIPTION — flavor italic + colored effect numbers ── */}
+      <div style={{
+        position: 'absolute',
+        top: '79%',
+        left: '20%',
+        width: '60%',
+        height: '14%',
+        fontSize: fs(4.5),
+        fontFamily: 'Inter, system-ui, sans-serif',
+        lineHeight: 1.35,
+        pointerEvents: 'none',
+        userSelect: 'none',
+        overflow: 'hidden',
+      }}>
+        <span style={{ color: '#fff', opacity: 0.85, fontStyle: 'italic', display: 'block', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+          {card.flavorText}
+        </span>
+        <span style={{ fontWeight: 700, color: '#fff', marginTop: 2, display: 'block', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+          {colorizeEffect(card.effectText)}
+        </span>
+      </div>
 
       {/* ── EQUIPPED badge (top-left corner of card) ─────────────────────────── */}
       {equipped && (
