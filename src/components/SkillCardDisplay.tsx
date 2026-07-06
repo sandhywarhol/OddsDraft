@@ -66,6 +66,8 @@ export default function SkillCardDisplay({
         cursor: selectable ? 'pointer' : 'default',
         transition: 'transform 0.15s ease',
         transform: selected ? 'scale(1.04)' : 'scale(1)',
+        borderRadius: '12px',
+        overflow: 'hidden',
       }}
     >
       <style>{`
