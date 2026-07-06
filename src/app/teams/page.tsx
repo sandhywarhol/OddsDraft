@@ -432,7 +432,7 @@ export default function TeamsPage() {
             position: 'absolute',
             inset: 0,
             zIndex: 0,
-            backgroundImage: 'url("/team.png")',
+            backgroundImage: 'url("/team.webp")',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 1,

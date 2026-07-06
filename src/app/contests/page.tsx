@@ -231,7 +231,7 @@ export default function ContestsPage() {
               position: 'absolute',
               inset: 0,
               zIndex: 0,
-              backgroundImage: 'url("/schedule.png")',
+              backgroundImage: 'url("/schedule.webp")',
               backgroundSize: 'cover',
               backgroundPosition: 'bottom',
               opacity: 1,

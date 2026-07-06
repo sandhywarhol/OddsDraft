@@ -6,17 +6,67 @@ export default function HowItWorksPage() {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
 
-      <main style={{ padding: '48px 16px 80px' }}>
-        <div className="container" style={{ maxWidth: 800 }}>
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
-            <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>
-              How OddsDraft Works
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
-              Everything you need to know to start building lineups and winning SOL.
-            </p>
-          </div>
+      <main style={{ padding: '48px 0 80px' }}>
+        <div className="container" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
+          {/* Header */}
+          <div style={{
+            marginBottom: 40,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20,
+            position: 'relative',
+            padding: '54px 40px',
+            border: '2px solid #ffd700',
+            overflow: 'hidden',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}>
+            {/* Background Image without blur */}
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 0,
+              backgroundImage: 'url("/how_it_work.webp")',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              opacity: 1,
+              pointerEvents: 'none',
+            }} />
 
+            {/* Light gradient overlay to ensure text readability without being too dark */}
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+              background: 'linear-gradient(90deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 60%)',
+            }} />
+
+            <div style={{ position: 'relative', zIndex: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <span style={{
+                  background: '#ffd700',
+                  color: '#000000',
+                  padding: '3px 8px',
+                  fontSize: '0.68rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  borderRadius: 0
+                }}>
+                  Guide
+                </span>
+              </div>
+              <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 8, lineHeight: 1.1 }}>
+                How OddsDraft Works
+              </h1>
+              <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
+                Everything you need to know to start building lineups and winning SOL.
+              </p>
+            </div>
+            <img 
+              src="/fifa_world_cup_2026_logo.webp" 
+              alt="FIFA World Cup 2026 Logo" 
+              style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'relative', zIndex: 2 }}
+            />
+          </div>
+        </div>
+
+        <div className="container" style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
             
             {/* Step 1 */}

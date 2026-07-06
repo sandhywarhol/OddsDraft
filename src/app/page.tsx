@@ -869,7 +869,7 @@ function StatsSection() {
           position: 'absolute',
           inset: 0,
           zIndex: 0,
-          backgroundImage: 'url("/homepage.png")',
+          backgroundImage: 'url("/homepage.webp")',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           opacity: 1,
@@ -1238,22 +1238,43 @@ function CTASection() {
 function Footer() {
   return (
     <footer style={{
-      borderTop: '1px solid var(--border-subtle)',
-      padding: '40px 0',
-      color: 'var(--text-muted)',
+      position: 'relative',
+      borderTop: '2px solid #ffd700',
+      padding: '54px 0',
+      color: '#fff',
+      overflow: 'hidden',
+      boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
     }}>
-      <div className="container">
-        <div className="footer-inner">
+      {/* Background Image without blur */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 0,
+        backgroundImage: 'url("/footer.webp")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        opacity: 1,
+        pointerEvents: 'none',
+      }} />
+
+      {/* Thin dark gradient overlay to ensure text readability */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.2) 100%)',
+      }} />
+
+      <div className="container" style={{ position: 'relative', zIndex: 2 }}>
+        <div className="footer-inner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img src="/Logo OddsDraft.svg" alt="OddsDraft Logo" className="footer-logo" />
+            <img src="/Logo OddsDraft.svg" alt="OddsDraft Logo" className="footer-logo" style={{ height: '40px', objectFit: 'contain' }} />
           </div>
-          <div className="footer-text">
+          <div className="footer-text" style={{ fontSize: '0.85rem', opacity: 0.9 }}>
             Powered by{' '}
             <a
               href="https://txline-docs.txodds.com"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}
+              style={{ color: '#ffd700', textDecoration: 'underline', fontWeight: 600 }}
             >
               TxODDS
             </a>
