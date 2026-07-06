@@ -1648,6 +1648,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           console.log('[LivePage] Fallback: TxLINE live but no GameState detected — synthesized kick_off');
         }
 
+        // Suppress dialog for historical events loaded on page-open (first poll).
+        // Must be set before PlayerStats and convertTxLineUpdates paths so both share it.
+        const suppressDialog = isFirstTxLinePollRef.current || matchCompletedRef.current;
+        isFirstTxLinePollRef.current = false;
+
         // ── PlayerStats delta: detect new goals/cards from cumulative TxLINE snapshot ──
         const latestStats = latest?.playerStats as Record<string, Record<string, number>> | undefined;
         if (latestStats) {
@@ -1714,6 +1719,19 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               if (ev.type === 'goal' || ev.type === 'own_goal') playSFX('goal');
               else if (ev.type === 'yellow_card' || ev.type === 'red_card') playSFX('whistle');
             }
+
+            // Trigger NPC dialog for significant PlayerStats events (goal, red card, etc.).
+            // convertTxLineUpdates below only fires dialog if _allEvents contains the event —
+            // PlayerStats is often the only source when individual events are missing/unconfirmed.
+            if (!suppressDialog && !showPopupRef.current) {
+              const DIALOG_TYPES = new Set(['goal', 'own_goal', 'red_card', 'penalty_save', 'yellow_card']);
+              const dialogEv = statsEvents.find(e => DIALOG_TYPES.has(e.type)) ?? null;
+              if (dialogEv) {
+                setLatestEvent(dialogEv);
+                setDialogStep(1);
+                setShowPopup(true);
+              }
+            }
           }
         }
         // ── End PlayerStats delta ──────────────────────────────────────────────
@@ -1727,11 +1745,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           fixture.awayFlag,
           seenSeqsRef.current
         );
-
-        // First poll seeds seenSeqs with historical events — suppress popup so the dialog
-        // only appears for events that arrive AFTER the user opens the page.
-        const suppressDialog = isFirstTxLinePollRef.current || matchCompletedRef.current;
-        isFirstTxLinePollRef.current = false;
 
         if (newEvents.length === 0 && !latestStats) return;
 
