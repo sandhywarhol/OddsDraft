@@ -76,28 +76,45 @@ export async function GET(req: NextRequest) {
       const scoreHome: number = (raw as any)?.Score?.Participant1?.Total?.Goals ?? 0;
       const scoreAway: number = (raw as any)?.Score?.Participant2?.Total?.Goals ?? 0;
 
-      // Filter confirmed events only — TxLINE sends every event twice
-      // (Confirmed=false then Confirmed=true). Process only confirmed to avoid duplicates.
+      // Filter confirmed events only — TxLINE sends Confirmed=false first, then Confirmed=true.
       const confirmedEvents = allEvents.filter(ev => ev.Confirmed !== false);
 
       // Filter only significant events we haven't notified about yet
-      const candidateEvents = confirmedEvents.filter(ev => {
+      const sigConfirmed = confirmedEvents.filter(ev => {
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const mapped = ACTION_MAP[rawType] ?? rawType;
         return SIGNIFICANT.has(mapped);
       });
 
-      if (candidateEvents.length === 0) continue;
+      if (sigConfirmed.length === 0) continue;
 
-      // Build event IDs using Seq (unique per TxLINE event) when available,
-      // otherwise fall back to type+minute (no player — player name varies between
-      // Confirmed=false and Confirmed=true stages causing false duplicates).
+      // TxLINE sometimes sends two Confirmed=true events for the same moment
+      // (consecutive Seq numbers, same action/minute/participant). Deduplicate by
+      // content key before hitting the notified_events table so we never send twice.
+      const seenContentKeys = new Set<string>();
+      const candidateEvents: typeof sigConfirmed = [];
+      for (const ev of sigConfirmed) {
+        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+        const mapped = ACTION_MAP[rawType] ?? rawType;
+        const min = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
+        const d = ev.Data?.New ?? ev.Data ?? {};
+        const participant: number = (typeof d === 'object' ? (d as any).Participant : null) ?? ev.Participant ?? 0;
+        const contentKey = `${mapped}-${min}-${participant}`;
+        if (!seenContentKeys.has(contentKey)) {
+          seenContentKeys.add(contentKey);
+          candidateEvents.push(ev);
+        }
+      }
+
+      // Event IDs use content key (not raw Seq) so that TxLINE double-sends of the
+      // same logical event always map to the same ID in notified_events.
       const eventIds = candidateEvents.map(ev => {
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const mapped = ACTION_MAP[rawType] ?? rawType;
-        const min = parseInt(ev.Clock?.Seconds ? String(Math.floor(ev.Clock.Seconds / 60)) : ev.minute) || 0;
-        const seq = ev.Seq ?? ev.seq;
-        return seq ? `seq-${seq}` : `${mapped}-${min}`;
+        const min = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
+        const d = ev.Data?.New ?? ev.Data ?? {};
+        const participant: number = (typeof d === 'object' ? (d as any).Participant : null) ?? ev.Participant ?? 0;
+        return `${mapped}-${min}-${participant}`;
       });
 
       const { data: alreadyNotified } = await supabase
@@ -120,7 +137,10 @@ export async function GET(req: NextRequest) {
       if (!subs?.length) {
         // Still mark as notified so we don't reprocess
         await supabase.from('notified_events').upsert(
-          newEvents.map((_, i) => ({ fixture_id: fixture.fixtureId, event_id: eventIds[candidateEvents.indexOf(newEvents[i])] }))
+          newEvents.map((ev, i) => {
+            const idx = candidateEvents.indexOf(newEvents[i]);
+            return { fixture_id: fixture.fixtureId, event_id: eventIds[idx] };
+          })
         );
         continue;
       }
@@ -128,6 +148,7 @@ export async function GET(req: NextRequest) {
       // ── Write all new events to live_match_events (for /points command) ──
       await supabase.from('live_match_events').upsert(
         newEvents.map((ev, i) => {
+          const idx = candidateEvents.indexOf(newEvents[i]);
           const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
           const eventType = ACTION_MAP[rawType] ?? rawType;
           const minSec = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
@@ -140,7 +161,7 @@ export async function GET(req: NextRequest) {
           const rPlayer = rId ? WC2026_PLAYERS.find(p => p.id === rId) : null;
           return {
             fixture_id: fixture.fixtureId,
-            event_id: eventIds[candidateEvents.indexOf(newEvents[i])],
+            event_id: eventIds[idx],
             minute: minSec,
             event_type: eventType,
             player_name: rPlayer?.name ?? rawPName,
@@ -209,7 +230,7 @@ export async function GET(req: NextRequest) {
       }
 
       // Mark all new events as notified
-      const newEventIds = newEvents.map((_, i) => candidateEvents.indexOf(newEvents[i])).map(i => eventIds[i]);
+      const newEventIds = newEvents.map(ev => eventIds[candidateEvents.indexOf(ev)]);
       await supabase.from('notified_events').upsert(
         newEventIds.map(id => ({ fixture_id: fixture.fixtureId, event_id: id }))
       );
