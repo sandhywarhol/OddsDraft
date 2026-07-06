@@ -40,22 +40,36 @@ async function fetchAndSendRecap(chatId: number, contestId: string) {
     const dbRes = await fetch(`${appUrl}/api/live/events?fixtureId=${contestId}`, { cache: 'no-store' });
     if (dbRes.ok) events = await dbRes.json();
 
-    // If DB empty, pull directly from TxLINE score snapshot via proxy
+    // If DB empty, pull directly from TxLINE score updates via proxy (same endpoint as cron)
     if (!events?.length) {
-      const snapRes = await fetch(`${appUrl}/api/txline/scores/snapshot/${contestId}`, { cache: 'no-store' });
-      if (snapRes.ok) {
-        const snapRaw = await snapRes.json();
-        const allEvts: any[] = Array.isArray((snapRaw as any)?._allEvents)
-          ? (snapRaw as any)._allEvents
-          : (Array.isArray(snapRaw) ? snapRaw : []);
+      const updRes = await fetch(`${appUrl}/api/txline/scores/updates/${contestId}`, { cache: 'no-store' });
+      if (updRes.ok) {
+        const updRaw = await updRes.json();
+        const allEvts: any[] = Array.isArray((updRaw as any)?._allEvents)
+          ? (updRaw as any)._allEvents
+          : (Array.isArray(updRaw) ? updRaw : []);
+        const ACTION_MAP: Record<string, string> = {
+          goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
+          own_goal: 'own_goal', owngoal: 'own_goal',
+          yellowcard: 'yellow_card', yellow_card: 'yellow_card',
+          redcard: 'red_card', red_card: 'red_card',
+          substitution: 'substitution', sub: 'substitution',
+          penalty_save: 'penalty_save', penaltysave: 'penalty_save',
+          half_time: 'half_time', halftime: 'half_time',
+          full_time: 'full_time', fulltime: 'full_time',
+          kick_off: 'kick_off', kickoff: 'kick_off',
+        };
         events = allEvts
           .filter((e: any) => e.Confirmed !== false)
-          .map((e: any) => ({
-            event_type: (e.Action ?? e.type ?? '').toLowerCase().replace(/\s+/g, '_'),
-            minute: e.Clock?.Seconds ? Math.floor(e.Clock.Seconds / 60) : (e.minute ?? 0),
-            player_name: e.PlayerName ?? e.player ?? '',
-            team_name: e.Participant === 2 ? fixture?.awayTeam : fixture?.homeTeam,
-          }));
+          .map((e: any) => {
+            const rawType = (e.Action ?? e.type ?? '').toLowerCase().replace(/\s+/g, '_');
+            return {
+              event_type: ACTION_MAP[rawType] ?? rawType,
+              minute: e.Clock?.Seconds ? Math.floor(e.Clock.Seconds / 60) : (parseInt(e.minute) || 0),
+              player_name: e.Player ?? e.PlayerName ?? e.player ?? '',
+              team_name: e.Participant === 2 ? fixture?.awayTeam : fixture?.homeTeam,
+            };
+          });
       }
     }
 
@@ -69,7 +83,7 @@ async function fetchAndSendRecap(chatId: number, contestId: string) {
 
     if (!display?.length) {
       await sendMessage(chatId,
-        `📋 *${matchName}*\n\nNo events yet — match may not have started or is scheduled.`,
+        `📋 *${matchName}*\n\nNo events recorded yet — the match may not have started.`,
         { parse_mode: 'Markdown' }
       );
       return;
