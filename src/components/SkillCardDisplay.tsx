@@ -131,8 +131,8 @@ export default function SkillCardDisplay({
       {/* ── SKILL NAME ── */}
       <div style={{
         position: 'absolute',
-        top: '58.5%',
-        left: '20%',
+        top: '66%',
+        left: '32%',
         height: '5.5%',
         display: 'flex',
         alignItems: 'center',
@@ -160,8 +160,8 @@ export default function SkillCardDisplay({
       {/* ── POSITION ── */}
       <div style={{
         position: 'absolute',
-        top: '68.5%',
-        left: '20%',
+        top: '75%',
+        left: '32%',
         height: '4%',
         display: 'flex',
         alignItems: 'center',
@@ -188,21 +188,22 @@ export default function SkillCardDisplay({
       {/* ── DESCRIPTION — flavor italic + colored effect numbers ── */}
       <div style={{
         position: 'absolute',
-        top: '79%',
-        left: '20%',
-        width: '60%',
+        top: '83%',
+        left: '10%',
+        width: '80%',
         height: '14%',
         fontSize: fs(4.5),
         fontFamily: 'Inter, system-ui, sans-serif',
         lineHeight: 1.35,
+        textAlign: 'center',
         pointerEvents: 'none',
         userSelect: 'none',
         overflow: 'hidden',
       }}>
-        <span style={{ color: '#fff', opacity: 0.85, fontStyle: 'italic', display: 'block', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+        <span style={{ color: '#111', opacity: 0.9, fontStyle: 'italic', display: 'block' }}>
           {card.flavorText}
         </span>
-        <span style={{ fontWeight: 700, color: '#fff', marginTop: 2, display: 'block', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+        <span style={{ fontWeight: 700, color: '#111', marginTop: 2, display: 'block' }}>
           {colorizeEffect(card.effectText)}
         </span>
       </div>
