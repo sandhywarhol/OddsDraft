@@ -866,7 +866,7 @@ export default function CardsPage() {
             display: 'flex',
             flexWrap: 'wrap',
             gap: 16,
-            justifyContent: 'flex-start',
+            justifyContent: 'space-between',
           }}>
             <style>{`
               @keyframes card-shine {
@@ -886,7 +886,7 @@ export default function CardsPage() {
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}
                   onClick={() => handleCardClick(instance, card)}
                 >
-                  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 4 }}>
+                  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 12 }}>
                     <SkillCardDisplay
                       card={card}
                       instance={instance}

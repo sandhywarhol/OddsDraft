@@ -91,11 +91,6 @@ export default function SkillCardDisplay({
           objectFit: 'contain',
           borderRadius: '12px',
           userSelect: 'none',
-          filter: equipped
-            ? `drop-shadow(0 0 ${width * 0.06}px ${rarityColor})`
-            : selected
-            ? `drop-shadow(0 0 ${width * 0.08}px #fff)`
-            : `drop-shadow(0 0 ${width * 0.04}px ${rarityColor}88)`,
         }}
       />
 
