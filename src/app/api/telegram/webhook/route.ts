@@ -179,13 +179,14 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
   const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
   try {
-    // Get user's lineup
-    const { data: entryRow } = await supabase
+    // Get user's lineup — may have multiple rows (different contest_type), take best/first
+    const { data: entries } = await supabase
       .from('contest_entries')
       .select('lineup, contest_type')
       .eq('fixture_id', contestId)
-      .eq('wallet_address', walletAddress)
-      .single();
+      .ilike('wallet_address', walletAddress);  // case-insensitive for safety
+
+    const entryRow = entries?.[0] ?? null;
 
     if (!entryRow?.lineup?.players?.length) {
       await sendMessage(chatId,
