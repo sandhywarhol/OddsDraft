@@ -7,6 +7,7 @@ import { subscribeToFreeTier, activateApiAccess, fetchGuestToken } from '@/lib/t
 interface TxLineContextProps {
   appMode: 'demo' | 'live';
   toggleAppMode: () => void;
+  isAdmin: boolean;
 
   apiToken: string | null;
   guestJwt: string | null;
@@ -24,6 +25,7 @@ interface TxLineContextProps {
 const TxLineContext = createContext<TxLineContextProps>({
   appMode: 'demo',
   toggleAppMode: () => {},
+  isAdmin: false,
 
   apiToken: null,
   guestJwt: null,
@@ -48,6 +50,8 @@ function lsSet(key: string, value: string) {
   if (typeof window === 'undefined') return;
   try { localStorage.setItem(key, value); } catch { /* ignore */ }
 }
+
+const ADMIN_WALLET = process.env.NEXT_PUBLIC_ADMIN_WALLET ?? 'FwHtKFZY6jRqhtczE7Nkwq7pkR7fb3vWq6YqYSYtGcMv';
 
 export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   const ENV_TOKEN = process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
@@ -82,6 +86,16 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
 
   const wallet = useWallet();
   const { connection } = useConnection();
+
+  const isAdmin = !!(wallet.publicKey && wallet.publicKey.toString() === ADMIN_WALLET);
+
+  // Force non-admin users out of demo mode
+  useEffect(() => {
+    if (!isAdmin && appMode === 'demo') {
+      setAppMode('live');
+      lsSet('txline_app_mode', 'live');
+    }
+  }, [isAdmin, appMode]);
 
   // Persist apiToken changes (e.g. after subscription activation)
   useEffect(() => {
@@ -217,7 +231,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <TxLineContext.Provider value={{ appMode, toggleAppMode, apiToken, guestJwt, isSubscribing, subscribeAndActivate, getGuestToken, setManualApiToken, liveFixtures, allFixtures, isLoadingFixtures, fixturesAvailable }}>
+    <TxLineContext.Provider value={{ appMode, toggleAppMode, isAdmin, apiToken, guestJwt, isSubscribing, subscribeAndActivate, getGuestToken, setManualApiToken, liveFixtures, allFixtures, isLoadingFixtures, fixturesAvailable }}>
       {children}
     </TxLineContext.Provider>
   );

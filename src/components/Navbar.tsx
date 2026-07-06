@@ -12,7 +12,7 @@ import { User, LogOut, ChevronDown, Volume2, VolumeX } from 'lucide-react';
 import SponsorsMarquee from '@/components/SponsorsMarquee';
 
 export default function Navbar() {
-  const { appMode, toggleAppMode } = useTxLine();
+  const { appMode, toggleAppMode, isAdmin } = useTxLine();
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
 
@@ -75,8 +75,8 @@ export default function Navbar() {
 
         {/* Right Actions (Flex 1, align right) */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-          
-          <button
+
+          {isAdmin && <button
             onClick={toggleAppMode}
             style={{
               height: '24px',
@@ -103,7 +103,7 @@ export default function Navbar() {
               boxShadow: `0 0 4px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}`,
             }} />
             {(mounted && appMode === 'live') ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
-          </button>
+          </button>}
 
           {mounted ? (
             <WalletDropdown 
@@ -199,24 +199,26 @@ export default function Navbar() {
           {/* Divider */}
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '4px 0' }} />
 
-          {/* Mode toggle */}
-          <button
-            onClick={() => { toggleAppMode(); setMobileOpen(false); }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 8, padding: '10px 14px', cursor: 'pointer', color: '#fff', textAlign: 'left', width: '100%',
-            }}
-          >
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-              background: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
-              boxShadow: `0 0 6px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}`,
-            }} />
-            <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-              {(mounted && appMode === 'live') ? 'Mode: LIVE — Switch to Demo' : 'Mode: DEMO — Switch to Live'}
-            </span>
-          </button>
+          {/* Mode toggle — admin only */}
+          {isAdmin && (
+            <button
+              onClick={() => { toggleAppMode(); setMobileOpen(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 8, padding: '10px 14px', cursor: 'pointer', color: '#fff', textAlign: 'left', width: '100%',
+              }}
+            >
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                background: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
+                boxShadow: `0 0 6px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}`,
+              }} />
+              <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                {(mounted && appMode === 'live') ? 'Mode: LIVE — Switch to Demo' : 'Mode: DEMO — Switch to Live'}
+              </span>
+            </button>
+          )}
 
           {/* Wallet button */}
           <div style={{ marginTop: 4 }}>
