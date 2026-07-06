@@ -861,6 +861,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const retroComputedRef = useRef(false);
   const showPopupRef = useRef(false);
   const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
+  // Possession tracking for possession_bonus: count events per team, reset each half
+  const possessionCountRef = useRef<Record<number, number>>({ 1: 0, 2: 0 });
+  const halftimePossAwardedRef = useRef(false);
+  const fulltimePossAwardedRef = useRef(false);
+  const extraTimeBonusAwardedRef = useRef(false);
   // Suppress popup on the very first TxLINE poll (historical events, not live arrivals)
   const isFirstTxLinePollRef = useRef(true);
   // Mirrors matchCompleted state so poll closures can read it without stale capture
@@ -1250,6 +1255,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
         // TxLINE native format: each SSE object IS the event (Action at top level)
         const action = (u.Action ?? u.action ?? '').toLowerCase();
+
+        // Count possession events BEFORE skipping — used to award possession_bonus at halftime/fulltime
+        if (['safe_possession','attack_possession','danger_possession','high_danger_possession','possession'].includes(action)) {
+          const pd = u.Data?.New ?? u.Data ?? {};
+          const pNum: number = pd.Participant ?? u.Participant ?? 1;
+          possessionCountRef.current[pNum] = (possessionCountRef.current[pNum] ?? 0) + 1;
+        }
+
         // Skip infrastructure/non-scoring actions
         const skipActions = new Set([
           'coverage_update','comment','connected','disconnected','standby','weather',
@@ -1301,14 +1314,29 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
         }
 
-        // penalty_outcome: TxLINE sends Data.Outcome = "Missed" for saved/missed penalties
-        // and "Scored" for converted ones. Default mapping is 'goal' so only override for misses.
+        // penalty_outcome: TxLINE sends Data.Outcome = "Missed" | "Saved" | "Scored"
         if (action === 'penalty_outcome' || action === 'penaltyoutcome') {
           const outcome = (rawData.Outcome ?? '').toLowerCase();
-          if (outcome === 'missed' || outcome === 'saved') {
+          if (outcome === 'scored') {
+            // TxLINE fires a separate 'goal' action for scored penalties — skip to avoid double points
+            return [];
+          }
+          if (outcome === 'missed') {
             return [{ type: 'penalty_miss', minute, period: '', participant,
-              playerId: undefined, playerName: undefined,
+              playerId: rawData.PlayerId, playerName: rawData.PlayerName,
               assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
+          }
+          if (outcome === 'saved') {
+            // Both the kicker (missed) and the opposing GK (saved) get events
+            return [
+              { type: 'penalty_miss', minute, period: '', participant,
+                playerId: rawData.PlayerId, playerName: rawData.PlayerName,
+                assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined },
+              { type: 'penalty_save', minute, period: '',
+                participant: participant === 1 ? 2 : 1,
+                playerId: undefined, playerName: undefined,
+                assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined },
+            ];
           }
         }
 
@@ -1600,11 +1628,98 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             synthEvents.push({ id: `synth-kickoff-${Date.now()}`, minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Kick off! The match has started.' });
           } else if (gs === 'HalfTime') {
             synthEvents.push({ id: `synth-ht-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half time!' });
+            // Award possession_bonus to MID players on the dominant team for the 1st half
+            if (!halftimePossAwardedRef.current && isMounted) {
+              halftimePossAwardedRef.current = true;
+              const p1c = possessionCountRef.current[1] ?? 0;
+              const p2c = possessionCountRef.current[2] ?? 0;
+              if (p1c + p2c > 10 && userLineupRef.current?.players?.length > 0) {
+                const domPart = p1c >= p2c ? 1 : 2;
+                const domTeam = domPart === 1 ? fixture.homeTeam : fixture.awayTeam;
+                const { players: pbP, captain: pbCap, confidence: pbConf } = userLineupRef.current;
+                let pbBonus = 0;
+                for (const p of (pbP as any[])) {
+                  if (!p?.id || p.position !== 'MID' || p.team !== domTeam) continue;
+                  let pts = 1;
+                  if (pbCap === p.id) pts *= 2;
+                  const stars = (pbConf as Record<string, number>)?.[p.id] ?? 3;
+                  pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+                  pts = Math.round(pts * 100) / 100;
+                  pbBonus += pts;
+                  setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+                  setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'possession bonus', pts, minute: 45 }] }));
+                }
+                if (pbBonus > 0) {
+                  setLeaderboard(prev => {
+                    const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + pbBonus) * 100) / 100 } : e);
+                    return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+                  });
+                  setActiveToasts(prev => [{ id: `toast-poss-ht-${Date.now()}`, type: 'possession_bonus' as any, title: 'Possession Bonus', subtitle: `${domTeam} dominated`, value: `+${Math.round(pbBonus * 100) / 100} pts` }, ...prev]);
+                }
+              }
+              possessionCountRef.current = { 1: 0, 2: 0 }; // Reset counter for 2nd half
+            }
           } else if (gs === 'SecondHalf' && prevGs) {
             synthEvents.push({ id: `synth-so-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' });
+          } else if (gs === 'ExtraTime') {
+            synthEvents.push({ id: `synth-et-${Date.now()}`, minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'extra_time', points: 2, description: 'Extra time! The match continues.' });
+            // Award extra_time appearance bonus (+2) to all lineup players
+            if (!extraTimeBonusAwardedRef.current && isMounted && userLineupRef.current?.players?.length > 0) {
+              extraTimeBonusAwardedRef.current = true;
+              const { players: etP, captain: etCap, confidence: etConf } = userLineupRef.current;
+              let etBonus = 0;
+              for (const p of (etP as any[])) {
+                if (!p?.id) continue;
+                let pts = 2;
+                if (etCap === p.id) pts *= 2;
+                const stars = (etConf as Record<string, number>)?.[p.id] ?? 3;
+                pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+                pts = Math.round(pts * 100) / 100;
+                etBonus += pts;
+                setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+                setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'extra time', pts, minute: 90 }] }));
+              }
+              if (etBonus > 0) {
+                setLeaderboard(prev => {
+                  const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + etBonus) * 100) / 100 } : e);
+                  return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+                });
+                setActiveToasts(prev => [{ id: `toast-et-${Date.now()}`, type: 'extra_time' as any, title: 'Extra Time Bonus', subtitle: 'All players +2 pts', value: `+${Math.round(etBonus * 100) / 100} pts` }, ...prev]);
+              }
+            }
           } else if (gs === 'FullTime') {
             const ftMin = Math.max(90, Math.floor((lastClockSecondsRef.current ?? 90 * 60) / 60));
             synthEvents.push({ id: `synth-ft-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ends at ${ftMin}'.` });
+            // Award possession_bonus for 2nd half
+            if (!fulltimePossAwardedRef.current && isMounted) {
+              fulltimePossAwardedRef.current = true;
+              const p1c = possessionCountRef.current[1] ?? 0;
+              const p2c = possessionCountRef.current[2] ?? 0;
+              if (p1c + p2c > 10 && userLineupRef.current?.players?.length > 0) {
+                const domPart = p1c >= p2c ? 1 : 2;
+                const domTeam = domPart === 1 ? fixture.homeTeam : fixture.awayTeam;
+                const { players: pbP, captain: pbCap, confidence: pbConf } = userLineupRef.current;
+                let pbBonus = 0;
+                for (const p of (pbP as any[])) {
+                  if (!p?.id || p.position !== 'MID' || p.team !== domTeam) continue;
+                  let pts = 1;
+                  if (pbCap === p.id) pts *= 2;
+                  const stars = (pbConf as Record<string, number>)?.[p.id] ?? 3;
+                  pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+                  pts = Math.round(pts * 100) / 100;
+                  pbBonus += pts;
+                  setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+                  setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'possession bonus', pts, minute: 90 }] }));
+                }
+                if (pbBonus > 0) {
+                  setLeaderboard(prev => {
+                    const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + pbBonus) * 100) / 100 } : e);
+                    return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+                  });
+                  setActiveToasts(prev => [{ id: `toast-poss-ft-${Date.now()}`, type: 'possession_bonus' as any, title: 'Possession Bonus', subtitle: `${domTeam} dominated`, value: `+${Math.round(pbBonus * 100) / 100} pts` }, ...prev]);
+                }
+              }
+            }
           }
 
           if (synthEvents.length > 0 && isMounted) {
@@ -1801,10 +1916,37 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (!userLineupRef.current) continue;
           const { players, captain, confidence } = userLineupRef.current;
 
-          // goalkeeper_save synthesized from shot events may have no playerId —
+          // extra_time: award +2 to ALL lineup players (not a single-player event)
+          if (ev.type === 'extra_time' && !ev.playerId) {
+            if (!extraTimeBonusAwardedRef.current) {
+              extraTimeBonusAwardedRef.current = true;
+              let etBonus = 0;
+              for (const p of (players as any[])) {
+                if (!p?.id) continue;
+                let pts = 2;
+                if (captain === p.id) pts *= 2;
+                const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+                pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+                pts = Math.round(pts * 100) / 100;
+                etBonus += pts;
+                setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+                setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'extra time', pts, minute: ev.minute }] }));
+              }
+              if (etBonus > 0) {
+                setLeaderboard(prev => {
+                  const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + etBonus) * 100) / 100 } : e);
+                  return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+                });
+                setActiveToasts(prev => [{ id: `toast-et-ne-${Date.now()}`, type: 'extra_time' as any, title: 'Extra Time Bonus', subtitle: 'All players +2 pts', value: `+${Math.round(etBonus * 100) / 100} pts` }, ...prev]);
+              }
+            }
+            continue;
+          }
+
+          // goalkeeper_save / penalty_save synthesized without playerId —
           // find the GK in our lineup that plays for the saving team
           let matched = players.find((p: any) => p && p.id === ev.playerId);
-          if (!matched && ev.type === 'goalkeeper_save' && !ev.playerId) {
+          if (!matched && (ev.type === 'goalkeeper_save' || ev.type === 'penalty_save') && !ev.playerId) {
             matched = (players as any[]).find((p: any) => p && p.position === 'GK' && p.team === ev.team);
           }
           if (!matched) continue;
