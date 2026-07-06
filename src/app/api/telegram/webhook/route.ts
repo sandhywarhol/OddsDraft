@@ -175,20 +175,32 @@ async function fetchAndSendLeaderboard(chatId: number, contestId: string) {
   }
 }
 
+const ACTION_MAP_POINTS: Record<string, string> = {
+  goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
+  own_goal: 'own_goal', owngoal: 'own_goal',
+  yellowcard: 'yellow_card', yellow_card: 'yellow_card',
+  redcard: 'red_card', red_card: 'red_card',
+  penalty_save: 'penalty_save', penaltysave: 'penalty_save',
+  assist: 'assist',
+  penalty: 'penalty_won', penalty_won: 'penalty_won',
+  penaltymiss: 'penalty_missed', penalty_miss: 'penalty_missed', penalty_missed: 'penalty_missed',
+  save: 'goalkeeper_save', goalkeeper_save: 'goalkeeper_save',
+};
+const SCORING_EVENTS = new Set(['goal', 'own_goal', 'red_card', 'yellow_card', 'penalty_save', 'assist', 'penalty_won', 'penalty_missed', 'goalkeeper_save']);
+
 async function fetchAndSendPoints(chatId: number, contestId: string, walletAddress: string) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
   try {
-    // Get user's lineup — may have multiple rows (different contest_type), take best/first
+    // Get user's lineup
     const { data: entries } = await supabase
       .from('contest_entries')
       .select('lineup, contest_type')
       .eq('fixture_id', contestId)
-      .ilike('wallet_address', walletAddress);  // case-insensitive for safety
+      .ilike('wallet_address', walletAddress);
 
     const entryRow = entries?.[0] ?? null;
-
     if (!entryRow?.lineup?.players?.length) {
       await sendMessage(chatId,
         `📊 *${matchName}*\n\n❌ No lineup found for your wallet.\n\n[Join the contest ↗](${appUrl}/lineup/${contestId})`,
@@ -197,28 +209,58 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
       return;
     }
 
-    // Get all match events stored by cron
-    const { data: matchEvents } = await supabase
+    // Try events from DB first (stored by cron job)
+    const { data: dbEvents } = await supabase
       .from('live_match_events')
       .select('event_type, player_name, team_name, minute')
       .eq('fixture_id', contestId)
       .order('minute', { ascending: true });
 
-    const SCORING_EVENTS = new Set(['goal', 'own_goal', 'red_card', 'yellow_card', 'penalty_save', 'assist', 'penalty_won', 'penalty_missed']);
+    // Build a unified event list — either from DB (has names) or live from TxLINE
+    type PointsEvent = { event_type: string; player_name: string; team_name: string; minute: number };
+    let eventList: PointsEvent[] = [];
+
+    const dbUsable = (dbEvents ?? []).filter(e => e.player_name);
+    if (dbUsable.length > 0) {
+      eventList = dbUsable as PointsEvent[];
+    } else {
+      // Fall back to live TxLINE data — fetch directly
+      try {
+        const txRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${contestId}`, { cache: 'no-store' });
+        if (txRes.ok) {
+          const txArr = await txRes.json();
+          const raw = Array.isArray(txArr) && txArr.length > 0 ? mergeEvents(txArr) : (txArr ?? {});
+          const allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
+          for (const ev of allEvents) {
+            if (ev.Confirmed === false) continue;
+            const d = ev.Data?.New ?? ev.Data ?? {};
+            const rawType = (ev.Action ?? ev.type ?? '').toLowerCase().replace(/\s+/g, '_');
+            const eventType = ACTION_MAP_POINTS[rawType];
+            if (!eventType || !SCORING_EVENTS.has(eventType)) continue;
+            const rawPName = d.PlayerName ?? ev.Player ?? ev.player ?? '';
+            if (!rawPName) continue;
+            const participant: number = d.Participant ?? ev.Participant ?? 1;
+            const teamName = participant === 2 ? (fixture?.awayTeam ?? '') : (fixture?.homeTeam ?? '');
+            const resolvedId = matchPlayerName(rawPName, teamName);
+            const resolved = resolvedId ? WC2026_PLAYERS.find(p => p.id === resolvedId) : null;
+            const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
+            eventList.push({ event_type: eventType, player_name: resolved?.name ?? rawPName, team_name: teamName, minute });
+          }
+        }
+      } catch { /* TxLINE unavailable — proceed with empty list */ }
+    }
+
     const lineup = entryRow.lineup;
     let totalPts = 0;
     const breakdown: string[] = [];
 
-    for (const ev of (matchEvents ?? [])) {
+    for (const ev of eventList) {
       if (!SCORING_EVENTS.has(ev.event_type)) continue;
       const rawName = ev.player_name ?? '';
       if (!rawName) continue;
 
-      // Try ID-based match first (DB already stores resolved names from cron)
       const resolvedId = matchPlayerName(rawName, ev.team_name ?? '');
-      let matched = resolvedId
-        ? lineup.players.find((p: any) => p.id === resolvedId)
-        : null;
+      let matched = resolvedId ? lineup.players.find((p: any) => p.id === resolvedId) : null;
       if (!matched) {
         const parts = rawName.toLowerCase().split(/\s+/).filter((p: string) => p.length >= 3);
         matched = lineup.players.find((p: any) =>
@@ -236,7 +278,7 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
       pts = Math.round(pts * confMult * (isCaptain ? 2 : 1) * 10) / 10;
       totalPts += pts;
 
-      const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤', assist:'🎯', penalty_won:'🎯', penalty_missed:'❌' };
+      const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤', assist:'🎯', penalty_won:'🎯', penalty_missed:'❌', goalkeeper_save:'🧤' };
       const capNote = isCaptain ? ' *(C)×2*' : '';
       breakdown.push(`${evEmoji[ev.event_type] ?? '📣'} ${rawName} — ${ev.event_type.replace(/_/g,' ').toUpperCase()} (${ev.minute}') *+${pts}pts*${capNote}`);
     }
@@ -244,7 +286,7 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
     const totalStr = totalPts > 0 ? `+${Math.round(totalPts * 10) / 10}` : `${Math.round(totalPts * 10) / 10}`;
     const bdText = breakdown.length > 0 ? `\n\n${breakdown.join('\n')}` : '\n\n_No scoring events from your lineup yet_';
     await sendMessage(chatId,
-      `📊 *${matchName}* _(${entryRow.contest_type})_\n\n*Total: ${totalStr} pts*${bdText}\n\n[Full live score ↗](${appUrl}/live/${contestId})`,
+      `📊 *${matchName}* _(${entryRow.contest_type ?? 'standard'})_\n\n*Total: ${totalStr} pts*${bdText}\n\n[Full live score ↗](${appUrl}/live/${contestId})`,
       { parse_mode: 'Markdown' }
     );
   } catch {

@@ -125,14 +125,17 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // ── Write all new events to live_match_events (for browser fallback) ──
+      // ── Write all new events to live_match_events (for /points command) ──
       await supabase.from('live_match_events').upsert(
         newEvents.map((ev, i) => {
           const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
           const eventType = ACTION_MAP[rawType] ?? rawType;
           const minSec = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
-          const rawPName = ev.Player ?? ev.player ?? '';
-          const tName = ev.Team ?? ev.team ?? '';
+          // TxLINE native format: player info lives in Data.New, not top-level
+          const d = ev.Data?.New ?? ev.Data ?? {};
+          const rawPName = d.PlayerName ?? ev.Player ?? ev.player ?? '';
+          const participant: number = d.Participant ?? ev.Participant ?? 1;
+          const tName = participant === 2 ? fixture.awayTeam : fixture.homeTeam;
           const rId = rawPName ? matchPlayerName(rawPName, tName) : null;
           const rPlayer = rId ? WC2026_PLAYERS.find(p => p.id === rId) : null;
           return {
