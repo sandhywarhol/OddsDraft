@@ -83,6 +83,8 @@ export function formatMatchEvent(
       return `🔄 Substitution — ${teamName}${min}`;
     case 'penalty_save':
       return `🧤 *PENALTY SAVED!* ${playerName}${min}`;
+    case 'kick_off':
+      return `🟢 *Kick Off!* — ${homeTeam} vs ${awayTeam}`;
     case 'half_time':
       return `⏱ *Half Time* — ${homeTeam} ${score?.home ?? 0}–${score?.away ?? 0} ${awayTeam}`;
     case 'full_time':

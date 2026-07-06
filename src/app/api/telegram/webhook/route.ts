@@ -30,6 +30,7 @@ const EVENT_EMOJI: Record<string, string> = {
   penalty_save: '🧤', goalkeeper_save: '🧤',
   half_time: '⏱', full_time: '🏁',
   substitution: '🔄', corner_kick: '🚩', var_review: '📺',
+  kick_off: '🟢', penalty_won: '🎯', penalty_missed: '❌',
 };
 
 const RECAP_ACTION_MAP: Record<string, string> = {

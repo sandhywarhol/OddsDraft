@@ -16,7 +16,7 @@ const SIGNIFICANT = new Set([
   'goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save',
   'half_time', 'full_time',
   'yellow_card', 'substitution', 'corner_kick', 'var_review', 'extra_time',
-  'penalty_won', 'penalty_missed',
+  'penalty_won', 'penalty_missed', 'kick_off',
 ]);
 
 const ACTION_MAP: Record<string, string> = {
@@ -28,6 +28,7 @@ const ACTION_MAP: Record<string, string> = {
   penalty_save: 'penalty_save', penaltysave: 'penalty_save',
   half_time: 'half_time', halftime: 'half_time',
   full_time: 'full_time', fulltime: 'full_time',
+  kick_off: 'kick_off', kickoff: 'kick_off', secondhalf: 'kick_off',
   // TxLINE raw event type names (from txodds.ts mapEventToFantasyType):
   corner: 'corner_kick', corner_kick: 'corner_kick',
   var: 'var_review', var_review: 'var_review',
