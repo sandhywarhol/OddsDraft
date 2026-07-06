@@ -3089,7 +3089,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rank</div>
                     </div>
                     <div>
-                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: '#ffd700' }}>
+                      <div suppressHydrationWarning style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: '#ffd700' }}>
                         {(() => {
                           const entry = leaderboard.find(e => e.isUser);
                           if (!entry || !entry.rank || typeof entry.rank !== 'number') return '—';
