@@ -29,60 +29,72 @@ const EVENT_EMOJI: Record<string, string> = {
   substitution: '🔄', corner_kick: '🚩', var_review: '📺',
 };
 
+const RECAP_ACTION_MAP: Record<string, string> = {
+  goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
+  own_goal: 'own_goal', owngoal: 'own_goal',
+  yellowcard: 'yellow_card', yellow_card: 'yellow_card',
+  redcard: 'red_card', red_card: 'red_card',
+  substitution: 'substitution', sub: 'substitution',
+  corner_kick: 'corner_kick', cornerkick: 'corner_kick',
+  penalty_save: 'penalty_save', penaltysave: 'penalty_save',
+  half_time: 'half_time', halftime: 'half_time',
+  full_time: 'full_time', fulltime: 'full_time',
+  kick_off: 'kick_off', kickoff: 'kick_off',
+};
+
+function parseTxLineEvents(rawArr: any[], fixtureName?: { homeTeam?: string; awayTeam?: string }) {
+  const arr: any[] = Array.isArray(rawArr) ? rawArr : [];
+  return arr.map((e: any) => {
+    const rawType = (e.Action ?? e.type ?? '').toLowerCase().replace(/\s+/g, '_');
+    return {
+      event_type: RECAP_ACTION_MAP[rawType] ?? rawType,
+      minute: e.Clock?.Seconds ? Math.floor(e.Clock.Seconds / 60) : (parseInt(e.minute) || 0),
+      player_name: e.Player ?? e.PlayerName ?? e.player ?? '',
+      team_name: e.Participant === 2 ? fixtureName?.awayTeam : fixtureName?.homeTeam,
+    };
+  }).filter((e: any) => e.event_type && e.event_type !== 'coverage_update' && e.event_type !== 'connected');
+}
+
 async function fetchAndSendRecap(chatId: number, contestId: string) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 
   try {
-    // Try live_match_events first (populated by cron), fall back to TxLINE snapshot
     let events: any[] = [];
 
+    // Source 1: live_match_events DB (written by cron — most reliable if table exists)
     const dbRes = await fetch(`${appUrl}/api/live/events?fixtureId=${contestId}`, { cache: 'no-store' });
     if (dbRes.ok) events = await dbRes.json();
 
-    // If DB empty, pull from TxLINE snapshot (has full match history, unlike updates).
-    // Path: /api/txline/api/scores/snapshot/{id} — same as live page bootstrap.
-    // Proxy returns a raw SSE array; mergeEvents() builds _allEvents from it.
+    // Source 2: TxLINE snapshot (full match history; may be empty during live match)
     if (!events?.length) {
       const snapRes = await fetch(`${appUrl}/api/txline/api/scores/snapshot/${contestId}`, { cache: 'no-store' });
       if (snapRes.ok) {
         const snapArr = await snapRes.json();
-        const merged = Array.isArray(snapArr) && snapArr.length > 0
-          ? mergeEvents(snapArr)
-          : (snapArr ?? {});
+        const merged = Array.isArray(snapArr) && snapArr.length > 0 ? mergeEvents(snapArr) : (snapArr ?? {});
         const allEvts: any[] = Array.isArray((merged as any)?._allEvents)
           ? (merged as any)._allEvents
           : (Array.isArray(snapArr) ? snapArr : []);
-        const ACTION_MAP: Record<string, string> = {
-          goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
-          own_goal: 'own_goal', owngoal: 'own_goal',
-          yellowcard: 'yellow_card', yellow_card: 'yellow_card',
-          redcard: 'red_card', red_card: 'red_card',
-          substitution: 'substitution', sub: 'substitution',
-          penalty_save: 'penalty_save', penaltysave: 'penalty_save',
-          half_time: 'half_time', halftime: 'half_time',
-          full_time: 'full_time', fulltime: 'full_time',
-          kick_off: 'kick_off', kickoff: 'kick_off',
-        };
-        // Do NOT filter Confirmed here — snapshot is a point-in-time state, not a stream.
-        // During a live match, in-progress events may all be Confirmed: false in the snapshot;
-        // filtering them out leaves nothing. The Confirmed filter is only needed for the
-        // live SSE stream to prevent duplicate 2-stage events.
-        events = allEvts
-          .map((e: any) => {
-            const rawType = (e.Action ?? e.type ?? '').toLowerCase().replace(/\s+/g, '_');
-            return {
-              event_type: ACTION_MAP[rawType] ?? rawType,
-              minute: e.Clock?.Seconds ? Math.floor(e.Clock.Seconds / 60) : (parseInt(e.minute) || 0),
-              player_name: e.Player ?? e.PlayerName ?? e.player ?? '',
-              team_name: e.Participant === 2 ? fixture?.awayTeam : fixture?.homeTeam,
-            };
-          });
+        // No Confirmed filter — snapshot events may all be Confirmed:false during live match
+        events = parseTxLineEvents(allEvts, fixture);
       }
     }
 
-    const SIGNIFICANT_RECAP = ['goal','penalty_outcome','own_goal','yellow_card','red_card','penalty_save','half_time','full_time','kick_off'];
+    // Source 3: TxLINE updates (real-time stream — same endpoint cron uses; works during live)
+    if (!events?.length) {
+      const updRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${contestId}`, { cache: 'no-store' });
+      if (updRes.ok) {
+        const updArr = await updRes.json();
+        const merged = Array.isArray(updArr) && updArr.length > 0 ? mergeEvents(updArr) : (updArr ?? {});
+        const allEvts: any[] = Array.isArray((merged as any)?._allEvents)
+          ? (merged as any)._allEvents
+          : (Array.isArray(updArr) ? updArr : []);
+        events = parseTxLineEvents(allEvts, fixture);
+      }
+    }
+
+    const SIGNIFICANT_RECAP = ['goal','penalty_outcome','own_goal','yellow_card','red_card','penalty_save','half_time','full_time','kick_off','substitution','corner_kick','var_review'];
     const filtered = (events ?? [])
       .filter(e => SIGNIFICANT_RECAP.includes(e.event_type ?? e.type ?? ''))
       .slice(-8)
