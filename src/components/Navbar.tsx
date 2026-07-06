@@ -76,34 +76,48 @@ export default function Navbar() {
         {/* Right Actions (Flex 1, align right) */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
 
-          {isAdmin && <button
-            onClick={toggleAppMode}
-            style={{
-              height: '24px',
-              borderRadius: '12px',
-              padding: '0 8px',
-              fontSize: '0.58rem',
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              background: (mounted && appMode === 'live')
-                ? 'linear-gradient(145deg, #0d1b2a, #0a111a)'
-                : 'linear-gradient(145deg, #2a0d1b, #1a0a11)',
-              color: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
-              border: `1px solid ${(mounted && appMode === 'live') ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
-              display: 'flex', alignItems: 'center', gap: 4,
-              boxShadow: (mounted && appMode === 'live') ? '0 0 6px rgba(0,229,255,0.2), inset 0 1px 1px rgba(255,255,255,0.05)' : '0 0 6px rgba(255,77,109,0.2), inset 0 1px 1px rgba(255,255,255,0.05)',
-              cursor: 'pointer', transition: 'all 0.3s ease',
-            }}
-            onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
-            onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-          >
-            <span style={{
-              width: 4, height: 4, borderRadius: '50%',
-              background: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
-              boxShadow: `0 0 4px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}`,
-            }} />
-            {(mounted && appMode === 'live') ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
-          </button>}
+          {isAdmin ? (
+            <button
+              onClick={toggleAppMode}
+              style={{
+                height: '24px', borderRadius: '12px', padding: '0 8px', fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.05em',
+                background: (mounted && appMode === 'live') ? 'linear-gradient(145deg, #0d1b2a, #0a111a)' : 'linear-gradient(145deg, #2a0d1b, #1a0a11)',
+                color: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d',
+                border: `1px solid ${(mounted && appMode === 'live') ? 'rgba(0,229,255,0.4)' : 'rgba(255,77,109,0.4)'}`,
+                display: 'flex', alignItems: 'center', gap: 4,
+                boxShadow: (mounted && appMode === 'live') ? '0 0 6px rgba(0,229,255,0.2), inset 0 1px 1px rgba(255,255,255,0.05)' : '0 0 6px rgba(255,77,109,0.2), inset 0 1px 1px rgba(255,255,255,0.05)',
+                cursor: 'pointer', transition: 'all 0.3s ease',
+              }}
+              onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
+              onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d', boxShadow: `0 0 4px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}` }} />
+              {(mounted && appMode === 'live') ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
+            </button>
+          ) : (
+            <a
+              href="https://t.me/OddsDraftBot"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                height: '24px', borderRadius: '12px', padding: '0 10px', fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.05em',
+                background: 'linear-gradient(145deg, #0d2137, #07111f)',
+                color: '#29b6f6',
+                border: '1px solid rgba(41,182,246,0.45)',
+                display: 'flex', alignItems: 'center', gap: 5,
+                boxShadow: '0 0 6px rgba(41,182,246,0.2)',
+                cursor: 'pointer', transition: 'all 0.2s ease', textDecoration: 'none',
+              }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'scale(1.05)'; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLAnchorElement).style.transform = 'scale(1)'; }}
+            >
+              {/* Telegram icon */}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+              </svg>
+              NOTIFY ME
+            </a>
+          )}
 
           {mounted ? (
             <WalletDropdown 

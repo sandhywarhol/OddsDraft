@@ -1131,26 +1131,36 @@ function FeaturesSection() {
   ];
 
   return (
-    <section id="features-section" style={{ padding: '80px 0', background: 'transparent', position: 'relative', overflow: 'hidden' }}>
-      {/* footer.webp as background for this section */}
+    <section id="features-section" style={{ padding: '0 0 80px', background: 'transparent' }}>
+      {/* Why OddsDraft header box — footer.webp as background image */}
       <div style={{
-        position: 'absolute', inset: 0, zIndex: 0,
-        backgroundImage: 'url("/footer.webp")',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center top',
-        opacity: 0.18,
-        pointerEvents: 'none',
-      }} />
-      <div className="container" style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ textAlign: 'center', marginBottom: 60 }}>
-          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.2)' }}>
+        position: 'relative',
+        overflow: 'hidden',
+        borderTop: '2px solid #ffd700',
+        borderBottom: '2px solid #ffd700',
+        marginBottom: 60,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 0,
+          backgroundImage: 'url("/footer.webp")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          pointerEvents: 'none',
+        }} />
+        {/* Dark overlay so text is readable */}
+        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'rgba(0,0,0,0.55)', pointerEvents: 'none' }} />
+        <div className="container" style={{ position: 'relative', zIndex: 2, textAlign: 'center', padding: '60px 24px' }}>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 12, color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.4)' }}>
             Why OddsDraft?
           </h2>
-          <p style={{ color: 'var(--text-secondary)', maxWidth: 500, margin: '0 auto' }}>
+          <p style={{ color: 'rgba(255,255,255,0.8)', maxWidth: 500, margin: '0 auto', fontSize: '1.05rem' }}>
             The only fantasy platform built on live football data + on-chain rewards
           </p>
         </div>
+      </div>
 
+      <div className="container" style={{ position: 'relative', zIndex: 1 }}>
         <div className="grid-three">
           {features.map((feature, idx) => {
             const card = (
