@@ -10,7 +10,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const SIGNIFICANT = new Set(['goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save', 'half_time', 'full_time']);
+const SIGNIFICANT = new Set([
+  'goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save',
+  'half_time', 'full_time',
+  'yellow_card', 'substitution', 'corner_kick', 'var_review', 'extra_time',
+]);
 
 const ACTION_MAP: Record<string, string> = {
   goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
