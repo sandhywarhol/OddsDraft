@@ -129,6 +129,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Store in Supabase for persistence
+    if (walletAddress) {
+      const rowsToInsert = Object.entries(bonuses).map(([playerId, data]: [string, any]) => ({
+        fixture_id: fixtureId,
+        wallet_address: walletAddress,
+        player_id: playerId,
+        performance_bonus: data.performanceBonus ?? 0,
+        skill_card_bonus: data.skillCard ? 0 : 0, // Will be calculated on frontend
+        timepoint,
+        calculated_at: new Date().toISOString(),
+      }));
+
+      // Upsert to avoid duplicates (same player in same fixture at same timepoint)
+      if (rowsToInsert.length > 0) {
+        try {
+          await supabase
+            .from('match_performance_bonuses')
+            .upsert(rowsToInsert, {
+              onConflict: 'fixture_id,wallet_address,player_id,timepoint',
+            });
+        } catch (err) {
+          console.warn('[PerformanceBonus] Supabase upsert failed:', err);
+        }
+      }
+    }
+
     return NextResponse.json({
       bonuses,
       timepoint,
