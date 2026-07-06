@@ -883,6 +883,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     homeCoach?: string; awayCoach?: string;
   } | null>(null);
   const lineupFetchedRef = useRef(false);
+  const lineupRetryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [eventsTab, setEventsTab] = useState<'events' | 'lineups'>('events');
 
   // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
@@ -1274,6 +1275,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         // Parse lineup SSE push (sent ~1hr before kickoff) to update formation view
         if (action === 'lineups' && !lineupFetchedRef.current) {
           lineupFetchedRef.current = true;
+          if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
           try {
             const teamsArr: any[] = u.Lineups ?? u.lineups ?? u.Data?.Lineups ?? u.Data?.lineups ?? [];
             const homeFp: FormationPlayer[] = [];
@@ -1451,53 +1453,67 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         console.log(`[LivePage] Player map — ${Object.keys(pMap).length} players matched`);
       }
 
-      // Fetch real lineup for formation visualisation (once per session)
-      if (!lineupFetchedRef.current && isMounted) {
-        lineupFetchedRef.current = true;
+      // Fetch real lineup for formation visualisation — retries every 60s until data arrives
+      const fetchLineup = async () => {
+        if (lineupFetchedRef.current || !isMounted) return;
         try {
           const lineupRes = await fetch(`/api/txline/api/fixtures/lineups/${resolvedFixtureId}`);
-          if (lineupRes.ok) {
-            const lineupData: any = await lineupRes.json();
-            const players: any[] = Array.isArray(lineupData)
-              ? lineupData
-              : (lineupData?.lineups ?? lineupData?.players ?? lineupData?.Lineups ?? []);
-            if (players.length > 0 && isMounted) {
-              const home: FormationPlayer[] = [];
-              const away: FormationPlayer[] = [];
-              let homeCoach: string | undefined;
-              let awayCoach: string | undefined;
-              for (const p of players) {
-                const participant: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
-                const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
-                const rawName: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
-                const name = rawName.includes(',')
-                  ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ')
-                  : rawName;
-                if (!name) continue;
-                // Extract coach entry
-                if (rawPos === 'COACH' || (p.Role ?? p.role ?? '').toUpperCase() === 'COACH') {
-                  if (participant === 1) homeCoach = name; else awayCoach = name;
-                  continue;
-                }
-                const fp: FormationPlayer = {
-                  id: pMap[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
-                  name,
-                  jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
-                  position: rawPos || 'MID',
-                  participant,
-                  starter: !!(p.Starter ?? p.starter ?? false),
-                };
-                if (participant === 1) home.push(fp); else away.push(fp);
-              }
-              if (home.length + away.length > 0) {
-                setRealLineup({ home, away, homeCoach, awayCoach });
-                console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
-              }
+          if (!lineupRes.ok) return;
+          const lineupData: any = await lineupRes.json();
+          // Handle both flat array and nested {lineups:[]} / {Data:{Lineups:[]}} shapes
+          let players: any[] = [];
+          if (Array.isArray(lineupData)) {
+            players = lineupData;
+          } else if (Array.isArray(lineupData?.lineups ?? lineupData?.Lineups)) {
+            players = lineupData.lineups ?? lineupData.Lineups;
+          } else if (Array.isArray(lineupData?.Data?.Lineups ?? lineupData?.Data?.lineups)) {
+            players = lineupData.Data.Lineups ?? lineupData.Data.lineups;
+          } else if (Array.isArray(lineupData?.players)) {
+            players = lineupData.players;
+          }
+          if (players.length === 0 || !isMounted) return;
+          const home: FormationPlayer[] = [];
+          const away: FormationPlayer[] = [];
+          let homeCoach: string | undefined;
+          let awayCoach: string | undefined;
+          for (const p of players) {
+            const participant: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
+            const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
+            const rawName: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
+            const name = rawName.includes(',')
+              ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ')
+              : rawName;
+            if (!name) continue;
+            if (rawPos === 'COACH' || (p.Role ?? p.role ?? '').toUpperCase() === 'COACH') {
+              if (participant === 1) homeCoach = name; else awayCoach = name;
+              continue;
             }
+            const fp: FormationPlayer = {
+              id: pMap[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
+              name,
+              jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
+              position: rawPos || 'MID',
+              participant,
+              starter: !!(p.Starter ?? p.starter ?? false),
+            };
+            if (participant === 1) home.push(fp); else away.push(fp);
+          }
+          if (home.length + away.length > 0) {
+            lineupFetchedRef.current = true;
+            if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
+            setRealLineup({ home, away, homeCoach, awayCoach });
+            console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
           }
         } catch (err) {
-          console.warn('[LivePage] Lineup fetch failed (non-critical):', err);
+          console.warn('[LivePage] Lineup fetch failed (will retry):', err);
         }
+      };
+
+      // Immediate attempt + retry every 60s until we get data
+      fetchLineup();
+      if (!lineupFetchedRef.current) {
+        if (lineupRetryTimerRef.current) clearInterval(lineupRetryTimerRef.current);
+        lineupRetryTimerRef.current = setInterval(fetchLineup, 60_000);
       }
 
       // Load all events that happened before we connected via the score snapshot
@@ -2119,6 +2135,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     return () => {
       isMounted = false;
       clearInterval(interval);
+      if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
