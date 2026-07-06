@@ -3535,23 +3535,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   )}
                 </div>
               )}
-
-              {/* Point Reference */}
-              <div className="card" style={{ marginTop: 20 }}>
-                <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Fantasy Points Reference
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                  {Object.entries(POINT_MAP).map(([event, pts]) => (
-                    <div key={event} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', padding: '4px 8px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>{event.replace(/_/g, ' ')}</span>
-                      <span style={{ fontWeight: 700, color: pts >= 0 ? 'var(--color-primary)' : 'var(--color-danger)' }}>
-                        {pts >= 0 ? '+' : ''}{pts}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* RIGHT: Match Events + Leaderboard */}
@@ -3756,6 +3739,23 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       </div>
                     );
                   })()}
+                </div>
+              </div>
+
+              {/* Point Reference */}
+              <div className="card">
+                <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Fantasy Points Reference
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {Object.entries(POINT_MAP).map(([event, pts]) => (
+                    <div key={event} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', padding: '4px 8px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>{event.replace(/_/g, ' ')}</span>
+                      <span style={{ fontWeight: 700, color: pts >= 0 ? 'var(--color-primary)' : 'var(--color-danger)' }}>
+                        {pts >= 0 ? '+' : ''}{pts}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
