@@ -4,6 +4,8 @@ import { sendMessage, formatMatchEvent } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
 import { calculateEventPoints } from '@/lib/fantasy-engine';
+import { matchPlayerName } from '@/lib/txline-bridge';
+import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -123,13 +125,17 @@ export async function GET(req: NextRequest) {
           const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
           const eventType = ACTION_MAP[rawType] ?? rawType;
           const minSec = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
+          const rawPName = ev.Player ?? ev.player ?? '';
+          const tName = ev.Team ?? ev.team ?? '';
+          const rId = rawPName ? matchPlayerName(rawPName, tName) : null;
+          const rPlayer = rId ? WC2026_PLAYERS.find(p => p.id === rId) : null;
           return {
             fixture_id: fixture.fixtureId,
             event_id: eventIds[candidateEvents.indexOf(newEvents[i])],
             minute: minSec,
             event_type: eventType,
-            player_name: ev.Player ?? ev.player ?? '',
-            team_name: ev.Team ?? ev.team ?? '',
+            player_name: rPlayer?.name ?? rawPName,
+            team_name: tName,
             home_score: scoreHome,
             away_score: scoreAway,
           };
@@ -143,8 +149,12 @@ export async function GET(req: NextRequest) {
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const eventType = ACTION_MAP[rawType] ?? rawType;
         const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
-        const playerName = ev.Player ?? ev.player ?? '';
+        const rawPlayerName = ev.Player ?? ev.player ?? '';
         const teamName = ev.Team ?? ev.team ?? '';
+        // Resolve TxLINE abbreviated name (e.g. "Kane H.") to our display name ("Harry Kane")
+        const resolvedId = rawPlayerName ? matchPlayerName(rawPlayerName, teamName) : null;
+        const resolvedPlayer = resolvedId ? WC2026_PLAYERS.find(p => p.id === resolvedId) : null;
+        const playerName = resolvedPlayer?.name ?? rawPlayerName;
 
         const text = formatMatchEvent(eventType, playerName, teamName, minute, fixture.homeTeam, fixture.awayTeam, { home: scoreHome, away: scoreAway });
 
@@ -195,15 +205,28 @@ export async function GET(req: NextRequest) {
               for (const ev of scoringEvents) {
                 const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
                 const eventType = ACTION_MAP[rt] ?? rt;
-                const playerName = (ev.Player ?? ev.player ?? '').trim();
-                if (!playerName || playerName.toLowerCase() === 'unknown') continue;
+                const rawPName = (ev.Player ?? ev.player ?? '').trim();
+                const evTeam = (ev.Team ?? ev.team ?? '').trim();
+                if (!rawPName) continue;
 
-                // Fuzzy match by last name segment (≥3 chars)
-                const nameParts = playerName.toLowerCase().split(/\s+/).filter((p: string) => p.length >= 3);
-                const matched = entry.lineup.players.find((p: any) =>
-                  nameParts.some((part: string) => (p.name ?? '').toLowerCase().includes(part))
-                );
+                // Resolve to our internal ID first (most reliable) then fall back to fuzzy name match
+                const txResolvedId = matchPlayerName(rawPName, evTeam);
+                const displayName = txResolvedId
+                  ? (WC2026_PLAYERS.find(p => p.id === txResolvedId)?.name ?? rawPName)
+                  : rawPName;
+
+                let matched = txResolvedId
+                  ? entry.lineup.players.find((p: any) => p.id === txResolvedId)
+                  : null;
+                if (!matched) {
+                  // Fallback: fuzzy last name match on display name
+                  const nameParts = displayName.toLowerCase().split(/\s+/).filter((p: string) => p.length >= 3);
+                  matched = entry.lineup.players.find((p: any) =>
+                    nameParts.some((part: string) => (p.name ?? '').toLowerCase().includes(part))
+                  );
+                }
                 if (!matched) continue;
+                const playerName = displayName;
 
                 let pts = calculateEventPoints(eventType, matched.position ?? 'ATT');
                 if (pts === 0) continue;

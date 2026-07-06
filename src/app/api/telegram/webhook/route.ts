@@ -134,21 +134,30 @@ async function fetchAndSendRecap(chatId: number, contestId: string) {
 async function fetchAndSendLeaderboard(chatId: number, contestId: string) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${contestId}`);
+    // contest/leaderboard returns {participants:[{wallet_address,contest_type}]} — no live points
+    // (points are tracked client-side during match, submitted to DB at full-time)
+    const res = await fetch(`${appUrl}/api/contest/leaderboard?fixture=${contestId}`);
     if (!res.ok) throw new Error('API error');
-    const data: Array<{ wallet: string; points: number; rank: number; prize?: string }> = await res.json();
-    const top5 = data.slice(0, 5);
-    if (top5.length === 0) {
-      await sendMessage(chatId, `🏆 *${matchName}*\n\nNo leaderboard data yet.`, { parse_mode: 'Markdown' });
+    const data = await res.json();
+    const participants: Array<{ wallet_address: string; contest_type: string }> = data?.participants ?? [];
+    if (participants.length === 0) {
+      await sendMessage(chatId,
+        `🏆 *${matchName}*\n\nNo entries yet for this match.\n\nJoin at ${appUrl}/lineup/${contestId}`,
+        { parse_mode: 'Markdown' }
+      );
       return;
     }
-    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-    const lines = top5.map((e, i) => {
-      const short = `${e.wallet.slice(0, 4)}...${e.wallet.slice(-4)}`;
-      return `${medals[i]} ${short} — *${e.points} pts*${e.prize ? ` | ${e.prize}` : ''}`;
+    const lines = participants.slice(0, 10).map((p, i) => {
+      const w = p.wallet_address ?? '';
+      const short = w.length > 8 ? `${w.slice(0, 4)}...${w.slice(-4)}` : w;
+      return `${i + 1}. ${short} _(${p.contest_type})_`;
     });
-    await sendMessage(chatId, `🏆 *Leaderboard — ${matchName}*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
+    await sendMessage(chatId,
+      `🏆 *${matchName}* — ${participants.length} entries\n\n${lines.join('\n')}\n\n_Live points update in real\\-time on the app_\n[Watch Live ↗](${appUrl}/live/${contestId})`,
+      { parse_mode: 'Markdown' }
+    );
   } catch {
     await sendMessage(chatId, '❌ Could not fetch leaderboard right now.');
   }
@@ -157,19 +166,22 @@ async function fetchAndSendLeaderboard(chatId: number, contestId: string) {
 async function fetchAndSendPoints(chatId: number, contestId: string, walletAddress: string) {
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   const matchName = fixture ? `${fixture.homeTeam} vs ${fixture.awayTeam}` : contestId;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app'}/api/contest/leaderboard?contestId=${contestId}`);
+    const res = await fetch(`${appUrl}/api/contest/leaderboard?fixture=${contestId}`);
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
-    const entry = data?.find((e: any) => e.wallet?.toLowerCase() === walletAddress.toLowerCase());
+    const participants: Array<{ wallet_address: string; contest_type: string }> = data?.participants ?? [];
+    const entry = participants.find(p => p.wallet_address?.toLowerCase() === walletAddress.toLowerCase());
     if (entry) {
+      const rank = participants.indexOf(entry) + 1;
       await sendMessage(chatId,
-        `📊 *${matchName}*\n\nPoints: *${entry.points}*\nRank: #${entry.rank}${entry.prize ? `\nPrize: ${entry.prize}` : ''}`,
+        `📊 *${matchName}*\n\n✅ You are entered _(${entry.contest_type})_\nEntry #${rank} of ${participants.length}\n\n_Fantasy points are tracked live in the app_\n[View Your Score ↗](${appUrl}/live/${contestId})`,
         { parse_mode: 'Markdown' }
       );
     } else {
       await sendMessage(chatId,
-        `📊 *${matchName}*\n\nNo lineup found for your wallet.\nJoin the contest at odds\\-draft\\.vercel\\.app`,
+        `📊 *${matchName}*\n\n❌ No lineup found for your wallet.\n\n[Join the contest ↗](${appUrl}/lineup/${contestId})`,
         { parse_mode: 'Markdown' }
       );
     }
