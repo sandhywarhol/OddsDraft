@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendMessage, answerCallbackQuery, formatKickoff } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
+import { mergeEvents } from '@/lib/txline';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,14 +41,19 @@ async function fetchAndSendRecap(chatId: number, contestId: string) {
     const dbRes = await fetch(`${appUrl}/api/live/events?fixtureId=${contestId}`, { cache: 'no-store' });
     if (dbRes.ok) events = await dbRes.json();
 
-    // If DB empty, pull directly from TxLINE score updates via proxy (same endpoint as cron)
+    // If DB empty, pull from TxLINE snapshot (has full match history, unlike updates).
+    // Path: /api/txline/api/scores/snapshot/{id} — same as live page bootstrap.
+    // Proxy returns a raw SSE array; mergeEvents() builds _allEvents from it.
     if (!events?.length) {
-      const updRes = await fetch(`${appUrl}/api/txline/scores/updates/${contestId}`, { cache: 'no-store' });
-      if (updRes.ok) {
-        const updRaw = await updRes.json();
-        const allEvts: any[] = Array.isArray((updRaw as any)?._allEvents)
-          ? (updRaw as any)._allEvents
-          : (Array.isArray(updRaw) ? updRaw : []);
+      const snapRes = await fetch(`${appUrl}/api/txline/api/scores/snapshot/${contestId}`, { cache: 'no-store' });
+      if (snapRes.ok) {
+        const snapArr = await snapRes.json();
+        const merged = Array.isArray(snapArr) && snapArr.length > 0
+          ? mergeEvents(snapArr)
+          : (snapArr ?? {});
+        const allEvts: any[] = Array.isArray((merged as any)?._allEvents)
+          ? (merged as any)._allEvents
+          : (Array.isArray(snapArr) ? snapArr : []);
         const ACTION_MAP: Record<string, string> = {
           goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
           own_goal: 'own_goal', owngoal: 'own_goal',

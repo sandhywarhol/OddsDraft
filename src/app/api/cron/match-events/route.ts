@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendMessage, formatMatchEvent } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
+import { mergeEvents } from '@/lib/txline';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,10 +49,13 @@ export async function GET(req: NextRequest) {
 
   for (const fixture of liveFixtures) {
     try {
-      // Use server-side proxy — injects auth, no client token needed
-      const scoreRes = await fetch(`${appUrl}/api/txline/scores/updates/${fixture.fixtureId}`, { cache: 'no-store' });
+      // Use server-side proxy — injects auth, no client token needed.
+      // Path matches live page: /api/txline/api/scores/updates/{id}
+      // Proxy returns a raw SSE array; mergeEvents() merges it into a state object with _allEvents.
+      const scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${fixture.fixtureId}`, { cache: 'no-store' });
       if (!scoreRes.ok) continue;
-      const raw = await scoreRes.json();
+      const scoreArr = await scoreRes.json();
+      const raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
       const allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
       if (allEvents.length === 0) continue;
 
