@@ -848,6 +848,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const leaderboardRef = useRef(leaderboard);
   const userLineupRef = useRef<any>(null);
   const appearedPlayersRef = useRef<Set<string>>(new Set());
+
+  // Returns Set of internal player IDs who actually started, per TxLINE data.
+  // Falls back to null if realLineup not yet loaded (caller awards to all in that case).
+  const getRealStarterIds = (): Set<string> | null => {
+    const rl = realLineupRef.current;
+    if (!rl) return null;
+    const starters = [...rl.home, ...rl.away].filter(p => p.starter !== false).map(p => p.id).filter(Boolean) as string[];
+    if (starters.length === 0) return null; // no starter flags set — don't penalise
+    return new Set(starters);
+  };
   // Tracks score synchronously so the full_time handler can read the final score
   // without depending on stale React state (score is not in the event-effect dep array)
   const scoreRef = useRef({ home: initialState.homeScore, away: initialState.awayScore });
@@ -884,6 +894,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   } | null>(null);
   const lineupFetchedRef = useRef(false);
   const lineupRetryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const realLineupRef = useRef<{ home: FormationPlayer[]; away: FormationPlayer[] } | null>(null);
   const [eventsTab, setEventsTab] = useState<'events' | 'lineups'>('events');
 
   // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
@@ -1314,6 +1325,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             });
             if (homeFp.length + awayFp.length > 0) {
               setRealLineup({ home: homeFp, away: awayFp, homeCoach: sseHomeCoach, awayCoach: sseAwayCoach });
+              realLineupRef.current = { home: homeFp, away: awayFp };
             }
           } catch { /* non-critical */ }
         }
@@ -1502,6 +1514,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             lineupFetchedRef.current = true;
             if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
             setRealLineup({ home, away, homeCoach, awayCoach });
+            realLineupRef.current = { home, away };
             console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
           }
         } catch (err) {
@@ -1553,12 +1566,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (snapGs && lastGameStateRef.current === null) {
           lastGameStateRef.current = snapGs; // prevent poll from re-synthesizing the same state
 
-          // Award starting_xi appearance points once (skip players already in snapshot events)
+          // Award starting_xi appearance points once (only for players confirmed in real TxLINE XI)
           if (isMatchLive && userLineupRef.current?.players?.length > 0) {
             const { players, captain, confidence } = userLineupRef.current;
+            const realStarters = getRealStarterIds();
             let totalBonus = 0;
             for (const p of (players as any[])) {
               if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+              if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
               let pts = 2;
               const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
               pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
@@ -1717,9 +1732,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           // Award starting appearance bonus once per session when match is first detected live
           if (!prevGs && isMatchLive && userLineupRef.current?.players?.length > 0) {
             const { players, captain, confidence } = userLineupRef.current;
+            const realStarters = getRealStarterIds();
             let totalBonus = 0;
             for (const p of (players as any[])) {
               if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+              if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
               let pts = 2;
               const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
               pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
@@ -2225,9 +2242,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       const lineup = userLineupRef.current;
       if (!lineup?.players?.length) return;
       const { players, captain, confidence } = lineup;
+      const realStarters = getRealStarterIds();
       let totalBonus = 0;
       for (const p of (players as any[])) {
         if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+        if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
         let pts = 2;
         const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
         pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
@@ -2269,9 +2288,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
         let totalBonus = 0;
 
-        // starting_xi appearance for all lineup players
+        // starting_xi appearance — only for players confirmed in real TxLINE XI
+        const realStarters = getRealStarterIds();
         for (const p of (players as any[])) {
           if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+          if (realStarters && !realStarters.has(p.id)) continue; // didn't actually play
           let pts = 2;
           const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
           pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
