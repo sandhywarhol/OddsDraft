@@ -41,7 +41,7 @@ async function proxy(req: NextRequest, path: string[]) {
 
   // Prefer server token for score data; browser credentials for auth/activation flows
   const isAuthPath = path[0] === 'auth' || (path[0] === 'api' && path[1] === 'token');
-  const apiToken = isAuthPath ? (browserToken ?? SERVER_TOKEN) : (SERVER_TOKEN || (browserToken ?? ''));
+  const apiToken = isAuthPath ? (browserToken ?? SERVER_TOKEN) : (SERVER_TOKEN || browserToken || '');
   const serverJwt = (!isAuthPath && SERVER_TOKEN) ? await getServerJwt() : null;
   const auth = isAuthPath ? browserAuth : (browserAuth ?? (serverJwt ? `Bearer ${serverJwt}` : null));
 
