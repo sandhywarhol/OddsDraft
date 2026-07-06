@@ -154,11 +154,11 @@ export default function SkillCardDisplay({
       {/* ── DESCRIPTION — flavor italic + colored effect numbers ── */}
       <div style={{
         position: 'absolute',
-        top: '84%',
+        top: '82%',
         left: '10%',
         width: '80%',
         height: '14%',
-        fontSize: fs(5.5),
+        fontSize: fs(5),
         fontFamily: 'Inter, system-ui, sans-serif',
         lineHeight: 1.35,
         textAlign: 'center',
