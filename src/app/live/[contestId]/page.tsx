@@ -1121,6 +1121,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // When in live mode and events haven't arrived yet, we derive the match minute
   // from elapsed time since kickoff so the display doesn't stick at 0'.
   const [liveClockMinute, setLiveClockMinute] = useState<number>(0);
+  const [showStatsModal, setShowStatsModal] = useState(false);
   useEffect(() => {
     if (appMode !== 'live' || !wcFixture) return;
     const update = () => {
@@ -3026,13 +3027,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         <span className="score-bug__score" suppressHydrationWarning>{score.away}</span>
                       </div>
                       <div className="score-bug__minute" suppressHydrationWarning>
-                        {appMode !== 'live'
-                          ? (minute < 90 ? `${minute}'` : 'FT')
-                          : matchCompleted
-                            ? 'FT'
-                            : txlineStatus === 'live'
-                              ? (minute > 0 ? `${minute}'` : liveClockMinute > 0 ? `~${liveClockMinute}'` : `0'`)
-                              : (isFinished ? 'FT' : '—')}
+                        {(() => {
+                          const hasHT = events.some(e => e.type === 'half_time');
+                          const hasKOAfterHT = events.some(e => e.type === 'kick_off' && e.minute > 45);
+                          const atHalfTime = hasHT && !hasKOAfterHT && !matchCompleted;
+                          if (appMode !== 'live') return minute < 90 ? `${minute}'` : 'FT';
+                          if (matchCompleted) return 'FT';
+                          if (atHalfTime) return 'HT';
+                          if (txlineStatus === 'live') return minute > 0 ? `${minute}'` : liveClockMinute > 0 ? `~${liveClockMinute}'` : `0'`;
+                          return isFinished ? 'FT' : '—';
+                        })()}
                       </div>
                       {appMode === 'live' ? (
                         <span
@@ -3053,6 +3057,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                           LIVE
                         </span>
                       )}
+                      {/* View Statistics button — shown at half/full time */}
+                      {(() => {
+                        const hasHT = events.some(e => e.type === 'half_time');
+                        const showBtn = hasHT || matchCompleted || events.some(e => e.type === 'full_time');
+                        if (!showBtn) return null;
+                        return (
+                          <button
+                            onClick={() => setShowStatsModal(true)}
+                            style={{
+                              marginTop: 4, padding: '3px 10px', fontSize: '0.62rem', fontWeight: 700,
+                              background: 'rgba(0,229,255,0.1)', border: '1px solid rgba(0,229,255,0.4)',
+                              borderRadius: 4, color: '#00e5ff', cursor: 'pointer', letterSpacing: '0.05em',
+                            }}
+                          >
+                            📊 View Statistics
+                          </button>
+                        );
+                      })()}
                     </>
                   )}
                 </div>
@@ -3850,6 +3872,88 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           </div>
         </div>
       </main>
+
+      {/* ── Match Statistics Modal ────────────────────────────────────────────── */}
+      {showStatsModal && (() => {
+        // Compute stats from events
+        const home = fixture.homeTeam;
+        const away = fixture.awayTeam;
+        const countByTeam = (type: string) => ({
+          home: events.filter(e => e.type === type && e.team === home).length,
+          away: events.filter(e => e.type === type && e.team === away).length,
+        });
+        const goals     = countByTeam('goal');
+        const corners   = countByTeam('corner_kick');
+        const yellows   = countByTeam('yellow_card');
+        const reds      = countByTeam('red_card');
+        const saves     = countByTeam('goalkeeper_save');
+        const danger    = countByTeam('danger_attack');
+        const subs      = countByTeam('substitution');
+        const ownGoals  = { home: events.filter(e => e.type === 'own_goal' && e.team === home).length, away: events.filter(e => e.type === 'own_goal' && e.team === away).length };
+
+        const StatRow = ({ label, home: h, away: a, highlight }: { label: string; home: number; away: number; highlight?: boolean }) => {
+          const total = h + a || 1;
+          const homePct = Math.round((h / total) * 100);
+          const awayPct = 100 - homePct;
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: highlight ? 700 : 500, marginBottom: 4, color: highlight ? '#fff' : 'rgba(255,255,255,0.75)' }}>
+                <span style={{ color: '#60a5fa' }}>{h}</span>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.72rem' }}>{label}</span>
+                <span style={{ color: '#f87171' }}>{a}</span>
+              </div>
+              <div style={{ display: 'flex', height: 5, borderRadius: 3, overflow: 'hidden', background: 'rgba(255,255,255,0.08)' }}>
+                <div style={{ width: `${homePct}%`, background: '#3b82f6', transition: 'width 0.4s' }} />
+                <div style={{ width: `${awayPct}%`, background: '#ef4444', transition: 'width 0.4s' }} />
+              </div>
+            </div>
+          );
+        };
+
+        const isHT = events.some(e => e.type === 'half_time') && !events.some(e => e.type === 'full_time');
+        const label = matchCompleted || events.some(e => e.type === 'full_time') ? 'Full Time Statistics' : 'Half Time Statistics';
+
+        return (
+          <div
+            onClick={() => setShowStatsModal(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ background: '#0f1929', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '28px 28px 24px', width: '100%', maxWidth: 480, maxHeight: '85vh', overflowY: 'auto' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: '0.68rem', color: '#00e5ff', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 2 }}>📊 {label}</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
+                    {fixture.homeFlag} {home} <span style={{ color: '#ffd700' }}>{score.home}–{score.away}</span> {away} {fixture.awayFlag}
+                  </div>
+                </div>
+                <button onClick={() => setShowStatsModal(false)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '1.2rem', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+              </div>
+
+              {/* Team headers */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontSize: '0.75rem', fontWeight: 700 }}>
+                <span style={{ color: '#60a5fa' }}>{fixture.homeFlag} {home}</span>
+                <span style={{ color: '#f87171' }}>{away} {fixture.awayFlag}</span>
+              </div>
+
+              <StatRow label="Goals" home={goals.home} away={goals.away} highlight />
+              <StatRow label="Corner Kicks" home={corners.home} away={corners.away} />
+              <StatRow label="Goalkeeper Saves" home={saves.home} away={saves.away} />
+              <StatRow label="Danger Attacks" home={danger.home} away={danger.away} />
+              <StatRow label="Yellow Cards" home={yellows.home} away={yellows.away} />
+              {(reds.home + reds.away > 0) && <StatRow label="Red Cards" home={reds.home} away={reds.away} />}
+              {(ownGoals.home + ownGoals.away > 0) && <StatRow label="Own Goals" home={ownGoals.home} away={ownGoals.away} />}
+              <StatRow label="Substitutions" home={subs.home} away={subs.away} />
+
+              <div style={{ marginTop: 16, fontSize: '0.68rem', color: 'rgba(255,255,255,0.3)', textAlign: 'center' }}>
+                Stats computed from TxLINE live event stream
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
