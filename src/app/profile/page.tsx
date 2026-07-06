@@ -4,9 +4,42 @@ import Navbar from '@/components/Navbar';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, Shield, Camera, Save, ArrowLeft, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+
+// Compress an image File to a base64 JPEG ≤ ~20KB (200×200 max)
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 200;
+      let w = img.width;
+      let h = img.height;
+      if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
+      else        { w = Math.round((w * MAX) / h); h = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function saveProfileToSupabase(wallet: string, username: string, avatar: string) {
+  try {
+    await fetch('/api/user/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallet, profile: { username, avatar, updatedAt: new Date().toISOString() } }),
+    });
+  } catch {}
+}
 
 export default function ProfilePage() {
   const { connected, publicKey } = useWallet();
@@ -16,9 +49,12 @@ export default function ProfilePage() {
   const [avatar, setAvatar] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [matchHistory, setMatchHistory] = useState<{ contestId: string; players: string[]; captain: string; submittedAt: string }[]>([]);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchBalance = async () => {
     if (!publicKey) return;
@@ -33,27 +69,42 @@ export default function ProfilePage() {
     }
   };
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (connected && publicKey) {
-      const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setUsername(parsed.username);
-        setAvatar(parsed.avatar);
-      } else {
-        setUsername(`User_${publicKey.toString().substring(0, 4)}`);
-        setAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`);
-      }
-      fetchBalance();
+    if (!connected || !publicKey) return;
+
+    // Load from localStorage first (fast)
+    const stored = localStorage.getItem(`profile_${publicKey.toString()}`);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setUsername(parsed.username ?? `User_${publicKey.toString().substring(0, 4)}`);
+      setAvatar(parsed.avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`);
+    } else {
+      setUsername(`User_${publicKey.toString().substring(0, 4)}`);
+      setAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${publicKey.toString()}`);
     }
+
+    // Try to load from Supabase (may have newer data from another device)
+    fetch(`/api/user/data?wallet=${publicKey.toString()}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.profile && Object.keys(data.profile).length > 0) {
+          const p = data.profile;
+          if (p.username) setUsername(p.username);
+          if (p.avatar)   setAvatar(p.avatar);
+          // Sync back to localStorage
+          localStorage.setItem(`profile_${publicKey.toString()}`, JSON.stringify(p));
+        }
+      })
+      .catch(() => {});
+
+    fetchBalance();
   }, [connected, publicKey]);
 
   // Load match history from localStorage
   useEffect(() => {
+    if (!mounted) return;
     const history: { contestId: string; players: string[]; captain: string; submittedAt: string }[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -74,31 +125,47 @@ export default function ProfilePage() {
     setMatchHistory(history);
   }, [mounted]);
 
-  const handleSave = () => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError('');
+    if (!file.type.startsWith('image/')) {
+      setUploadError('File must be an image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Max file size is 5MB.');
+      return;
+    }
+    try {
+      const compressed = await compressImage(file);
+      setAvatar(compressed);
+    } catch {
+      setUploadError('Failed to process image. Try another file.');
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+  };
+
+  const handleSave = async () => {
     if (!publicKey) return;
+    if (!username.trim()) return;
+
     setIsSaving(true);
-    
-    const profileData = {
-      username,
-      avatar,
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Save to local storage for demo mode
+    setSaveError('');
+
+    const profileData = { username: username.trim(), avatar, updatedAt: new Date().toISOString() };
+
+    // Save to localStorage immediately
     localStorage.setItem(`profile_${publicKey.toString()}`, JSON.stringify(profileData));
-    
-    // Simulate network delay
-    setTimeout(() => {
-      setIsSaving(false);
-      setSavedSuccess(true);
-      
-      // Dispatch custom event to trigger navbar update
-      window.dispatchEvent(new Event('storage'));
-      
-      setTimeout(() => {
-        setSavedSuccess(false);
-      }, 3000);
-    }, 600);
+    window.dispatchEvent(new Event('storage'));
+
+    // Save to Supabase
+    await saveProfileToSupabase(publicKey.toString(), username.trim(), avatar);
+
+    setIsSaving(false);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   if (!mounted) return null;
@@ -109,7 +176,7 @@ export default function ProfilePage() {
 
       <main style={{ padding: '48px 0 80px' }}>
         <div className="container-sm" style={{ maxWidth: '600px', margin: '0 auto' }}>
-          
+
           <div style={{ marginBottom: 32 }}>
             <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>
               <ArrowLeft size={16} /> Back to Dashboard
@@ -150,7 +217,7 @@ export default function ProfilePage() {
               <span>Identity Settings</span>
               <SettingsIcon />
             </div>
-            
+
             <div className="ro-window__body" style={{ padding: '32px' }}>
               {!connected ? (
                 <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -159,59 +226,88 @@ export default function ProfilePage() {
                   <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
                     Please connect your Solana wallet to view and edit your profile.
                   </p>
-                  <WalletMultiButton style={{ 
+                  <WalletMultiButton style={{
                     height: '40px', borderRadius: '8px',
                     fontSize: '0.9rem', fontWeight: 700,
                     padding: '0 20px', margin: '0 auto',
-                    background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)', 
+                    background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)',
                     color: '#1a1a1a', border: '1px solid rgba(255, 255, 255, 0.4)',
                     boxShadow: '0 1px 8px rgba(255, 215, 0, 0.2)'
                   }} />
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                  
+
                   {/* Avatar Section */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px' }}>
-                    <div style={{ 
-                      position: 'relative',
-                      width: '100px', height: '100px', 
-                      borderRadius: '50%',
-                      background: 'var(--bg-elevated)',
-                      border: '2px solid var(--border-medium)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      overflow: 'hidden'
-                    }}>
+                    {/* Avatar circle — click to upload */}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      title="Click to upload avatar"
+                      style={{
+                        position: 'relative', flexShrink: 0,
+                        width: '100px', height: '100px',
+                        borderRadius: '50%',
+                        background: 'var(--bg-elevated)',
+                        border: '2px solid var(--border-medium)',
+                        overflow: 'hidden', cursor: 'pointer', padding: 0,
+                      }}
+                    >
                       {avatar ? (
                         <img src={avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#fff' }} />
                       ) : (
                         <User size={40} color="var(--text-muted)" />
                       )}
-                      
+                      {/* Hover overlay */}
                       <div style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0,
-                        background: 'rgba(0,0,0,0.6)',
-                        padding: '4px',
-                        display: 'flex', justifyContent: 'center',
-                        backdropFilter: 'blur(4px)'
-                      }}>
-                        <Camera size={14} color="#fff" />
+                        position: 'absolute', inset: 0,
+                        background: 'rgba(0,0,0,0.55)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                        opacity: 0, transition: 'opacity 0.2s',
+                      }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
+                      >
+                        <Camera size={20} color="#fff" />
+                        <span style={{ fontSize: '0.6rem', color: '#fff', fontWeight: 700, textTransform: 'uppercase' }}>Upload</span>
                       </div>
-                    </div>
-                    
+                    </button>
+
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={handleAvatarUpload}
+                    />
+
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Avatar Display (Auto-Generated)
+                        Profile Photo
                       </label>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '12px' }}>
-                        In Demo Mode, avatars are automatically generated based on your wallet address using Dicebear.
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '12px' }}>
+                        Click the circle to upload a photo. Auto-compressed to 200×200px. Max 5MB.
                       </p>
-                      <button 
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => setAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random().toString()}`)}
-                      >
-                        🎲 Reroll Avatar
-                      </button>
+                      {uploadError && (
+                        <p style={{ fontSize: '0.78rem', color: 'var(--color-danger)', marginBottom: 8 }}>{uploadError}</p>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Camera size={13} style={{ marginRight: 4 }} />
+                          Upload Photo
+                        </button>
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => setAvatar(`https://api.dicebear.com/7.x/avataaars/svg?seed=${Math.random()}`)}
+                          style={{ fontSize: '0.75rem' }}
+                        >
+                          🎲 Random Avatar
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -290,44 +386,54 @@ export default function ProfilePage() {
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
                         Manager Username
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
+                        maxLength={32}
                         placeholder="Enter your display name"
-                        style={{ 
+                        style={{
                           width: '100%',
-                          padding: '12px 16px', 
-                          background: 'var(--bg-elevated)', 
+                          padding: '12px 16px',
+                          background: 'var(--bg-elevated)',
                           border: '1px solid var(--border-medium)',
                           borderRadius: '8px',
                           color: 'var(--text-primary)',
                           fontSize: '1rem',
                           outline: 'none',
-                          transition: 'border-color 0.2s'
+                          transition: 'border-color 0.2s',
+                          boxSizing: 'border-box',
                         }}
                         onFocus={(e) => e.target.style.borderColor = 'var(--color-primary)'}
                         onBlur={(e) => e.target.style.borderColor = 'var(--border-medium)'}
                       />
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 4, textAlign: 'right' }}>
+                        {username.length}/32
+                      </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-                    <button 
-                      className="btn btn--primary"
+                  {saveError && (
+                    <p style={{ fontSize: '0.82rem', color: 'var(--color-danger)', margin: '0' }}>{saveError}</p>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button
+                      className={`btn ${savedSuccess ? 'btn--secondary' : 'btn--primary'}`}
                       onClick={handleSave}
-                      disabled={isSaving}
+                      disabled={isSaving || !username.trim()}
                       style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: isSaving ? 0.7 : 1 }}
                     >
                       <Save size={16} />
-                      {isSaving ? 'Saving...' : savedSuccess ? 'Saved!' : 'Save Profile'}
+                      {isSaving ? 'Saving...' : savedSuccess ? '✓ Saved!' : 'Save Profile'}
                     </button>
                   </div>
-                  
+
                 </div>
               )}
             </div>
           </div>
+
           {/* Match History */}
           {connected && (
             <div className="ro-window" style={{ marginTop: 24 }}>
