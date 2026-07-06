@@ -57,45 +57,125 @@ export async function getWebhookInfo() {
   return res.json();
 }
 
-export function formatMatchEvent(
-  eventType: string,
-  playerName: string,
-  teamName: string,
-  minute: number,
-  homeTeam: string,
-  awayTeam: string,
-  score?: { home: number; away: number }
-): string {
-  const scoreStr = score ? ` | ${score.home}–${score.away}` : '';
-  const min = minute > 0 ? ` (${minute}')` : '';
+export interface MatchEventPayload {
+  eventType: string;
+  playerName?: string;
+  playerOut?: string;       // substitution: player being replaced
+  assistPlayer?: string;    // goal: player who assisted
+  teamName?: string;
+  teamFlag?: string;
+  minute?: number;
+  homeTeam: string;
+  awayTeam: string;
+  homeFlag?: string;
+  awayFlag?: string;
+  score?: { home: number; away: number };
+  description?: string;     // raw description from live feed
+}
+
+export function formatMatchEvent(p: MatchEventPayload): string {
+  const {
+    eventType, playerName = '', playerOut = '', assistPlayer = '',
+    teamName = '', teamFlag = '', minute = 0,
+    homeTeam, awayTeam, homeFlag = '', awayFlag = '',
+    score, description,
+  } = p;
+
+  const scoreStr = score != null ? `${homeFlag} ${homeTeam} *${score.home}–${score.away}* ${awayTeam} ${awayFlag}` : `${homeTeam} vs ${awayTeam}`;
+  const min = minute > 0 ? `${minute}'` : '';
+  const team = teamFlag ? `${teamFlag} ${teamName}` : teamName;
 
   switch (eventType) {
     case 'goal':
-    case 'penalty_outcome':
-      return `⚽ *GOAL!* ${playerName} — ${teamName}${min}${scoreStr}`;
+      return [
+        `⚽ *GOAL! ${team}*`,
+        playerName ? `👤 Scorer: *${playerName}*` : '',
+        assistPlayer ? `🎯 Assist: ${assistPlayer}` : '',
+        min ? `⏱ ${min}` : '',
+        `📊 ${scoreStr}`,
+      ].filter(Boolean).join('\n');
+
+    case 'penalty_scored':
+      return [
+        `⚽ *PENALTY SCORED! ${team}*`,
+        playerName ? `👤 ${playerName}` : '',
+        min ? `⏱ ${min}` : '',
+        `📊 ${scoreStr}`,
+      ].filter(Boolean).join('\n');
+
     case 'own_goal':
-      return `😬 *Own goal* — ${playerName} (${teamName})${min}${scoreStr}`;
+      return [
+        `😬 *OWN GOAL — ${team}*`,
+        playerName ? `👤 ${playerName}` : '',
+        min ? `⏱ ${min}` : '',
+        `📊 ${scoreStr}`,
+      ].filter(Boolean).join('\n');
+
     case 'yellow_card':
-      return `🟨 Yellow card — ${playerName} (${teamName})${min}`;
+      return `🟨 *Yellow Card* — ${playerName || 'Unknown'} (${team}) ${min ? `⏱ ${min}` : ''}`;
+
     case 'red_card':
-      return `🟥 *RED CARD!* ${playerName} (${teamName})${min}`;
+      return [
+        `🟥 *RED CARD! ${team}*`,
+        playerName ? `👤 ${playerName}` : '',
+        min ? `⏱ ${min}` : '',
+      ].filter(Boolean).join('\n');
+
     case 'substitution':
-      return `🔄 Substitution — ${teamName}${min}`;
+      return [
+        `🔄 *Substitution — ${team}*`,
+        playerName ? `🟢 On: *${playerName}*` : '',
+        playerOut  ? `🔴 Off: *${playerOut}*` : '',
+        min ? `⏱ ${min}` : '',
+      ].filter(Boolean).join('\n');
+
+    case 'corner_kick':
+      return `⛳ *Corner kick* — ${team}${min ? ` ⏱ ${min}` : ''}`;
+
     case 'penalty_save':
-      return `🧤 *PENALTY SAVED!* ${playerName}${min}`;
-    case 'kick_off':
-      return `🟢 *Kick Off!* — ${homeTeam} vs ${awayTeam}`;
-    case 'half_time':
-      return `⏱ *Half Time* — ${homeTeam} ${score?.home ?? 0}–${score?.away ?? 0} ${awayTeam}`;
-    case 'full_time':
-      return `🏁 *FULL TIME!*\n${homeTeam} ${score?.home ?? 0}–${score?.away ?? 0} ${awayTeam}`;
-    case 'var_review':
-      return `📺 VAR Review in progress${min}`;
-    case 'penalty_won':
-      return `🎯 *Penalty!* ${playerName ? `Won by ${playerName}` : teamName}${min}`;
+      return [
+        `🧤 *PENALTY SAVED!*`,
+        playerName ? `👤 Goalkeeper: *${playerName}* (${team})` : `${team}`,
+        min ? `⏱ ${min}` : '',
+        `📊 ${scoreStr}`,
+      ].filter(Boolean).join('\n');
+
     case 'penalty_missed':
-      return `❌ *Penalty missed!* ${playerName}${min}`;
+    case 'penalty_missed_shootout':
+      return `❌ *Penalty missed* — ${playerName || team}${min ? ` ⏱ ${min}` : ''}`;
+
+    case 'penalty_won':
+    case 'penalty_conceded':
+      return `🎯 *Penalty awarded to ${team}*${min ? ` ⏱ ${min}` : ''}${playerName ? `\n👤 Won by: ${playerName}` : ''}`;
+
+    case 'var_review':
+      return `📺 *VAR Review* — ${team || `${homeTeam} vs ${awayTeam}`}${min ? ` ⏱ ${min}` : ''}`;
+
+    case 'kick_off':
+      return `🟢 *Kick Off!*\n${homeFlag} ${homeTeam} vs ${awayTeam} ${awayFlag}`;
+
+    case 'half_time':
+      return `⏱ *Half Time*\n📊 ${scoreStr}`;
+
+    case 'full_time':
+      return `🏁 *FULL TIME!*\n📊 ${scoreStr}`;
+
+    case 'extra_time':
+      return `⏰ *Extra Time begins!*\n📊 ${scoreStr}`;
+
+    case 'danger_attack':
+      return `⚡ *Danger Attack — ${team}*${min ? ` ⏱ ${min}` : ''}\n${description ? `_${description}_` : ''}`;
+
+    case 'assist':
+      return `🎯 *Assist* — ${playerName} (${team})${min ? ` ⏱ ${min}` : ''}`;
+
+    case 'goalkeeper_save':
+      return `🧤 *Save* — ${playerName} (${team})${min ? ` ⏱ ${min}` : ''}`;
+
+    case 'starting_xi':
+      return `📋 *${team} Starting XI confirmed*`;
+
     default:
-      return `📣 ${eventType.replace(/_/g, ' ')} — ${playerName}${min}`;
+      return `📣 *${eventType.replace(/_/g, ' ')}*${team ? ` — ${team}` : ''}${playerName ? ` | ${playerName}` : ''}${min ? ` ⏱ ${min}` : ''}`;
   }
 }

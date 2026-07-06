@@ -2058,23 +2058,39 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setShowPopup(true);
         }
 
-        // Push Telegram notifications for significant new events (fire-and-forget)
+        // Push Telegram notifications for all relevant events (fire-and-forget)
+        // Skip internal scoring-only events that have no meaningful telegram message
+        const telegramSkip = new Set(['goal_conceded', 'possession_bonus', 'sub_appearance', 'starting_xi', 'clean_sheet_start']);
         if (!suppressDialog) {
           for (const ev of newEvents) {
-            const significant = ['goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save', 'half_time', 'full_time'];
-            if (!significant.includes(ev.type)) continue;
+            if (telegramSkip.has(ev.type)) continue;
+            // For substitution: find the matching sub_appearance event (same minute, same team) for playerIn
+            let playerOut: string | undefined;
+            let playerIn: string | undefined;
+            if (ev.type === 'substitution') {
+              // In TxLINE normalization: substitution.player = player going OUT
+              // The player coming IN is in a separate sub_appearance event
+              playerOut = ev.player || undefined;
+              const subIn = newEvents.find(e => e.type === 'sub_appearance' && e.minute === ev.minute && e.team === ev.team);
+              playerIn = subIn?.player || undefined;
+            }
             fetch('/api/telegram/notify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 contestId,
                 eventType: ev.type,
-                playerName: ev.player || '',
+                playerName: ev.type === 'substitution' ? (playerIn || ev.player || '') : (ev.player || ''),
+                playerOut: ev.type === 'substitution' ? playerOut : undefined,
                 teamName: ev.team || '',
+                teamFlag: ev.teamFlag || '',
                 minute: ev.minute,
                 homeTeam: fixture.homeTeam,
                 awayTeam: fixture.awayTeam,
+                homeFlag: fixture.homeFlag || '',
+                awayFlag: fixture.awayFlag || '',
                 score: scoreRef.current,
+                description: ev.description || '',
               }),
             }).catch(() => {});
           }

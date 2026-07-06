@@ -162,7 +162,11 @@ export async function GET(req: NextRequest) {
         const resolvedPlayer = resolvedId ? WC2026_PLAYERS.find(p => p.id === resolvedId) : null;
         const playerName = resolvedPlayer?.name ?? rawPlayerName;
 
-        const text = formatMatchEvent(eventType, playerName, teamName, minute, fixture.homeTeam, fixture.awayTeam, { home: scoreHome, away: scoreAway });
+        const text = formatMatchEvent({
+          eventType, playerName, teamName,
+          minute, homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+          score: { home: scoreHome, away: scoreAway },
+        });
 
         await Promise.allSettled(subs.map(sub => sendMessage(sub.chat_id, text, { parse_mode: 'Markdown' })));
         sent += subs.length;
