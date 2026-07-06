@@ -981,7 +981,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     setVerificationStatus('verifying');
     setTimeout(() => {
       setVerificationStatus('success');
-      if (userLineupRef.current && !hasOpenedPack(contestId)) {
+      if (userLineupRef.current && !hasOpenedPack(`${contestId}_${contestType}`)) {
         setTimeout(() => setShowCardPack(true), 600);
       }
     }, 2000);
@@ -2629,7 +2629,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     useEffect(() => {
       const shouldShow = (latestEvent?.type === 'full_time' && !showPopup) || matchCompleted;
       if (shouldShow && appMode === 'live') {
-        if (userLineupRef.current && !hasOpenedPack(contestId)) {
+        if (userLineupRef.current && !hasOpenedPack(`${contestId}_${contestType}`)) {
           const packTimer = setTimeout(() => setShowCardPack(true), 800);
           return () => clearTimeout(packTimer);
         }
@@ -2706,7 +2706,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       {showCardPack && (
         <CardPackOpener
           contestId={contestId}
-          onOpen={() => openCardPack(contestId)}
+          onOpen={() => openCardPack(`${contestId}_${contestType}`)}
           onClose={() => setShowCardPack(false)}
         />
       )}

@@ -758,7 +758,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
       if (stored) {
         userLineupRef.current = JSON.parse(stored);
       }
-      if (hasOpenedPack(contestId)) setHasClaimed(true);
+      if (hasOpenedPack(`${contestId}_${contestTypeParam}`)) setHasClaimed(true);
     } catch (e) {
       console.error('Failed to parse user lineup:', e);
     }
@@ -1725,10 +1725,10 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
       {showCardPack && (
         <CardPackOpener
           contestId={contestId}
-          onOpen={() => openCardPack(contestId)}
+          onOpen={() => openCardPack(`${contestId}_${contestTypeParam}`)}
           onClose={() => {
             setShowCardPack(false);
-            setHasClaimed(hasOpenedPack(contestId));
+            setHasClaimed(hasOpenedPack(`${contestId}_${contestTypeParam}`));
           }}
         />
       )}

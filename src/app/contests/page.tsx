@@ -9,6 +9,8 @@ import { useTxLine } from '@/context/TxLineContext';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useEffect, useState } from 'react';
 import type { MatchResult } from '@/app/api/match/result/route';
+import { hasOpenedPack, openCardPack } from '@/lib/card-collection';
+import CardPackOpener from '@/components/CardPackOpener';
 
 type FixtureScore = { home: number; away: number; completed?: boolean };
 
@@ -443,6 +445,7 @@ export default function ContestsPage() {
                     onViewResult={finishedScores[fixture.fixtureId] ? openMatchResult : undefined}
                     hasEntered={!!(enteredContests[fixture.fixtureId]?.length)}
                     firstContestType={enteredContests[fixture.fixtureId]?.[0]}
+                    enteredTypes={enteredContests[fixture.fixtureId] ?? []}
                   />
                 ))}
               </div>
@@ -696,14 +699,25 @@ function SwitchToLiveButton() {
   );
 }
 
-function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firstContestType }: {
+function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firstContestType, enteredTypes }: {
   fixture: DemoFixture;
   onSelect?: (f: DemoFixture) => void;
   counts?: { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number };
   onViewResult?: (f: DemoFixture) => void;
   hasEntered?: boolean;
   firstContestType?: string;
+  enteredTypes?: string[];
 }) {
+  const [claimingType, setClaimingType] = useState<string | null>(null);
+  const [claimedTypes, setClaimedTypes] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    const s = new Set<string>();
+    for (const ct of enteredTypes ?? []) {
+      if (hasOpenedPack(`${fixture.fixtureId}_${ct}`)) s.add(ct);
+    }
+    return s;
+  });
+
   const kickoff = new Date(fixture.kickoffAt);
   const isLive = fixture.status === 'live';
   const isFinished = fixture.status === 'finished';
@@ -895,6 +909,37 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
                 🏆 My Results
               </Link>
             )}
+            {/* Claim pack buttons — one per entered contest type */}
+            {(enteredTypes ?? []).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(enteredTypes ?? []).map(ct => {
+                  const claimed = claimedTypes.has(ct);
+                  const label = ct === 'top3' ? 'Top 3' : ct === '5050' ? '50/50' : 'Winner Takes All';
+                  return (
+                    <button
+                      key={ct}
+                      disabled={claimed}
+                      onClick={() => !claimed && setClaimingType(ct)}
+                      className="btn btn--full"
+                      style={{
+                        background: claimed ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                        color: claimed ? 'var(--text-muted)' : '#fff',
+                        border: claimed ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(168,85,247,0.4)',
+                        cursor: claimed ? 'default' : 'pointer',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        gap: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {claimed ? `✅ Pack Claimed (${label})` : `🎴 Claim Pack — ${label}`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {onViewResult && (
               <button
                 onClick={() => onViewResult(fixture)}
@@ -904,6 +949,17 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
               </button>
             )}
           </div>
+        )}
+        {/* Card pack opener modal */}
+        {claimingType && (
+          <CardPackOpener
+            contestId={`${fixture.fixtureId}_${claimingType}`}
+            onOpen={() => openCardPack(`${fixture.fixtureId}_${claimingType!}`)}
+            onClose={() => {
+              setClaimedTypes(prev => new Set([...prev, claimingType!]));
+              setClaimingType(null);
+            }}
+          />
         )}
       </div>
     </div>
