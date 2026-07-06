@@ -1,28 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
 import {
   calculatePlayerPerformanceBonus,
   calculateTeamStats,
-  applyStarMultiplier,
+  calculateTotalFantasyPoints,
   type PlayerMatchStats,
 } from '@/lib/fantasy-analytics';
+import { applySkillModifier } from '@/lib/card-collection';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 // POST /api/fantasy/performance-bonus
-// Calculate halftime/fulltime performance bonuses for all players in a fixture
-// Request body: { fixtureId, timepoint: 'halftime' | 'fulltime', playerPositions: {playerId: position} }
-// Returns: { playerId: totalBonus }
+// Calculate halftime/fulltime performance bonuses + skill card info for all players
+// Request body: { fixtureId, timepoint: 'halftime' | 'fulltime', contestId, walletAddress, playerPositions: {playerId: position} }
+// Returns: { playerId: { performanceBonus, skillCardId?, skillCardName? } }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { fixtureId, timepoint, playerPositions } = body;
+    const { fixtureId, timepoint, contestId, walletAddress, playerPositions } = body;
 
     if (!fixtureId || !timepoint) {
       return NextResponse.json(
         { error: 'Missing fixtureId or timepoint' },
         { status: 400 }
       );
+    }
+
+    // Fetch user's lineup with equipped cards if provided
+    let equippedCards: Record<string, { instanceId: string; cardId: string }> = {};
+    if (contestId && walletAddress) {
+      const { data: entry } = await supabase
+        .from('contest_entries')
+        .select('lineup')
+        .eq('fixture_id', fixtureId)
+        .eq('wallet_address', walletAddress)
+        .single();
+
+      if (entry?.lineup?.equippedCards) {
+        equippedCards = entry.lineup.equippedCards;
+      }
     }
 
     const fixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
@@ -81,12 +103,12 @@ export async function POST(req: NextRequest) {
     homeTeamStats.goalsFor = score?.Participant1?.Total?.Goals ?? 0;
     awayTeamStats.goalsFor = score?.Participant2?.Total?.Goals ?? 0;
 
-    // Calculate bonuses per player
-    const bonuses: Record<string, number> = {};
+    // Calculate bonuses per player + include equipped skill card info
+    const bonuses: Record<string, { performanceBonus: number; skillCard?: { cardId: string; instanceId: string } }> = {};
 
     for (const [playerId, stats] of Object.entries(playerStats)) {
       const position = playerPositions?.[playerId] ?? 'MID';
-      const bonus = calculatePlayerPerformanceBonus(
+      const performanceBonus = calculatePlayerPerformanceBonus(
         playerId,
         stats,
         position,
@@ -94,10 +116,24 @@ export async function POST(req: NextRequest) {
         awayTeamStats
       );
 
-      bonuses[playerId] = bonus.totalBonus;
+      bonuses[playerId] = {
+        performanceBonus: performanceBonus.totalBonus,
+      };
+
+      // Include equipped skill card if available
+      if (equippedCards[playerId]) {
+        bonuses[playerId].skillCard = {
+          cardId: equippedCards[playerId].cardId,
+          instanceId: equippedCards[playerId].instanceId,
+        };
+      }
     }
 
-    return NextResponse.json({ bonuses, timepoint, calculatedAt: new Date().toISOString() });
+    return NextResponse.json({
+      bonuses,
+      timepoint,
+      calculatedAt: new Date().toISOString(),
+    });
   } catch (err) {
     console.error('[PerformanceBonus] Error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

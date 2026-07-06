@@ -171,3 +171,44 @@ export function applyStarMultiplier(
   const multiplier = multipliers[Math.min(starRating, 5)] ?? 1.2;
   return Math.round(basePoints * multiplier * 10) / 10;
 }
+
+// Calculate total fantasy points with all modifiers
+export interface PointsBreakdown {
+  basePoints: number;
+  performanceBonus: number;
+  skillCardBonus: number;
+  starMultiplier: number;
+  totalPoints: number;
+  details: string[];
+}
+
+export function calculateTotalFantasyPoints(params: {
+  basePoints: number;
+  performanceBonus: number;
+  skillCardBonus: number;
+  starRating: number; // 1-5
+}): PointsBreakdown {
+  const { basePoints, performanceBonus, skillCardBonus, starRating } = params;
+
+  // Sum all bonuses before multiplier
+  const subtotal = basePoints + performanceBonus + skillCardBonus;
+
+  // Apply star multiplier
+  const multiplier = [1, 1.1, 1.2, 1.35, 1.5][Math.min(starRating, 5) - 1] ?? 1.2;
+  const totalPoints = Math.round(subtotal * multiplier * 10) / 10;
+
+  const details: string[] = [];
+  if (basePoints > 0) details.push(`Base: +${basePoints}`);
+  if (performanceBonus > 0) details.push(`Performance: +${performanceBonus}`);
+  if (skillCardBonus > 0) details.push(`Skill Card: +${skillCardBonus}`);
+  if (multiplier > 1) details.push(`Star ×${multiplier}`);
+
+  return {
+    basePoints,
+    performanceBonus,
+    skillCardBonus,
+    starMultiplier: multiplier,
+    totalPoints,
+    details,
+  };
+}
