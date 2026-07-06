@@ -1299,22 +1299,10 @@ function Footer() {
       overflow: 'hidden',
       boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
     }}>
-      {/* Background Image without blur */}
+      {/* Footer background */}
       <div style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 0,
-        backgroundImage: 'url("/footer.webp")',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        opacity: 1,
-        pointerEvents: 'none',
-      }} />
-
-      {/* Thin dark gradient overlay to ensure text readability */}
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.2) 100%)',
+        position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
+        background: 'linear-gradient(180deg, #0a1020 0%, #060d18 100%)',
       }} />
 
       <div className="container" style={{ position: 'relative', zIndex: 2 }}>

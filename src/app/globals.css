@@ -1896,35 +1896,38 @@ a {
 .wallet-adapter-modal {
   background: linear-gradient(160deg, #060d1f 0%, #0a1428 60%, #050b18 100%) !important;
   border: 1px solid rgba(41, 182, 246, 0.35) !important;
-  border-radius: 0 !important;
+  border-radius: 4px !important;
   box-shadow:
     0 0 0 1px rgba(41, 182, 246, 0.15),
     0 0 40px rgba(0, 140, 255, 0.18),
     0 24px 80px rgba(0, 0, 0, 0.8),
     inset 0 1px 0 rgba(255,255,255,0.04) !important;
-  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)) !important;
   max-width: 400px !important;
 }
 
-/* Corner accent lines (top-left and bottom-right) */
-.wallet-adapter-modal::before,
+/* Corner accent lines */
+.wallet-adapter-modal {
+  position: relative !important;
+}
+.wallet-adapter-modal::before {
+  content: '';
+  position: absolute;
+  top: 8px; left: 8px;
+  width: 24px; height: 24px;
+  border-top: 2px solid #29b6f6;
+  border-left: 2px solid #29b6f6;
+  pointer-events: none;
+  z-index: 10;
+}
 .wallet-adapter-modal::after {
   content: '';
   position: absolute;
-  width: 28px;
-  height: 28px;
-  border-color: #29b6f6;
-  border-style: solid;
-  z-index: 10;
+  bottom: 8px; right: 8px;
+  width: 24px; height: 24px;
+  border-bottom: 2px solid #29b6f6;
+  border-right: 2px solid #29b6f6;
   pointer-events: none;
-}
-.wallet-adapter-modal::before {
-  top: 6px; left: 6px;
-  border-width: 2px 0 0 2px;
-}
-.wallet-adapter-modal::after {
-  bottom: 6px; right: 6px;
-  border-width: 0 2px 2px 0;
+  z-index: 10;
 }
 
 /* Title */
@@ -1961,8 +1964,7 @@ a {
 .wallet-adapter-modal-list .wallet-adapter-button {
   background: rgba(10, 20, 40, 0.6) !important;
   border: 1px solid rgba(41, 182, 246, 0.18) !important;
-  border-radius: 0 !important;
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%) !important;
+  border-radius: 4px !important;
   color: #e2e8f0 !important;
   font-family: 'Inter', sans-serif !important;
   font-size: 0.95rem !important;
@@ -2026,8 +2028,7 @@ a {
   font-family: 'Bebas Neue', cursive !important;
   font-size: 0.85rem !important;
   letter-spacing: 0.1em !important;
-  border-radius: 0 !important;
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px)) !important;
+  border-radius: 4px !important;
   border: none !important;
   box-shadow: 0 0 12px rgba(255, 215, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.3) !important;
   transition: all 0.2s ease !important;

@@ -750,7 +750,7 @@ export default function TeamsPage() {
                     </h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
                       {selectedTeam.players.slice(11).map((p: any) => (
-                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)', opacity: 0.85 }}>
+                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 4px', opacity: 0.85 }}>
                           <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8' }}>
                             {p.position}
                           </div>
