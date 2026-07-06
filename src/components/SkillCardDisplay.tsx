@@ -9,7 +9,7 @@
 //   • Position text box       : top 73.5%, left 10%,   width 52%
 //   • Description text area   : top 80.5%, left 10%,   width 62%
 
-import { type SkillCard, RARITY_STARS, RARITY_COLOR } from '@/lib/skill-cards';
+import { type SkillCard, RARITY_COLOR } from '@/lib/skill-cards';
 import type { OwnedCard } from '@/lib/card-collection';
 
 interface SkillCardDisplayProps {
@@ -38,7 +38,6 @@ export default function SkillCardDisplay({
 }: SkillCardDisplayProps) {
   const height = Math.round(width * (1012.5 / 810));
   const rarityColor = RARITY_COLOR[card.rarity];
-  const stars = RARITY_STARS[card.rarity];
   const posColor =
     card.position === 'Goalkeeper' ? '#1565c0' :
     card.position === 'Defender'   ? '#2e7d32' :
@@ -100,39 +99,11 @@ export default function SkillCardDisplay({
         }}
       />
 
-      {/* ── RARITY LABEL ── */}
-      <div style={{
-        position: 'absolute',
-        top: '10%',
-        right: '19%',
-        height: '4.5%',
-        display: 'flex',
-        alignItems: 'center',
-        pointerEvents: 'none',
-        userSelect: 'none',
-      }}>
-        <span style={{
-          background: rarityColor,
-          color: '#fff',
-          fontSize: fs(3.5),
-          fontWeight: 900,
-          fontFamily: 'Inter, system-ui, sans-serif',
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          padding: `${fs(0.6)} ${fs(1.8)}`,
-          borderRadius: 2,
-          boxShadow: `0 1px 4px rgba(0,0,0,0.35)`,
-          lineHeight: 1.1,
-        }}>
-          {stars}
-        </span>
-      </div>
-
       {/* ── SKILL NAME ── */}
       <div style={{
         position: 'absolute',
-        top: '66%',
-        left: '32%',
+        top: '63%',
+        left: '40%',
         height: '5.5%',
         display: 'flex',
         alignItems: 'center',
@@ -160,8 +131,8 @@ export default function SkillCardDisplay({
       {/* ── POSITION ── */}
       <div style={{
         position: 'absolute',
-        top: '75%',
-        left: '32%',
+        top: '72%',
+        left: '40%',
         height: '4%',
         display: 'flex',
         alignItems: 'center',
@@ -188,11 +159,11 @@ export default function SkillCardDisplay({
       {/* ── DESCRIPTION — flavor italic + colored effect numbers ── */}
       <div style={{
         position: 'absolute',
-        top: '83%',
+        top: '86%',
         left: '10%',
         width: '80%',
         height: '14%',
-        fontSize: fs(4.5),
+        fontSize: fs(5.5),
         fontFamily: 'Inter, system-ui, sans-serif',
         lineHeight: 1.35,
         textAlign: 'center',
