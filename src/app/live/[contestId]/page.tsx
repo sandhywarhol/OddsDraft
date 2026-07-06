@@ -18,6 +18,7 @@ import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
 import { mergeEvents } from '@/lib/txline';
 import PlayerAvatar from '@/components/PlayerAvatar';
+import LiveLineupFormation, { type FormationPlayer } from '@/components/LiveLineupFormation';
 
 // Demo live events that replay at interval to simulate a live match
 const LIVE_EVENTS = [
@@ -876,6 +877,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const prevPlayerStatsRef = useRef<Record<string, Record<string, number>>>({});
   const [txlineStatus, setTxlineStatus] = useState<'connecting' | 'live' | 'waiting'>('connecting');
   const [minutesToKickoff, setMinutesToKickoff] = useState<number | null>(null);
+  // Real lineup for the pitch formation view (all players: starters + bench)
+  const [realLineup, setRealLineup] = useState<{
+    home: FormationPlayer[]; away: FormationPlayer[];
+    homeCoach?: string; awayCoach?: string;
+  } | null>(null);
+  const lineupFetchedRef = useRef(false);
+  const [eventsTab, setEventsTab] = useState<'events' | 'lineups'>('events');
 
   // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
   const equippedCardDefsRef = useRef<Record<string, SkillCard | null>>({});
@@ -1263,6 +1271,51 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           possessionCountRef.current[pNum] = (possessionCountRef.current[pNum] ?? 0) + 1;
         }
 
+        // Parse lineup SSE push (sent ~1hr before kickoff) to update formation view
+        if (action === 'lineups' && !lineupFetchedRef.current) {
+          lineupFetchedRef.current = true;
+          try {
+            const teamsArr: any[] = u.Lineups ?? u.lineups ?? u.Data?.Lineups ?? u.Data?.lineups ?? [];
+            const homeFp: FormationPlayer[] = [];
+            const awayFp: FormationPlayer[] = [];
+            let sseHomeCoach: string | undefined;
+            let sseAwayCoach: string | undefined;
+            teamsArr.forEach((teamData: any, idx: number) => {
+              const participant: 1 | 2 = idx === 0 ? 1 : 2;
+              const playerArr: any[] = teamData.lineups ?? teamData.Lineups ?? teamData.players ?? [];
+              // Coach might be at teamData level
+              const coachName: string = teamData.Coach ?? teamData.coach ?? teamData.ManagerName ?? '';
+              if (coachName) {
+                if (participant === 1) sseHomeCoach = coachName; else sseAwayCoach = coachName;
+              }
+              for (const p of playerArr) {
+                const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
+                const rawName: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
+                const name = rawName.includes(',')
+                  ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ')
+                  : rawName;
+                if (!name) continue;
+                if (rawPos === 'COACH' || (p.Role ?? p.role ?? '').toUpperCase() === 'COACH') {
+                  if (participant === 1) sseHomeCoach = name; else sseAwayCoach = name;
+                  continue;
+                }
+                const fp: FormationPlayer = {
+                  id: playerIdMapRef.current[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
+                  name,
+                  jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
+                  position: rawPos || 'MID',
+                  participant,
+                  starter: !!(p.Starter ?? p.starter ?? false),
+                };
+                if (participant === 1) homeFp.push(fp); else awayFp.push(fp);
+              }
+            });
+            if (homeFp.length + awayFp.length > 0) {
+              setRealLineup({ home: homeFp, away: awayFp, homeCoach: sseHomeCoach, awayCoach: sseAwayCoach });
+            }
+          } catch { /* non-critical */ }
+        }
+
         // Skip infrastructure/non-scoring actions
         const skipActions = new Set([
           'coverage_update','comment','connected','disconnected','standby','weather',
@@ -1396,6 +1449,55 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       if (isMounted) {
         playerIdMapRef.current = pMap;
         console.log(`[LivePage] Player map — ${Object.keys(pMap).length} players matched`);
+      }
+
+      // Fetch real lineup for formation visualisation (once per session)
+      if (!lineupFetchedRef.current && isMounted) {
+        lineupFetchedRef.current = true;
+        try {
+          const lineupRes = await fetch(`/api/txline/api/fixtures/lineups/${resolvedFixtureId}`);
+          if (lineupRes.ok) {
+            const lineupData: any = await lineupRes.json();
+            const players: any[] = Array.isArray(lineupData)
+              ? lineupData
+              : (lineupData?.lineups ?? lineupData?.players ?? lineupData?.Lineups ?? []);
+            if (players.length > 0 && isMounted) {
+              const home: FormationPlayer[] = [];
+              const away: FormationPlayer[] = [];
+              let homeCoach: string | undefined;
+              let awayCoach: string | undefined;
+              for (const p of players) {
+                const participant: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
+                const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
+                const rawName: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
+                const name = rawName.includes(',')
+                  ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ')
+                  : rawName;
+                if (!name) continue;
+                // Extract coach entry
+                if (rawPos === 'COACH' || (p.Role ?? p.role ?? '').toUpperCase() === 'COACH') {
+                  if (participant === 1) homeCoach = name; else awayCoach = name;
+                  continue;
+                }
+                const fp: FormationPlayer = {
+                  id: pMap[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
+                  name,
+                  jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
+                  position: rawPos || 'MID',
+                  participant,
+                  starter: !!(p.Starter ?? p.starter ?? false),
+                };
+                if (participant === 1) home.push(fp); else away.push(fp);
+              }
+              if (home.length + away.length > 0) {
+                setRealLineup({ home, away, homeCoach, awayCoach });
+                console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[LivePage] Lineup fetch failed (non-critical):', err);
+        }
       }
 
       // Load all events that happened before we connected via the score snapshot
@@ -3179,151 +3281,38 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 );
               })()}
 
-              {/* Match Events Timeline */}
-              <div className="card" style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, color: '#ffd700', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  Match Events
-                  {appMode === 'live' ? (
-                    <span
-                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
-                      style={{
-                        fontSize: '0.6rem',
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        fontWeight: 700,
-                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
-                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
-                      }}
-                    >
-                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
-                    </span>
-                  ) : (
-                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
-                  )}
-                  <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
-                    title="Points shown are base values for that event type. Your actual pts include captain 2× and confidence multiplier — see the lineup panel above.">
-                    ⓘ base pts
-                  </span>
-                </h3>
-
-                {events.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
-                      <>
-                        <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
-                        <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>
-                          {fixture.homeTeam} vs {fixture.awayTeam}
-                        </div>
-                        <div>
-                          Match kicks off in {minutesToKickoff < 60
-                            ? `${minutesToKickoff} minute${minutesToKickoff !== 1 ? 's' : ''}`
-                            : `${Math.floor(minutesToKickoff / 60)}h ${minutesToKickoff % 60}m`}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', marginTop: 8, color: 'rgba(255,255,255,0.25)' }}>
-                          Events will appear here as the match unfolds
-                        </div>
-                      </>
-                    ) : appMode === 'live' && txlineStatus === 'live' ? (
-                      <>
-                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚽</div>
-                        <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match in progress</div>
-                        <div>Connected to TxLINE — waiting for first notable event</div>
-                        <div style={{ fontSize: '0.75rem', marginTop: 4, color: 'rgba(255,255,255,0.25)' }}>
-                          Goals, cards and key plays will appear here instantly
-                        </div>
-                      </>
-                    ) : appMode === 'live' && matchCompleted ? (
-                      <>
-                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏁</div>
-                        <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match Finished</div>
-                        <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
-                          Final score: {score.home}–{score.away} · Event history recorded above
-                        </div>
-                      </>
-                    ) : appMode === 'live' && txlineStatus === 'waiting' ? (
-                      <>
-                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>📡</div>
-                        <div>Waiting for live data — checking TxLINE every 10s</div>
-                        <div style={{ fontSize: '0.75rem', marginTop: 4, color: 'rgba(255,255,255,0.25)' }}>
-                          Score updates from live data are shown above while we wait
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
-                        <div>Waiting for match events...</div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
-                  {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
-                    <div
-                      key={event.id}
-                      style={{
-                        display: 'flex',
-                        gap: 12,
-                        alignItems: 'flex-start',
-                        padding: '12px 14px',
-                        background: 'var(--bg-elevated)',
-                        borderRadius: 'var(--radius-md)',
-                        borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
-                        animation: 'score-pop 300ms ease',
-                      }}
-                    >
-                      <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{EVENT_ICONS[event.type]}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.875rem' }}>
-                            {(() => {
-                              const typeLabels: Record<string, string> = {
-                                goal:            'GOAL',
-                                own_goal:        'OWN GOAL',
-                                assist:          'ASSIST',
-                                goalkeeper_save: 'SAVE',
-                                penalty_save:    'PENALTY SAVED',
-                                penalty_won:     'PENALTY WON',
-                                penalty_missed:  'PENALTY MISSED',
-                                penalty_scored:  'PENALTY SCORED',
-                                penalty_missed_shootout: 'PENALTY MISSED',
-                                goal_conceded:   'GOAL CONCEDED',
-                                clean_sheet:     'CLEAN SHEET',
-                                corner_kick:     'CORNER KICK',
-                                var_review:      'VAR REVIEW',
-                                substitution:    'SUBSTITUTION',
-                                sub_appearance:  'SUBSTITUTION',
-                                kick_off:        'KICK OFF',
-                                half_time:       'HALF TIME',
-                                full_time:       'FULL TIME',
-                                extra_time:      'EXTRA TIME',
-                              };
-                              const label = typeLabels[event.type] ?? event.type.replace(/_/g, ' ').toUpperCase();
-                              const hasPlayer = event.player && event.player !== 'Unknown';
-                              return hasPlayer ? event.player : label;
-                            })()}
-                          </span>
-                          <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                            {event.minute}&apos;
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {event.team ? `${event.teamFlag} ${event.team}` : event.description}
-                        </div>
-                      </div>
-                      <div style={{
-                        fontFamily: 'Bebas Neue, cursive',
-                        fontSize: '1.1rem',
-                        color: event.points >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
-                        flexShrink: 0,
-                      }}>
-                        {event.points !== 0 ? `${event.points >= 0 ? '+' : ''}${event.points}` : '0'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* Formation — standalone landscape pitch below My Lineup */}
+              {(() => {
+                let homeFp: FormationPlayer[] = [];
+                let awayFp: FormationPlayer[] = [];
+                if (realLineup) {
+                  homeFp = realLineup.home;
+                  awayFp = realLineup.away;
+                } else if (appMode !== 'live') {
+                  const demoPlayers = events.filter(e => e.type === 'starting_xi');
+                  for (const ev of demoPlayers) {
+                    const isHome = ev.team === fixture.homeTeam;
+                    const fp: FormationPlayer = { id: ev.playerId, name: ev.player, position: 'MID', participant: isHome ? 1 : 2 };
+                    if (isHome) homeFp.push(fp); else awayFp.push(fp);
+                  }
+                }
+                const userIds: string[] = (userLineup?.players as any[] ?? [])
+                  .map((p: any) => p?.id).filter(Boolean);
+                return (
+                  <LiveLineupFormation
+                    homePlayers={homeFp}
+                    awayPlayers={awayFp}
+                    homeTeam={fixture.homeTeam}
+                    awayTeam={fixture.awayTeam}
+                    homeFlag={fixture.homeFlag}
+                    awayFlag={fixture.awayFlag}
+                    homeCoach={realLineup?.homeCoach}
+                    awayCoach={realLineup?.awayCoach}
+                    playerPoints={playerPoints}
+                    userLineupIds={userIds}
+                  />
+                );
+              })()}
 
               {/* Cryptographic Result Verification Panel */}
               <div className="card" style={{ 
@@ -3565,9 +3554,117 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               </div>
             </div>
 
-            {/* RIGHT: Leaderboard */}
-            <div>
+            {/* RIGHT: Match Events + Leaderboard */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Match Events panel */}
               <div className="ro-window" style={{ position: 'sticky', top: 80 }}>
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>⚡ Match Events</span>
+                  {appMode === 'live' ? (
+                    <span
+                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
+                      style={{
+                        fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
+                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                      }}
+                    >
+                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                    </span>
+                  ) : (
+                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
+                  )}
+                  <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
+                    title="Points shown are base values. Your actual pts include captain 2× and confidence multiplier.">
+                    ⓘ base pts
+                  </span>
+                </div>
+                <div className="ro-window__body" style={{ padding: 12 }}>
+                  {events.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
+                        <>
+                          <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>{fixture.homeTeam} vs {fixture.awayTeam}</div>
+                          <div>Match kicks off in {minutesToKickoff < 60 ? `${minutesToKickoff} min` : `${Math.floor(minutesToKickoff / 60)}h ${minutesToKickoff % 60}m`}</div>
+                        </>
+                      ) : appMode === 'live' && txlineStatus === 'live' ? (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚽</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match in progress</div>
+                          <div>Waiting for first notable event</div>
+                        </>
+                      ) : appMode === 'live' && matchCompleted ? (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏁</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match Finished</div>
+                          <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>Final score: {score.home}–{score.away}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
+                          <div>Waiting for match events...</div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+                    {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
+                      <div
+                        key={event.id}
+                        style={{
+                          display: 'flex', gap: 10, alignItems: 'flex-start',
+                          padding: '10px 12px',
+                          background: 'var(--bg-elevated)',
+                          borderRadius: 'var(--radius-md)',
+                          borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
+                          animation: 'score-pop 300ms ease',
+                        }}
+                      >
+                        <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{EVENT_ICONS[event.type]}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {(() => {
+                                const typeLabels: Record<string, string> = {
+                                  goal: 'GOAL', own_goal: 'OWN GOAL', assist: 'ASSIST',
+                                  goalkeeper_save: 'SAVE', penalty_save: 'PENALTY SAVED',
+                                  penalty_won: 'PENALTY WON', penalty_missed: 'PENALTY MISSED',
+                                  penalty_scored: 'PENALTY SCORED', penalty_missed_shootout: 'PENALTY MISSED',
+                                  goal_conceded: 'GOAL CONCEDED', clean_sheet: 'CLEAN SHEET',
+                                  corner_kick: 'CORNER KICK', var_review: 'VAR REVIEW',
+                                  substitution: 'SUBSTITUTION', sub_appearance: 'SUBSTITUTION',
+                                  kick_off: 'KICK OFF', half_time: 'HALF TIME',
+                                  full_time: 'FULL TIME', extra_time: 'EXTRA TIME',
+                                };
+                                const label = typeLabels[event.type] ?? event.type.replace(/_/g, ' ').toUpperCase();
+                                return (event.player && event.player !== 'Unknown') ? event.player : label;
+                              })()}
+                            </span>
+                            <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.85rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 4 }}>
+                              {event.minute}&apos;
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {event.team ? `${event.teamFlag} ${event.team}` : event.description}
+                          </div>
+                        </div>
+                        <div style={{
+                          fontFamily: 'Bebas Neue, cursive', fontSize: '1rem',
+                          color: event.points >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
+                          flexShrink: 0,
+                        }}>
+                          {event.points !== 0 ? `${event.points >= 0 ? '+' : ''}${event.points}` : '0'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Leaderboard */}
+              <div className="ro-window">
                 <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>🏆 Live Leaderboard</span>
                   <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>Live</span>
