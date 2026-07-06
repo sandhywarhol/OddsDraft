@@ -3,7 +3,6 @@
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { useTxLine } from '@/context/TxLineContext';
-import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 
@@ -70,38 +69,29 @@ export default function LeaderboardPage() {
     const fetchLeaderboard = async () => {
       try {
         setIsLoading(true);
-        // We query the users table and sort by total_earned_sol descending
-        const { data, error } = await supabase
-          .from('users')
-          .select('wallet_address, username, avatar_url, total_contests, total_wins, total_earned_sol')
-          .order('total_earned_sol', { ascending: false })
-          .limit(20);
+        const res = await fetch('/api/leaderboard', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: any[] = await res.json();
 
-        if (error) throw error;
-        
-        if (data) {
-          const mapped = data.map((u: any, index: number) => {
-            const isUser = publicKey && u.wallet_address === publicKey.toString();
-            // Shorten wallet address if username is not present
-            const displayUser = u.username || `User_${u.wallet_address.substring(0, 4)}`;
-            return {
-              rank: index + 1,
-              user: displayUser,
-              wallet: `${u.wallet_address.substring(0, 4)}...${u.wallet_address.substring(u.wallet_address.length - 3)}`,
-              rawWallet: u.wallet_address,
-              avatar: u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.wallet_address}`,
-              contests: u.total_contests || 0,
-              wins: u.total_wins || 0,
-              points: 0, // points are contest-specific, global is sol
-              sol: u.total_earned_sol || 0,
-              isUser
-            };
-          });
-          setLiveLeaderboard(mapped);
-        }
+        const mapped = data.map((u, index) => {
+          const isUser = publicKey && u.wallet_address === publicKey.toString();
+          const displayUser = u.username || `User_${u.wallet_address.substring(0, 4)}`;
+          return {
+            rank: index + 1,
+            user: displayUser,
+            wallet: `${u.wallet_address.substring(0, 4)}...${u.wallet_address.substring(u.wallet_address.length - 3)}`,
+            rawWallet: u.wallet_address,
+            avatar: u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.wallet_address}`,
+            contests: u.total_contests || 0,
+            wins: u.total_wins || 0,
+            points: u.total_points || 0,
+            sol: u.total_earned_sol || 0,
+            isUser,
+          };
+        });
+        setLiveLeaderboard(mapped);
       } catch (err: any) {
-        console.warn('[Leaderboard] Supabase not available, using demo data:', err);
-        // Supabase not configured — show demo data silently
+        console.warn('[Leaderboard] fetch failed, using demo data:', err);
         setLiveLeaderboard(DEMO_LEADERBOARD);
       } finally {
         setIsLoading(false);
@@ -137,7 +127,7 @@ export default function LeaderboardPage() {
               position: 'absolute',
               inset: 0,
               zIndex: 0,
-              backgroundImage: 'url("/leaderboard.png")',
+              backgroundImage: 'url("/leaderboard.webp")',
               backgroundSize: 'cover',
               backgroundPosition: 'center',
               opacity: 1,
