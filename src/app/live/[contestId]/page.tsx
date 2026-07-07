@@ -2157,16 +2157,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
         if (newEvents.length === 0) return;
 
-        // Only pop dialog for the final (most recent) event — same as demo UX
-        const trigger = newEvents[newEvents.length - 1];
+        // Prefer high-importance events as the NPC dialog trigger.
+        // Without this, synthesized goal_conceded (pushed after goal) or assist events
+        // would become the trigger and the excited goal commentator dialog would never show.
+        const DIALOG_PRIORITY = ['goal', 'own_goal', 'penalty_scored', 'red_card',
+          'penalty_save', 'yellow_card', 'assist', 'penalty_missed',
+          'clean_sheet', 'full_time', 'half_time', 'kick_off'];
+        const trigger =
+          newEvents.find(e => DIALOG_PRIORITY.includes(e.type)) ??
+          newEvents[newEvents.length - 1];
         setMinute(trigger.minute);
 
-        // SFX
-        if (trigger.type === 'goal' || trigger.type === 'own_goal') {
+        // SFX — check all newEvents so goal SFX fires even if trigger was overridden
+        const hasGoal = newEvents.some(e => e.type === 'goal' || e.type === 'own_goal');
+        if (hasGoal) {
           playSFX('goal');
-        } else if (trigger.type === 'full_time') {
+        } else if (newEvents.some(e => e.type === 'full_time')) {
           playSFX('end_game');
-        } else if (['kick_off', 'half_time', 'yellow_card', 'red_card', 'corner_kick', 'substitution', 'extra_time', 'penalty_save'].includes(trigger.type)) {
+        } else if (newEvents.some(e => ['kick_off', 'half_time', 'yellow_card', 'red_card', 'corner_kick', 'substitution', 'extra_time', 'penalty_save'].includes(e.type))) {
           playSFX('whistle');
         }
 
