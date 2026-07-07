@@ -7,7 +7,8 @@ import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import type { MatchResult } from '@/app/api/match/result/route';
 import { hasOpenedPack, openCardPack } from '@/lib/card-collection';
 import CardPackOpener from '@/components/CardPackOpener';
@@ -17,7 +18,16 @@ type FixtureScore = { home: number; away: number; completed?: boolean };
 
 export default function ContestsPage() {
   const { appMode, liveFixtures, allFixtures } = useTxLine();
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
+
+  const handleReplayTutorial = useCallback(() => {
+    localStorage.removeItem('hasSeenLineupTutorial');
+    // Navigate to first upcoming/live match lineup, or demo fallback
+    const upcoming = WC2026_FIXTURES.find(f => f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now() - 4 * 3600 * 1000);
+    const targetId = liveFixtures?.[0]?.fixtureId ?? upcoming?.fixtureId ?? 'demo-wc-1';
+    router.push(`/lineup/${targetId}`);
+  }, [liveFixtures, router]);
   const [enteredContests, setEnteredContests] = useState<Record<string, string[]>>({});
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);
   const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number }>>({});
@@ -274,6 +284,27 @@ export default function ContestsPage() {
               alt="FIFA World Cup 2026 Logo" 
               style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'relative', zIndex: 2 }}
             />
+          </div>
+
+          {/* Replay Tutorial */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, marginTop: -8 }}>
+            <button
+              onClick={handleReplayTutorial}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px',
+                fontSize: '0.72rem', fontWeight: 700,
+                color: '#fbf0b9',
+                background: 'rgba(251,240,185,0.07)',
+                border: '1px solid rgba(251,240,185,0.3)',
+                borderRadius: 20,
+                cursor: 'pointer',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+              }}
+            >
+              ▶ Replay Tutorial
+            </button>
           </div>
 
           {/* Entry Fee Info */}
