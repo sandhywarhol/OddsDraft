@@ -22,11 +22,10 @@ export default function ContestsPage() {
   const [mounted, setMounted] = useState(false);
 
   const handleReplayTutorial = useCallback(() => {
-    localStorage.removeItem('hasSeenLineupTutorial');
-    // Navigate to first upcoming/live match lineup, or demo fallback
+    // Pick first upcoming/live match — ?replay=1 forces tutorial even if already entered
     const upcoming = WC2026_FIXTURES.find(f => f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now() - 4 * 3600 * 1000);
-    const targetId = liveFixtures?.[0]?.fixtureId ?? upcoming?.fixtureId ?? 'demo-wc-1';
-    router.push(`/lineup/${targetId}`);
+    const targetId = liveFixtures?.[0]?.fixtureId ?? upcoming?.fixtureId ?? WC2026_FIXTURES[0]?.fixtureId;
+    if (targetId) router.push(`/lineup/${targetId}?replay=1`);
   }, [liveFixtures, router]);
   const [enteredContests, setEnteredContests] = useState<Record<string, string[]>>({});
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);

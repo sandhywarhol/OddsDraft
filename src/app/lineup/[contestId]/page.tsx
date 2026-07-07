@@ -123,6 +123,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const { contestId } = use(params);
   const searchParamsObj = use(searchParams);
   const contestType = (searchParamsObj.contestType as string) || 'top3';
+  const isReplayTutorial = searchParamsObj.replay === '1';
   const { appMode, liveFixtures } = useTxLine();
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
@@ -190,7 +191,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const alreadyEntered = typeof window !== 'undefined'
     ? (JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]') as string[]).includes(contestType)
     : false;
-  const [submitted, setSubmitted] = useState(alreadyEntered);
+  const [submitted, setSubmitted] = useState(isReplayTutorial ? false : alreadyEntered);
   const [submitting, setSubmitting] = useState(false);
 
   type PayStep = { label: string; status: 'pending' | 'loading' | 'ok' | 'error'; detail?: string };
@@ -287,11 +288,16 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   };
 
   useEffect(() => {
+    if (isReplayTutorial) {
+      localStorage.removeItem('hasSeenLineupTutorial');
+      setTutorialStep(1);
+      return;
+    }
     const hasSeenTutorial = localStorage.getItem('hasSeenLineupTutorial');
     if (!hasSeenTutorial) {
       setTutorialStep(1);
     }
-  }, []);
+  }, [isReplayTutorial]);
 
   const handleNextTutorialStep = (e: React.MouseEvent) => {
     e.stopPropagation();
