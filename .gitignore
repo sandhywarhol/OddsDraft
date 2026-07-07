@@ -40,6 +40,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Claude Code session data
+.claude/
+
+# Office documents and temp files
+*.docx
+*.doc
+*.rtf
+*.pdf
+Implementation\ Plan*.rtf
+
 # Anchor / Rust program files
 /oddsdraft_program/.anchor
 /oddsdraft_program/target
