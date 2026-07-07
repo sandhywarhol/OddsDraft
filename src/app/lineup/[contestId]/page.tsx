@@ -204,7 +204,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   // Verify against Supabase on load — catches cases where localStorage was lost
   // (page refresh during payment) so the user can't accidentally pay twice.
   useEffect(() => {
-    if (submitted || isDemo || !publicKey) return;
+    if (submitted || isDemo || !publicKey || isReplayTutorial) return;
     fetch(`/api/contest/check-entry?fixtureId=${contestId}&walletAddress=${publicKey.toString()}&contestType=${contestType}`)
       .then(r => r.json())
       .then(({ entered }) => {
