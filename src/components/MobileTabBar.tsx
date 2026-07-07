@@ -3,14 +3,32 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { User, Volume2, VolumeX, LogOut } from 'lucide-react';
+import { useAudio } from '@/context/AudioContext';
 
 export default function MobileTabBar() {
   const pathname = usePathname();
   const { connected, publicKey, disconnect } = useWallet();
   const { setVisible } = useWalletModal();
+  const { isMuted, toggleMute } = useAudio();
   const [mounted, setMounted] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    }
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMenu]);
 
   const isSchedule = pathname === '/contests' || pathname === '/' || pathname?.startsWith('/lineup');
   const isCards = pathname === '/cards';
@@ -21,6 +39,7 @@ export default function MobileTabBar() {
     : null;
 
   return (
+    <>
     <nav className="mobile-tab-bar">
       <Link href="/contests" className={`mobile-tab-bar__tab${isSchedule ? ' active' : ''}`}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -43,9 +62,10 @@ export default function MobileTabBar() {
 
       <button
         className={`mobile-tab-bar__tab mobile-tab-bar__tab--wallet${connected ? ' active' : ''}`}
-        onClick={() => {
+        onClick={(e) => {
+          e.stopPropagation();
           if (connected) {
-            disconnect();
+            setShowMenu(!showMenu);
           } else {
             setVisible(true);
           }
@@ -70,5 +90,52 @@ export default function MobileTabBar() {
         )}
       </button>
     </nav>
+
+      {/* Popup Menu */}
+      {showMenu && connected && (
+        <div 
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            bottom: '76px', // sits just above the tab bar
+            right: '16px',
+            width: '220px',
+            background: '#151e2e',
+            border: '1px solid rgba(255, 215, 0, 0.3)',
+            borderRadius: '12px',
+            boxShadow: '0 -4px 32px rgba(0,0,0,0.8)',
+            overflow: 'hidden',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Link 
+            href="/profile" 
+            onClick={() => setShowMenu(false)}
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', color: '#fff', textDecoration: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)' }}
+          >
+            <User size={18} color="#ffd700" />
+            <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>Profile</span>
+          </Link>
+          
+          <button 
+            onClick={() => { toggleMute(); setShowMenu(false); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', color: '#fff', background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+          >
+            {isMuted ? <VolumeX size={18} color="#ffd700" /> : <Volume2 size={18} color="#ffd700" />}
+            <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{isMuted ? 'Unmute Audio' : 'Mute Audio'}</span>
+          </button>
+          
+          <button
+            onClick={() => { disconnect(); setShowMenu(false); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', color: '#ff4d6d', background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+          >
+            <LogOut size={18} color="#ff4d6d" />
+            <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>Logout</span>
+          </button>
+        </div>
+      )}
+    </>
   );
 }

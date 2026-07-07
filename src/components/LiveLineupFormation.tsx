@@ -269,16 +269,14 @@ function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: 
         </div>
 
         {/* ── Body ── */}
-        <div style={{ display: 'flex', alignItems: 'stretch', height: 440 }}>
+        <div className="lineup-body">
 
           {/* Left: Subs + Coach */}
-          <div style={{
-            flex: 1, minWidth: 0,
+          <div className="lineup-subs" style={{
             background: 'rgba(0,0,0,0.5)',
             borderRight: `1px solid ${color}30`,
-            display: 'flex', flexDirection: 'column',
             padding: '12px 14px',
-            overflowY: 'auto', maxHeight: '100%',
+            overflowY: 'auto',
           }}>
             <div style={{
               fontSize: '0.65rem', fontWeight: 800, color,
@@ -286,7 +284,7 @@ function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: 
             }}>
               Substitutes
             </div>
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', alignContent: 'start' }}>
+            <div className="lineup-subs-grid">
               {bench.length === 0 && (
                 <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.22)', fontStyle: 'italic' }}>—</span>
               )}
@@ -364,17 +362,14 @@ function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: 
           </div>
 
           {/* Right: Pitch — flat view, no perspective */}
-          <div style={{
-            width: 293, flexShrink: 0, position: 'relative',
-            overflow: 'hidden',
-          }}>
+          <div className="lineup-pitch-container">
             <svg
               viewBox={`0 0 ${PW} ${PH}`}
               style={{
                 position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
               }}
               xmlns="http://www.w3.org/2000/svg"
-              preserveAspectRatio="xMaxYMid meet"
+              preserveAspectRatio="xMidYMid meet"
             >
               <Pitch />
 

@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, type Player, type DemoFixture } from '@/lib/players';
-import { getStaticPlayersByTeam } from '@/lib/wc2026-players-static';
+import { getStaticPlayersByTeam, WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
 import { calculateFantasyPoints } from '@/lib/fantasy-engine';
-import { getCardsForLineupPosition, getCardById, type OwnedCard } from '@/lib/card-collection';
+import { getCardsForLineupPosition, getCardById, addCardToCollection, type OwnedCard } from '@/lib/card-collection';
 import { RARITY_COLOR } from '@/lib/skill-cards';
 import { formatDistanceToNow } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
@@ -318,7 +318,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       }
     }
 
-    if (tutorialStep < 7) {
+    if (tutorialStep < 8) {
       const nextStep = tutorialStep + 1;
       const nextData = getTutorialData(nextStep);
       const targetId = nextData?.targetId;
@@ -440,14 +440,14 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
   useEffect(() => {
     if (tutorialStep === 4) {
-      const team = fixture.homeTeam;
-      const allPlayers = getPlayers(team);
-      const gk = allPlayers.find(p => p.position === 'GK');
-      const cb = allPlayers.find(p => p.position === 'DEF');
-      const mf = allPlayers.find(p => p.position === 'MID');
-      const sw = allPlayers.filter(p => p.position === 'DEF')[1] || allPlayers.find(p => p.position === 'DEF');
-      const cf = allPlayers.find(p => p.position === 'ATT');
-      
+      // Use world-famous players so the tutorial feels real and recognisable
+      const allWC = WC2026_PLAYERS as unknown as Player[];
+      const gk = allWC.find(p => p.id === 'bra-alisson');
+      const cb = allWC.find(p => p.id === 'bra-marquinhos');
+      const mf = allWC.find(p => p.id === 'spa-rodri');
+      const sw = allWC.find(p => p.id === 'arg-messi');
+      const cf = allWC.find(p => p.id === 'nor-haaland');
+
       if (gk && cb && mf && sw && cf) {
         setLineup([
           { id: gk.id, name: gk.name, position: gk.position, team: gk.team, teamFlag: gk.teamFlag, rating: gk.rating },
@@ -456,11 +456,32 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           { id: sw.id, name: sw.name, position: sw.position, team: sw.team, teamFlag: sw.teamFlag, rating: sw.rating },
           { id: cf.id, name: cf.name, position: cf.position, team: cf.team, teamFlag: cf.teamFlag, rating: cf.rating },
         ]);
-        setCaptain(mf.id);
-        setConfidence({ [gk.id]: 2, [cb.id]: 3, [mf.id]: 4, [sw.id]: 3, [cf.id]: 5 });
+        setCaptain(sw.id); // Messi as captain
+        setConfidence({ [gk.id]: 3, [cb.id]: 3, [mf.id]: 4, [sw.id]: 5, [cf.id]: 4 });
+
+        // Seed demo skill cards so the Skill Card section shows equipped cards during tutorial
+        const demoCards: OwnedCard[] = [
+          { instanceId: 'tutorial-demo-gk',  cardId: 'gk-rare',       obtainedAt: new Date().toISOString() },
+          { instanceId: 'tutorial-demo-def', cardId: 'def-rare',      obtainedAt: new Date().toISOString() },
+          { instanceId: 'tutorial-demo-mid', cardId: 'mid-rare',      obtainedAt: new Date().toISOString() },
+          { instanceId: 'tutorial-demo-att', cardId: 'str-legendary', obtainedAt: new Date().toISOString() },
+        ];
+        demoCards.forEach(c => {
+          // Only add if not already present (idempotent for multiple replays)
+          const existing = JSON.parse(localStorage.getItem('oddsdraft_card_collection') || '{"cards":[]}');
+          if (!existing.cards.find((x: OwnedCard) => x.instanceId === c.instanceId)) {
+            addCardToCollection(c);
+          }
+        });
+        setEquippedCards({
+          [gk.id]: 'tutorial-demo-gk',
+          [cb.id]: 'tutorial-demo-def',
+          [mf.id]: 'tutorial-demo-mid',
+          [cf.id]: 'tutorial-demo-att',
+        });
       }
     }
-  }, [tutorialStep, fixture]);
+  }, [tutorialStep]);
 
   const tutorialData = getTutorialData(tutorialStep);
 
@@ -973,7 +994,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   letterSpacing: '0.05em'
                 }}>
                   Click anywhere to continue 
-                  <span style={{ marginLeft: 8 }}>({tutorialStep}/7)</span>
+                  <span style={{ marginLeft: 8 }}>({tutorialStep}/8)</span>
                 </div>
               </div>
               
@@ -1940,10 +1961,18 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 7:
       return {
         speakerTitle: 'Guide',
-        text: `"Bonus tip! You can equip a Skill Card to each player for extra points. Earn cards after every match — and if you collect 2 copies of the same card, combine them into a higher rarity for even stronger bonuses. Check My Cards to manage your collection!"`,
+        text: `"Bonus tip! Equip a Skill Card to each player for extra points — I've already equipped demo cards so you can see how it looks. Earn your own cards after every match!"`,
         image: '/NPC/NPC Guide Female.svg',
         position: 'left',
         targetId: 'skill-card-section',
+      };
+    case 8:
+      return {
+        speakerTitle: 'Guide',
+        text: `"Visit 'My Cards' (top menu) to manage your full collection. Collect 2 copies of the same card to combine them into a higher rarity for even stronger bonuses. Legendary cards give massive point multipliers! Good luck, manager!"`,
+        image: '/NPC/NPC Guide Male.svg',
+        position: 'right',
+        targetId: 'lineup-header',
       };
     default:
       return null;

@@ -124,7 +124,7 @@ export default function Navbar() {
               isMuted={isMuted} 
               toggleMute={toggleMute} 
             />
-          ) : <div style={{width: 80, height: 24}}></div>}
+          ) : <div className="desktop-only" style={{width: 80, height: 24}}></div>}
           {/* Mobile menu toggle */}
           <button
             className="btn btn--ghost btn--sm navbar__toggle"
@@ -276,24 +276,28 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
   }, [dropdownRef]);
 
   if (!connected) {
-    return <WalletMultiButton style={{ 
-      height: '24px', 
-      borderRadius: '5px',
-      fontSize: '0.62rem', 
-      fontWeight: 700,
-      padding: '0 10px', 
-      background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)', 
-      color: '#1a1a1a',
-      border: '1px solid rgba(255, 255, 255, 0.4)',
-      boxShadow: '0 1px 8px rgba(255, 215, 0, 0.2)',
-      lineHeight: '24px',
-      fontFamily: 'inherit',
-      transition: 'all 0.3s ease'
-    }} />;
+    return (
+      <div className="desktop-only">
+        <WalletMultiButton style={{ 
+          height: '24px', 
+          borderRadius: '5px',
+          fontSize: '0.62rem', 
+          fontWeight: 700,
+          padding: '0 10px', 
+          background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)', 
+          color: '#1a1a1a',
+          border: '1px solid rgba(255, 255, 255, 0.4)',
+          boxShadow: '0 1px 8px rgba(255, 215, 0, 0.2)',
+          lineHeight: '24px',
+          fontFamily: 'inherit',
+          transition: 'all 0.3s ease'
+        }} />
+      </div>
+    );
   }
 
   return (
-    <div className="wallet-dropdown" ref={dropdownRef} style={{ position: 'relative' }}>
+    <div className="wallet-dropdown desktop-only" ref={dropdownRef} style={{ position: 'relative' }}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
         style={{

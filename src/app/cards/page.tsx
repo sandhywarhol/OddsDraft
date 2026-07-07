@@ -446,10 +446,13 @@ function CombineModal({
 
         {/* Combine animation area */}
         {phase !== 'done' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 32 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 32 }}>
             {/* Source card ×2 */}
             {[0, 1].map(i => (
               <div key={i} style={{
+                width: '100%',
+                maxWidth: 140,
+                flex: 1,
                 opacity: phase === 'combining' ? 0.4 : 1,
                 transition: 'opacity 0.6s ease',
               }}>
@@ -476,11 +479,11 @@ function CombineModal({
 
             {/* Result slot */}
             <div style={{
-              width: 140, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+              width: '100%', maxWidth: 140, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
               minHeight: 'auto',
             }}>
               <div style={{
-                width: 140, height: Math.round(140 * (1012.5 / 810)), borderRadius: 12,
+                width: '100%', height: 'auto', aspectRatio: '810 / 1012.5', borderRadius: 12,
                 background: phase === 'combining'
                   ? `linear-gradient(135deg, ${nextRarityColor}33, rgba(0,0,0,0.6))`
                   : 'rgba(255,255,255,0.04)',
@@ -644,6 +647,7 @@ export default function CardsPage() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20,
           position: 'relative',
           padding: '54px 40px',
+          minHeight: 340,
           border: '2px solid #ffd700',
           overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
@@ -706,7 +710,7 @@ export default function CardsPage() {
           <img 
             src="/fifa_world_cup_2026_logo.webp" 
             alt="FIFA World Cup 2026 Logo" 
-            style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'relative', zIndex: 2 }}
+            style={{ height: '100px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'absolute', top: 24, left: 24, zIndex: 2 }}
           />
         </div>
 
@@ -749,7 +753,7 @@ export default function CardsPage() {
         </div>
 
         {/* How it works */}
-        <div style={{
+        <div className="desktop-only" style={{
           background: 'rgba(33,150,243,0.06)',
           border: '1px solid rgba(33,150,243,0.15)',
           borderRadius: 12,
@@ -765,7 +769,7 @@ export default function CardsPage() {
         </div>
 
         {/* Card Combine System */}
-        <div style={{
+        <div className="desktop-only" style={{
           background: 'linear-gradient(135deg, rgba(255,215,0,0.06) 0%, rgba(255,100,0,0.06) 100%)',
           border: '1px solid rgba(255,215,0,0.2)',
           borderRadius: 12,
@@ -967,11 +971,12 @@ export default function CardsPage() {
               const isCombineable = copyCount >= 2 && canCombine(instance.cardId);
               return (
                 <div
+                  className="card-responsive-wrapper"
                   key={instance.instanceId}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', width: '100%', maxWidth: 240 }}
                   onClick={() => handleCardClick(instance, card)}
                 >
-                  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 12 }}>
+                  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 12, width: '100%' }}>
                     <SkillCardDisplay
                       card={card}
                       instance={instance}

@@ -234,6 +234,7 @@ export default function ContestsPage() {
             display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20,
             position: 'relative',
             padding: '54px 40px',
+            minHeight: 340,
             border: '2px solid #ffd700',
             overflow: 'hidden',
             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
@@ -281,7 +282,7 @@ export default function ContestsPage() {
             <img 
               src="/fifa_world_cup_2026_logo.webp" 
               alt="FIFA World Cup 2026 Logo" 
-              style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'relative', zIndex: 2 }}
+              style={{ height: '100px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'absolute', top: 24, left: 24, zIndex: 2 }}
             />
           </div>
 

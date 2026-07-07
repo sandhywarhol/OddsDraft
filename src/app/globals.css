@@ -1,7 +1,35 @@
 /* OddsDraft — Global Design System */
 /* Dark theme with electric green accents — football energy */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Bebas+Neue&family=Cinzel+Decorative:wght@700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap');
+
+/* ============================================================
+   LIVE LINEUP LAYOUT CLASSES
+   ============================================================ */
+.lineup-body {
+  display: flex;
+  align-items: stretch;
+  height: 440px;
+}
+.lineup-subs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lineup-subs-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  align-content: start;
+}
+.lineup-pitch-container {
+  width: 293px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
 
 /* ============================================================
    CSS CUSTOM PROPERTIES — Design Tokens
@@ -1207,6 +1235,10 @@ h1, h2, h3, h4, h5, h6 {
 /* ============================================================
    MOBILE RESPONSIVE
    ============================================================ */
+.mobile-only {
+  display: none !important;
+}
+
 @media (max-width: 768px) {
   .container { padding: 0 var(--space-4); }
   
@@ -1561,12 +1593,12 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 80px;
+  padding: 65px 130px;
 }
 
 .npc-referee-bubble-bg {
   position: absolute;
-  inset: -15px -30px;
+  inset: -30px -65px;
   z-index: -1;
   overflow: visible;
 }
@@ -1638,8 +1670,7 @@ a {
   flex-direction: column;
   gap: 8px;
   animation: score-pop 300ms ease-out, dialog-glow 2s infinite;
-  max-height: 38vh;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .npc-jrpg-dialog-footer {
@@ -1736,19 +1767,19 @@ a {
     bottom: auto !important;
     top: 50vh !important;
     width: 90% !important;
-    max-width: 360px !important;
+    max-width: 440px !important;
     display: flex !important;
     justify-content: center !important;
     z-index: 1030 !important;
   }
 
   .npc-referee-bubble-container {
-    padding: 36px 32px !important;
+    padding: 52px 60px !important;
     width: 100% !important;
   }
 
   .npc-referee-bubble-bg {
-    inset: -12px -10px !important;
+    inset: -22px -22px !important;
   }
 
   .npc-referee-bubble-text {
@@ -1770,8 +1801,7 @@ a {
     right: auto !important;
     transform: none !important;
     bottom: auto !important;
-    max-height: 42vh !important;
-    overflow-y: auto !important;
+    overflow: visible !important;
   }
 
   .npc-jrpg-speaker-tag {
@@ -2140,14 +2170,55 @@ a {
   /* ── Cards page grid (2 per row on mobile) ───────────────── */
   .cards-grid-mobile {
     display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 12px !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
     justify-content: unset !important;
+  }
+  .cards-grid-mobile .card-responsive-wrapper {
+    width: 100% !important;
   }
 
   /* ── Sponsors marquee smaller on mobile ─────────────────── */
   .sponsors-marquee {
     font-size: 0.7rem !important;
   }
+
+  .navbar__nav { display: none; }
+  
+  /* ── Hide elements only needed on desktop ─────────────────── */
+  .desktop-only {
+    display: none !important;
+  }
+  
+  /* ── Show elements only needed on mobile ─────────────────── */
+  .mobile-only {
+    display: block !important;
+  }
+
+  /* ── Lineup mobile overrides ────────────────────────────────── */
+  .lineup-body {
+    flex-direction: column-reverse;
+    height: auto;
+  }
+  .lineup-subs {
+    max-height: none !important;
+    border-right: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
+  }
+  .lineup-subs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .lineup-pitch-container {
+    width: 100% !important;
+    height: 440px !important;
+    margin: 0 auto;
+  }
+
+  /* ── Mobile Layout Reordering for Live Page ── */
+  .live-grid {
+    display: flex !important;
+    flex-direction: column !important;
+  }
 }
+
 

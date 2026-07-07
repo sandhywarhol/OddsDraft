@@ -3301,6 +3301,44 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           })()}
 
 
+
+          {/* MOBILE ONLY User Stats (Right below score) */}
+          <div className="mobile-only" style={{ marginBottom: 20 }}>
+{/* User Fantasy Stats */}
+              <div className="card card--primary live-stats-mobile" style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', gap: 'var(--live-stats-gap)', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                      Fantasy Points
+                    </div>
+                    <div suppressHydrationWarning style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '3rem', color: 'var(--color-primary)', lineHeight: 1 }}>
+                      {userPoints.toFixed(1)}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', gap: 16 }}>
+                    <div>
+                      <div suppressHydrationWarning style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: 'var(--text-primary)' }}>
+                        #{userRank}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rank</div>
+                    </div>
+                    <div>
+                      <div suppressHydrationWarning style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: '#ffd700' }}>
+                        {(() => {
+                          const entry = leaderboard.find(e => e.isUser);
+                          if (!entry || !entry.rank || typeof entry.rank !== 'number') return '—';
+                          const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
+                          const sol = getPrizeForRank(entry.rank, contestType, n);
+                          return sol > 0 ? sol.toFixed(4) : '—';
+                        })()}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Estimated SOL</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+          </div>
+
           {/* Match completed banner — shown when authoritative source confirms match is finished */}
           {matchCompleted && appMode === 'live' && (
             <div style={{
@@ -3374,11 +3412,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           )}
 
           {/* Main Grid */}
-          <div className="grid-sidebar">
+          <div className="grid-sidebar live-grid">
             {/* LEFT: Events Timeline + User Stats */}
-            <div>
+            <div className="live-col-left">
+
+              <div className="desktop-only" style={{ display: 'contents' }}>
               {/* User Fantasy Stats */}
-              <div className="card card--primary" style={{ marginBottom: 20 }}>
+              <div className="card card--primary live-stats" style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', gap: 'var(--live-stats-gap)', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
@@ -3411,9 +3451,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 </div>
               </div>
               
+
+              </div>
               {/* ── Spectator banner (no lineup) ── */}
               {!userLineup && (
-                <div className="card" style={{ marginBottom: 20, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.18)' }}>
+                <div className="card live-spectator" style={{ marginBottom: 20, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: 'rgba(0,229,255,0.04)', border: '1px solid rgba(0,229,255,0.18)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: '1.2rem' }}>👁</span>
                     <div>
@@ -3435,7 +3477,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               {userLineup && userLineup.players?.filter(Boolean).length > 0 && (() => {
                 const players = (userLineup.players as any[]).filter(Boolean);
                 return (
-                  <div className="card" style={{ marginBottom: 20 }}>
+                  <div className="card live-my-lineup" style={{ marginBottom: 20 }}>
                     <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 14, color: '#ffd700', display: 'flex', alignItems: 'center', gap: 8 }}>
                       My Lineup
                       <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>real-time pts</span>
@@ -3605,6 +3647,126 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 );
               })()}
 
+
+              {/* MOBILE ONLY Match Events (Reordered) */}
+              <div className="mobile-only" style={{ marginBottom: 20 }}>
+              {/* Match Events panel */}
+              <div className="ro-window live-events-mobile" style={{ position: 'sticky', top: 80 }}>
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>⚡ Match Events</span>
+                  {appMode === 'live' ? (
+                    <span
+                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
+                      style={{
+                        fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
+                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                      }}
+                    >
+                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                    </span>
+                  ) : (
+                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
+                  )}
+                  <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
+                    title="Points shown are base values. Your actual pts include captain 2× and confidence multiplier.">
+                    ⓘ base pts
+                  </span>
+                </div>
+                <div className="ro-window__body" style={{ padding: 12 }}>
+                  {events.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
+                        <>
+                          <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>{fixture.homeTeam} vs {fixture.awayTeam}</div>
+                          <div>Match kicks off in {minutesToKickoff < 60 ? `${minutesToKickoff} min` : `${Math.floor(minutesToKickoff / 60)}h ${minutesToKickoff % 60}m`}</div>
+                        </>
+                      ) : appMode === 'live' && txlineStatus === 'live' ? (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚽</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match in progress</div>
+                          <div>Waiting for first notable event</div>
+                        </>
+                      ) : appMode === 'live' && matchCompleted ? (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏁</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match Finished</div>
+                          <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>Final score: {score.home}–{score.away}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
+                          <div>Waiting for match events...</div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+                    {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
+                      <div
+                        key={event.id}
+                        style={{
+                          display: 'flex', gap: 10, alignItems: 'flex-start',
+                          padding: '10px 12px',
+                          background: 'var(--bg-elevated)',
+                          borderRadius: 'var(--radius-md)',
+                          borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
+                          animation: 'score-pop 300ms ease',
+                        }}
+                      >
+                        <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{EVENT_ICONS[event.type]}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {(() => {
+                                const typeLabels: Record<string, string> = {
+                                  goal: 'GOAL', own_goal: 'OWN GOAL', assist: 'ASSIST',
+                                  goalkeeper_save: 'SAVE', penalty_save: 'PENALTY SAVED',
+                                  penalty_won: 'PENALTY WON', penalty_missed: 'PENALTY MISSED',
+                                  penalty_scored: 'PENALTY SCORED', penalty_missed_shootout: 'PENALTY MISSED',
+                                  goal_conceded: 'GOAL CONCEDED', clean_sheet: 'CLEAN SHEET',
+                                  corner_kick: 'CORNER KICK', var_review: 'VAR REVIEW',
+                                  substitution: 'SUBSTITUTION', sub_appearance: 'SUBSTITUTION',
+                                  kick_off: 'KICK OFF', half_time: 'HALF TIME',
+                                  full_time: 'FULL TIME', extra_time: 'EXTRA TIME',
+                                };
+                                const label = typeLabels[event.type] ?? event.type.replace(/_/g, ' ').toUpperCase();
+                                if (event.type === 'substitution' && (event.player || event.playerOut)) {
+                                  return (
+                                    <span style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3 }}>
+                                      {event.player && <span style={{ color: '#4ade80', fontSize: '0.72rem' }}>▲ {event.player}</span>}
+                                      {event.playerOut && <span style={{ color: '#f87171', fontSize: '0.72rem' }}>▼ {event.playerOut}</span>}
+                                    </span>
+                                  );
+                                }
+                                return (event.player && event.player !== 'Unknown') ? event.player : label;
+                              })()}
+                            </span>
+                            <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.85rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 4 }}>
+                              {event.minute}&apos;
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
+                          </div>
+                        </div>
+                        <div style={{
+                          fontFamily: 'Bebas Neue, cursive', fontSize: '1rem',
+                          color: event.points >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
+                          flexShrink: 0,
+                        }}>
+                          {event.points !== 0 ? `${event.points >= 0 ? '+' : ''}${event.points}` : '0'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+
+              </div>
               {/* Formation — standalone landscape pitch below My Lineup */}
               {(() => {
                 let homeFp: FormationPlayer[] = [];
@@ -3638,8 +3800,226 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 );
               })()}
 
+            {/* RIGHT: Match Events + Leaderboard */}
+            <div className="live-col-right" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+              <div className="desktop-only" style={{ display: 'contents' }}>
+              {/* Match Events panel */}
+              <div className="ro-window live-events" style={{ position: 'sticky', top: 80 }}>
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>⚡ Match Events</span>
+                  {appMode === 'live' ? (
+                    <span
+                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
+                      style={{
+                        fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
+                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
+                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                      }}
+                    >
+                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                    </span>
+                  ) : (
+                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
+                  )}
+                  <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
+                    title="Points shown are base values. Your actual pts include captain 2× and confidence multiplier.">
+                    ⓘ base pts
+                  </span>
+                </div>
+                <div className="ro-window__body" style={{ padding: 12 }}>
+                  {events.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
+                        <>
+                          <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>{fixture.homeTeam} vs {fixture.awayTeam}</div>
+                          <div>Match kicks off in {minutesToKickoff < 60 ? `${minutesToKickoff} min` : `${Math.floor(minutesToKickoff / 60)}h ${minutesToKickoff % 60}m`}</div>
+                        </>
+                      ) : appMode === 'live' && txlineStatus === 'live' ? (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚽</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match in progress</div>
+                          <div>Waiting for first notable event</div>
+                        </>
+                      ) : appMode === 'live' && matchCompleted ? (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏁</div>
+                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match Finished</div>
+                          <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>Final score: {score.home}–{score.away}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
+                          <div>Waiting for match events...</div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+                    {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
+                      <div
+                        key={event.id}
+                        style={{
+                          display: 'flex', gap: 10, alignItems: 'flex-start',
+                          padding: '10px 12px',
+                          background: 'var(--bg-elevated)',
+                          borderRadius: 'var(--radius-md)',
+                          borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
+                          animation: 'score-pop 300ms ease',
+                        }}
+                      >
+                        <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{EVENT_ICONS[event.type]}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {(() => {
+                                const typeLabels: Record<string, string> = {
+                                  goal: 'GOAL', own_goal: 'OWN GOAL', assist: 'ASSIST',
+                                  goalkeeper_save: 'SAVE', penalty_save: 'PENALTY SAVED',
+                                  penalty_won: 'PENALTY WON', penalty_missed: 'PENALTY MISSED',
+                                  penalty_scored: 'PENALTY SCORED', penalty_missed_shootout: 'PENALTY MISSED',
+                                  goal_conceded: 'GOAL CONCEDED', clean_sheet: 'CLEAN SHEET',
+                                  corner_kick: 'CORNER KICK', var_review: 'VAR REVIEW',
+                                  substitution: 'SUBSTITUTION', sub_appearance: 'SUBSTITUTION',
+                                  kick_off: 'KICK OFF', half_time: 'HALF TIME',
+                                  full_time: 'FULL TIME', extra_time: 'EXTRA TIME',
+                                };
+                                const label = typeLabels[event.type] ?? event.type.replace(/_/g, ' ').toUpperCase();
+                                if (event.type === 'substitution' && (event.player || event.playerOut)) {
+                                  return (
+                                    <span style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3 }}>
+                                      {event.player && <span style={{ color: '#4ade80', fontSize: '0.72rem' }}>▲ {event.player}</span>}
+                                      {event.playerOut && <span style={{ color: '#f87171', fontSize: '0.72rem' }}>▼ {event.playerOut}</span>}
+                                    </span>
+                                  );
+                                }
+                                return (event.player && event.player !== 'Unknown') ? event.player : label;
+                              })()}
+                            </span>
+                            <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.85rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 4 }}>
+                              {event.minute}&apos;
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
+                          </div>
+                        </div>
+                        <div style={{
+                          fontFamily: 'Bebas Neue, cursive', fontSize: '1rem',
+                          color: event.points >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
+                          flexShrink: 0,
+                        }}>
+                          {event.points !== 0 ? `${event.points >= 0 ? '+' : ''}${event.points}` : '0'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+
+              </div>
+              {/* Leaderboard */}
+              <div className="ro-window live-leaderboard">
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>🏆 Live Leaderboard</span>
+                  <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>Live</span>
+                </div>
+                <div className="ro-window__body" style={{ padding: 16, maxHeight: '420px', overflowY: 'auto' }}>
+                  <table className="leaderboard" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'center' }}>#</th>
+                        <th>Player</th>
+                        <th style={{ textAlign: 'right' }}>Pts</th>
+                        <th style={{ textAlign: 'right' }}>Prize</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((entry) => (
+                        <tr
+                          key={entry.wallet}
+                          style={{
+                            background: entry.isUser ? 'rgba(0, 229, 255, 0.15)' : 'transparent',
+                            transition: 'all 300ms',
+                          }}
+                        >
+                          <td className="leaderboard__rank" style={{ textAlign: 'center' }}>
+                            <span className={`leaderboard__rank--${entry.rank}`}>
+                              {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
+                            </span>
+                          </td>
+                          <td style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <img 
+                              src={(entry as any).avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.wallet}`} 
+                              alt="avatar" 
+                              style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--bg-surface)' }} 
+                            />
+                            <div>
+                              <div style={{ fontWeight: entry.isUser ? 700 : 500, fontSize: '0.85rem', color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>
+                                {entry.username}
+                                {entry.isUser && <span style={{ fontSize: '0.65rem', color: '#00e5ff', marginLeft: 4 }}>YOU</span>}
+                              </div>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                                {entry.wallet}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span className="leaderboard__points" style={{ color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>{entry.points.toFixed(1)}</span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontSize: '0.8rem', color: entry.prize !== '-' ? '#ffd700' : 'var(--text-muted)', fontWeight: 600 }}>
+                            {entry.prize}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Prize pool breakdown */}
+                  {(() => {
+                    const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
+                    const pool = Math.round(n * 0.01 * 10000) / 10000;
+                    type Row = { place: string; prize: string; pct: string; color: string };
+                    let breakdown: Row[] = [];
+                    if (contestType === '5050') {
+                      const winners = Math.max(1, Math.floor(n / 2));
+                      const each = winners > 0 ? Math.round((pool / winners) * 10000) / 10000 : 0;
+                      breakdown = [{ place: 'Top 50%', prize: `${each.toFixed(4)} SOL each`, pct: '100%', color: '#10b981' }];
+                    } else if (contestType === 'wta') {
+                      breakdown = [{ place: '1st', prize: `${pool.toFixed(4)} SOL`, pct: '100%', color: '#FFD700' }];
+                    } else {
+                      breakdown = [
+                        { place: '1st', prize: `${(pool * 0.5).toFixed(4)} SOL`, pct: '50%', color: '#FFD700' },
+                        { place: '2nd', prize: `${(pool * 0.3).toFixed(4)} SOL`, pct: '30%', color: '#C0C0C0' },
+                        { place: '3rd', prize: `${(pool * 0.2).toFixed(4)} SOL`, pct: '20%', color: '#CD7F32' },
+                      ];
+                    }
+                    return (
+                      <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                          Prize Pool: {pool.toFixed(4)} SOL · {n} player{n !== 1 ? 's' : ''}
+                        </div>
+                        {breakdown.map((p) => (
+                          <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700, width: 50 }}>{p.place}</span>
+                            <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
+                              <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
+                            </div>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+            </div>
               {/* Cryptographic Result Verification Panel */}
-              <div className="card" style={{ 
+              <div className="card live-txline" style={{ 
                 marginBottom: 20,
               }}>
                 <style>{`
@@ -3861,219 +4241,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               )}
             </div>
 
-            {/* RIGHT: Match Events + Leaderboard */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Match Events panel */}
-              <div className="ro-window" style={{ position: 'sticky', top: 80 }}>
-                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>⚡ Match Events</span>
-                  {appMode === 'live' ? (
-                    <span
-                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
-                      style={{
-                        fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
-                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
-                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
-                      }}
-                    >
-                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
-                    </span>
-                  ) : (
-                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
-                  )}
-                  <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
-                    title="Points shown are base values. Your actual pts include captain 2× and confidence multiplier.">
-                    ⓘ base pts
-                  </span>
-                </div>
-                <div className="ro-window__body" style={{ padding: 12 }}>
-                  {events.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
-                        <>
-                          <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
-                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>{fixture.homeTeam} vs {fixture.awayTeam}</div>
-                          <div>Match kicks off in {minutesToKickoff < 60 ? `${minutesToKickoff} min` : `${Math.floor(minutesToKickoff / 60)}h ${minutesToKickoff % 60}m`}</div>
-                        </>
-                      ) : appMode === 'live' && txlineStatus === 'live' ? (
-                        <>
-                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚽</div>
-                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match in progress</div>
-                          <div>Waiting for first notable event</div>
-                        </>
-                      ) : appMode === 'live' && matchCompleted ? (
-                        <>
-                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏁</div>
-                          <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>Match Finished</div>
-                          <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>Final score: {score.home}–{score.away}</div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: '2rem', marginBottom: 8 }}>⏰</div>
-                          <div>Waiting for match events...</div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
-                    {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
-                      <div
-                        key={event.id}
-                        style={{
-                          display: 'flex', gap: 10, alignItems: 'flex-start',
-                          padding: '10px 12px',
-                          background: 'var(--bg-elevated)',
-                          borderRadius: 'var(--radius-md)',
-                          borderLeft: `3px solid ${EVENT_COLORS[event.type] ?? 'var(--border-medium)'}`,
-                          animation: 'score-pop 300ms ease',
-                        }}
-                      >
-                        <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{EVENT_ICONS[event.type]}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                            <span style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {(() => {
-                                const typeLabels: Record<string, string> = {
-                                  goal: 'GOAL', own_goal: 'OWN GOAL', assist: 'ASSIST',
-                                  goalkeeper_save: 'SAVE', penalty_save: 'PENALTY SAVED',
-                                  penalty_won: 'PENALTY WON', penalty_missed: 'PENALTY MISSED',
-                                  penalty_scored: 'PENALTY SCORED', penalty_missed_shootout: 'PENALTY MISSED',
-                                  goal_conceded: 'GOAL CONCEDED', clean_sheet: 'CLEAN SHEET',
-                                  corner_kick: 'CORNER KICK', var_review: 'VAR REVIEW',
-                                  substitution: 'SUBSTITUTION', sub_appearance: 'SUBSTITUTION',
-                                  kick_off: 'KICK OFF', half_time: 'HALF TIME',
-                                  full_time: 'FULL TIME', extra_time: 'EXTRA TIME',
-                                };
-                                const label = typeLabels[event.type] ?? event.type.replace(/_/g, ' ').toUpperCase();
-                                if (event.type === 'substitution' && (event.player || event.playerOut)) {
-                                  return (
-                                    <span style={{ display: 'flex', flexDirection: 'column', gap: 1, lineHeight: 1.3 }}>
-                                      {event.player && <span style={{ color: '#4ade80', fontSize: '0.72rem' }}>▲ {event.player}</span>}
-                                      {event.playerOut && <span style={{ color: '#f87171', fontSize: '0.72rem' }}>▼ {event.playerOut}</span>}
-                                    </span>
-                                  );
-                                }
-                                return (event.player && event.player !== 'Unknown') ? event.player : label;
-                              })()}
-                            </span>
-                            <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.85rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 4 }}>
-                              {event.minute}&apos;
-                            </span>
-                          </div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
-                          </div>
-                        </div>
-                        <div style={{
-                          fontFamily: 'Bebas Neue, cursive', fontSize: '1rem',
-                          color: event.points >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
-                          flexShrink: 0,
-                        }}>
-                          {event.points !== 0 ? `${event.points >= 0 ? '+' : ''}${event.points}` : '0'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Leaderboard */}
-              <div className="ro-window">
-                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>🏆 Live Leaderboard</span>
-                  <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>Live</span>
-                </div>
-                <div className="ro-window__body" style={{ padding: 16, maxHeight: '420px', overflowY: 'auto' }}>
-                  <table className="leaderboard" style={{ width: '100%' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: 'center' }}>#</th>
-                        <th>Player</th>
-                        <th style={{ textAlign: 'right' }}>Pts</th>
-                        <th style={{ textAlign: 'right' }}>Prize</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaderboard.map((entry) => (
-                        <tr
-                          key={entry.wallet}
-                          style={{
-                            background: entry.isUser ? 'rgba(0, 229, 255, 0.15)' : 'transparent',
-                            transition: 'all 300ms',
-                          }}
-                        >
-                          <td className="leaderboard__rank" style={{ textAlign: 'center' }}>
-                            <span className={`leaderboard__rank--${entry.rank}`}>
-                              {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
-                            </span>
-                          </td>
-                          <td style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <img 
-                              src={(entry as any).avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${entry.wallet}`} 
-                              alt="avatar" 
-                              style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--bg-surface)' }} 
-                            />
-                            <div>
-                              <div style={{ fontWeight: entry.isUser ? 700 : 500, fontSize: '0.85rem', color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>
-                                {entry.username}
-                                {entry.isUser && <span style={{ fontSize: '0.65rem', color: '#00e5ff', marginLeft: 4 }}>YOU</span>}
-                              </div>
-                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                                {entry.wallet}
-                              </div>
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <span className="leaderboard__points" style={{ color: entry.isUser ? '#00e5ff' : 'var(--text-primary)' }}>{entry.points.toFixed(1)}</span>
-                          </td>
-                          <td style={{ textAlign: 'right', fontSize: '0.8rem', color: entry.prize !== '-' ? '#ffd700' : 'var(--text-muted)', fontWeight: 600 }}>
-                            {entry.prize}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  {/* Prize pool breakdown */}
-                  {(() => {
-                    const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
-                    const pool = Math.round(n * 0.01 * 10000) / 10000;
-                    type Row = { place: string; prize: string; pct: string; color: string };
-                    let breakdown: Row[] = [];
-                    if (contestType === '5050') {
-                      const winners = Math.max(1, Math.floor(n / 2));
-                      const each = winners > 0 ? Math.round((pool / winners) * 10000) / 10000 : 0;
-                      breakdown = [{ place: 'Top 50%', prize: `${each.toFixed(4)} SOL each`, pct: '100%', color: '#10b981' }];
-                    } else if (contestType === 'wta') {
-                      breakdown = [{ place: '1st', prize: `${pool.toFixed(4)} SOL`, pct: '100%', color: '#FFD700' }];
-                    } else {
-                      breakdown = [
-                        { place: '1st', prize: `${(pool * 0.5).toFixed(4)} SOL`, pct: '50%', color: '#FFD700' },
-                        { place: '2nd', prize: `${(pool * 0.3).toFixed(4)} SOL`, pct: '30%', color: '#C0C0C0' },
-                        { place: '3rd', prize: `${(pool * 0.2).toFixed(4)} SOL`, pct: '20%', color: '#CD7F32' },
-                      ];
-                    }
-                    return (
-                      <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                          Prize Pool: {pool.toFixed(4)} SOL · {n} player{n !== 1 ? 's' : ''}
-                        </div>
-                        {breakdown.map((p) => (
-                          <div key={p.place} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <span style={{ fontSize: '0.8rem', color: p.color, fontWeight: 700, width: 50 }}>{p.place}</span>
-                            <div style={{ flex: 1, height: 4, background: 'var(--bg-glass)', borderRadius: 999, margin: '0 10px', overflow: 'hidden' }}>
-                              <div style={{ width: p.pct, height: '100%', background: p.color, borderRadius: 999 }} />
-                            </div>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 600 }}>{p.prize}</span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
               {/* Point Reference */}
               <div className="card">
                 <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -4090,7 +4257,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   ))}
                 </div>
               </div>
-            </div>
+
           </div>
         </div>
       </main>

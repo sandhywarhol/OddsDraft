@@ -44,8 +44,8 @@ export default function SkillCardDisplay({
     card.position === 'Midfielder' ? '#e65100' :
     card.position === 'Winger'     ? '#00838f' : '#6a1b9a';
 
-  // Font sizes scale with card width
-  const fs = (base: number) => `${(base * width) / 200}px`;
+  // Helper to scale font size relative to container width (responsive)
+  const fs = (base: number) => `calc(${base / 200} * 100cqw)`;
 
   // Colorize +number green and -number red inside effect text
   const colorizeEffect = (text: string) =>
@@ -57,11 +57,15 @@ export default function SkillCardDisplay({
 
   return (
     <div
+      className="skill-card-container"
       onClick={selectable ? onSelect : undefined}
       style={{
+        containerType: 'inline-size',
         position: 'relative',
-        width,
-        height,
+        width: '100%',
+        maxWidth: width, // Respect the max width passed via prop on desktop
+        aspectRatio: '810 / 1012.5',
+        height: 'auto',
         flexShrink: 0,
         cursor: selectable ? 'pointer' : 'default',
         transition: 'transform 0.15s ease',

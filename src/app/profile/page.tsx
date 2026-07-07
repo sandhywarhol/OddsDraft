@@ -174,8 +174,8 @@ export default function ProfilePage() {
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
 
-      <main style={{ padding: '48px 0 80px' }}>
-        <div className="container-sm" style={{ maxWidth: '600px', margin: '0 auto' }}>
+      <main style={{ padding: '100px 16px 100px' }}>
+        <div className="container-sm" style={{ maxWidth: '600px', margin: '0 auto', padding: 0 }}>
 
           <div style={{ marginBottom: 32 }}>
             <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: 600, fontSize: '0.9rem' }}>
@@ -239,7 +239,7 @@ export default function ProfilePage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
                   {/* Avatar Section */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '24px' }}>
                     {/* Avatar circle — click to upload */}
                     <button
                       onClick={() => fileInputRef.current?.click()}
@@ -292,7 +292,7 @@ export default function ProfilePage() {
                       {uploadError && (
                         <p style={{ fontSize: '0.78rem', color: 'var(--color-danger)', marginBottom: 8 }}>{uploadError}</p>
                       )}
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         <button
                           className="btn btn--secondary btn--sm"
                           onClick={() => fileInputRef.current?.click()}
@@ -326,7 +326,9 @@ export default function ProfilePage() {
                         borderRadius: '8px',
                         color: 'var(--text-muted)',
                         fontFamily: 'monospace',
-                        fontSize: '0.9rem'
+                        fontSize: '0.9rem',
+                        overflowWrap: 'break-word',
+                        wordBreak: 'break-all'
                       }}>
                         {publicKey?.toString()}
                       </div>
@@ -338,7 +340,7 @@ export default function ProfilePage() {
                         SOL Balance
                       </label>
                       <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16,
                         padding: '12px 16px',
                         background: 'rgba(0,232,122,0.05)',
                         border: '1px solid rgba(0,232,122,0.2)',
@@ -357,18 +359,7 @@ export default function ProfilePage() {
                             )}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {solBalance !== null && solBalance < 0.105 && (
-                            <a
-                              href="https://faucet.solana.com"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn--sm"
-                              style={{ fontSize: '0.75rem', padding: '6px 12px', background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.4)', borderRadius: 6, textDecoration: 'none', fontWeight: 700 }}
-                            >
-                              💧 Get SOL
-                            </a>
-                          )}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           <button
                             onClick={fetchBalance}
                             disabled={balanceLoading}
