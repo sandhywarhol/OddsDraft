@@ -2,7 +2,7 @@
 
 > **Build your 5-a-side squad. Watch the match live. Earn points in real-time. Collect rare Skill Cards.**
 
-🌐 **Live App:** [odds-draft.vercel.app](https://odds-draft.vercel.app)  
+🌐 **Live App:** [oddsdraft.fun](https://oddsdraft.fun)  
 📦 **GitHub:** [github.com/sandhywarhol/OddsDraft](https://github.com/sandhywarhol/OddsDraft)  
 📬 **Telegram Bot:** [@oddsdraftbot](https://t.me/oddsdraftbot)
 
@@ -203,7 +203,7 @@ To experience the full flow without a wallet, click **"Demo Mode"** on any match
 ## Submission — TxODDS Consumer & Fan Experiences Hackathon
 
 ### Application Access
-🌐 [https://odds-draft.vercel.app](https://odds-draft.vercel.app)
+🌐 [https://oddsdraft.fun](https://oddsdraft.fun)
 
 - No login required — connect any Solana wallet (Phantom recommended) or use **Demo Mode**
 - Replay the full lineup tutorial: go to **Match Schedule → Replay Tutorial**

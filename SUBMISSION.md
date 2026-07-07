@@ -5,7 +5,7 @@
 
 ## 1. Application Access
 
-**Live App:** https://odds-draft.vercel.app
+**Live App:** https://oddsdraft.fun
 
 **How to test (no wallet needed):**
 - Visit any match on the **Match Schedule** page
