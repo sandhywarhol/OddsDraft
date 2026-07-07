@@ -4,7 +4,7 @@ import { sendMessage, answerCallbackQuery, formatKickoff } from '@/lib/telegram-
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
 import { calculateEventPoints } from '@/lib/fantasy-engine';
-import { matchPlayerName } from '@/lib/txline-bridge';
+import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 const supabase = createClient(
@@ -209,6 +209,15 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
       return;
     }
 
+    // Build TxLINE PlayerId → internal player ID map for resolving nameless events
+    const apiToken = process.env.TXODDS_API_TOKEN ?? process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
+    let playerIdMap: Record<string, string> = {};
+    if (apiToken && fixture) {
+      try {
+        playerIdMap = await buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam);
+      } catch { /* fall through with empty map */ }
+    }
+
     // Try events from DB first (stored by cron job)
     const { data: dbEvents } = await supabase
       .from('live_match_events')
@@ -238,10 +247,13 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
             const eventType = ACTION_MAP_POINTS[rawType];
             if (!eventType || !SCORING_EVENTS.has(eventType)) continue;
             const rawPName = d.PlayerName ?? ev.Player ?? ev.player ?? '';
-            if (!rawPName) continue;
             const participant: number = d.Participant ?? ev.Participant ?? 1;
             const teamName = participant === 2 ? (fixture?.awayTeam ?? '') : (fixture?.homeTeam ?? '');
-            const resolvedId = matchPlayerName(rawPName, teamName);
+            const txPId = String(d.PlayerId ?? d.Player1Id ?? '');
+            const resolvedId = rawPName
+              ? matchPlayerName(rawPName, teamName)
+              : (txPId ? playerIdMap[txPId] : null);
+            if (!rawPName && !resolvedId) continue;
             const resolved = resolvedId ? WC2026_PLAYERS.find(p => p.id === resolvedId) : null;
             const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
             eventList.push({ event_type: eventType, player_name: resolved?.name ?? rawPName, team_name: teamName, minute });

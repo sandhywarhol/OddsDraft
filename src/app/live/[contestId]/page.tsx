@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { calculateEventPoints, POINT_MAP, getPrizeForRank } from '@/lib/fantasy-engine';
+import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -874,6 +875,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const kickoffFiredRef = useRef(false); // prevents duplicate kickoff synthesis
   // Possession tracking for possession_bonus: count events per team, reset each half
   const possessionCountRef = useRef<Record<number, number>>({ 1: 0, 2: 0 });
+  // Per-half danger attack / corner counts for stats-based scoring
+  const halfDangerCountRef  = useRef<Record<number, number>>({ 1: 0, 2: 0 });
+  const halfCornerCountRef  = useRef<Record<number, number>>({ 1: 0, 2: 0 });
+  // Score snapshot at half-time (to compute second-half goals separately)
+  const htScoreRef = useRef<{ home: number; away: number } | null>(null);
   // Throttle danger_attack events: track last timestamp (ms) per participant to avoid spam
   const lastDangerEventRef = useRef<Record<number, number>>({ 1: 0, 2: 0 });
   const halftimePossAwardedRef = useRef(false);
@@ -1224,6 +1230,56 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, wcFixture]);
 
+  // ── Shared helper: apply stats-based bonuses to lineup at HT/FT ─────────────
+  // Called from both live-mode polling and demo-mode event trigger.
+  const applyStatsBonuses = (stats: HalfStats, minute: number) => {
+    if (!userLineupRef.current?.players?.length) return;
+    const { players, captain, confidence } = userLineupRef.current;
+    const bonuses = evaluateHalfStats(stats);
+    let totalDelta = 0;
+
+    for (const bonus of bonuses) {
+      const bonusTeam = bonus.forTeam === 'home' ? fixture.homeTeam : fixture.awayTeam;
+      const label = STAT_BONUS_LABELS[bonus.eventType] ?? bonus.eventType.replace(/_/g, ' ');
+
+      for (const p of (players as any[])) {
+        if (!p?.id || p.team !== bonusTeam) continue;
+        const basePts = getPositionScore(bonus.eventType, p.position);
+        if (basePts === 0) continue;
+
+        let pts = basePts;
+        if (!appearedPlayersRef.current.has(p.id) && pts > 0) {
+          pts += 2; // implicit appearance
+          appearedPlayersRef.current.add(p.id);
+        }
+        if (captain === p.id) pts *= 2;
+        const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+        pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+        pts = Math.round(pts * 100) / 100;
+        if (pts === 0) continue;
+
+        totalDelta += pts;
+        setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+        setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label, pts, minute }] }));
+      }
+    }
+
+    if (totalDelta !== 0) {
+      setLeaderboard(prev => {
+        const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalDelta) * 100) / 100 } : e);
+        return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+      });
+      const label = minute <= 45 ? 'Half Time Analysis' : 'Full Time Analysis';
+      setActiveToasts(prev => [{
+        id: `toast-stats-${minute}-${Date.now()}`,
+        type: 'possession_bonus' as any,
+        title: label,
+        subtitle: 'Stats bonuses applied',
+        value: totalDelta > 0 ? `+${Math.round(totalDelta * 100) / 100} pts` : `${Math.round(totalDelta * 100) / 100} pts`,
+      }, ...prev]);
+    }
+  };
+
   // ── LIVE MODE: TxLINE API polling ──────────────────────────────────────────
   useEffect(() => {
     if (appMode !== 'live') return;
@@ -1342,6 +1398,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           const cooldownMs = action === 'high_danger_possession' ? 90_000 : 150_000;
           if (now - (lastDangerEventRef.current[pNum] ?? 0) >= cooldownMs) {
             lastDangerEventRef.current[pNum] = now;
+            halfDangerCountRef.current[pNum] = (halfDangerCountRef.current[pNum] ?? 0) + 1;
             const clkSec = u.Clock?.Seconds ?? pd.Clock?.Seconds ?? 0;
             const dangerMin = Math.max(0, Math.floor(clkSec / 60));
             const isHome = pNum === 1;
@@ -1845,36 +1902,33 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             synthEvents.push({ id: `synth-kickoff-${Date.now()}`, minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Kick off! The match has started.' });
           } else if (gs === 'HalfTime') {
             synthEvents.push({ id: `synth-ht-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half time!' });
-            // Award possession_bonus to MID players on the dominant team for the 1st half
+            // ── H1 stats-based bonus evaluation ─────────────────────────────
             if (!halftimePossAwardedRef.current && isMounted) {
               halftimePossAwardedRef.current = true;
               const p1c = possessionCountRef.current[1] ?? 0;
               const p2c = possessionCountRef.current[2] ?? 0;
-              if (p1c + p2c > 10 && userLineupRef.current?.players?.length > 0) {
-                const domPart = p1c >= p2c ? 1 : 2;
-                const domTeam = domPart === 1 ? fixture.homeTeam : fixture.awayTeam;
-                const { players: pbP, captain: pbCap, confidence: pbConf } = userLineupRef.current;
-                let pbBonus = 0;
-                for (const p of (pbP as any[])) {
-                  if (!p?.id || p.position !== 'MID' || p.team !== domTeam) continue;
-                  let pts = 1;
-                  if (pbCap === p.id) pts *= 2;
-                  const stars = (pbConf as Record<string, number>)?.[p.id] ?? 3;
-                  pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-                  pts = Math.round(pts * 100) / 100;
-                  pbBonus += pts;
-                  setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-                  setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'possession bonus', pts, minute: 45 }] }));
-                }
-                if (pbBonus > 0) {
-                  setLeaderboard(prev => {
-                    const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + pbBonus) * 100) / 100 } : e);
-                    return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-                  });
-                  setActiveToasts(prev => [{ id: `toast-poss-ht-${Date.now()}`, type: 'possession_bonus' as any, title: 'Possession Bonus', subtitle: `${domTeam} dominated`, value: `+${Math.round(pbBonus * 100) / 100} pts` }, ...prev]);
-                }
+              const totalPoss = p1c + p2c;
+              const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
+              const awayPct = 100 - homePct;
+              // Count first-half event stats from eventsRef (live events already accumulated)
+              const htStats: HalfStats = {
+                homeGoals:         scoreRef.current.home,
+                awayGoals:         scoreRef.current.away,
+                homeDangers:       halfDangerCountRef.current[1] ?? 0,
+                awayDangers:       halfDangerCountRef.current[2] ?? 0,
+                homeCorners:       halfCornerCountRef.current[1] ?? 0,
+                awayCorners:       halfCornerCountRef.current[2] ?? 0,
+                homePossessionPct: homePct,
+                awayPossessionPct: awayPct,
+              };
+              if (userLineupRef.current?.players?.length > 0) {
+                applyStatsBonuses(htStats, 45);
               }
-              possessionCountRef.current = { 1: 0, 2: 0 }; // Reset counter for 2nd half
+              // Reset per-half counters for second half
+              possessionCountRef.current   = { 1: 0, 2: 0 };
+              halfDangerCountRef.current   = { 1: 0, 2: 0 };
+              halfCornerCountRef.current   = { 1: 0, 2: 0 };
+              htScoreRef.current           = { ...scoreRef.current };
             }
           } else if (gs === 'SecondHalf' && prevGs) {
             synthEvents.push({ id: `synth-so-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' });
@@ -1907,34 +1961,28 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           } else if (gs === 'FullTime') {
             const ftMin = Math.max(90, Math.floor((lastClockSecondsRef.current ?? 90 * 60) / 60));
             synthEvents.push({ id: `synth-ft-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ends at ${ftMin}'.` });
-            // Award possession_bonus for 2nd half
+            // ── H2 stats-based bonus evaluation ─────────────────────────────
             if (!fulltimePossAwardedRef.current && isMounted) {
               fulltimePossAwardedRef.current = true;
               const p1c = possessionCountRef.current[1] ?? 0;
               const p2c = possessionCountRef.current[2] ?? 0;
-              if (p1c + p2c > 10 && userLineupRef.current?.players?.length > 0) {
-                const domPart = p1c >= p2c ? 1 : 2;
-                const domTeam = domPart === 1 ? fixture.homeTeam : fixture.awayTeam;
-                const { players: pbP, captain: pbCap, confidence: pbConf } = userLineupRef.current;
-                let pbBonus = 0;
-                for (const p of (pbP as any[])) {
-                  if (!p?.id || p.position !== 'MID' || p.team !== domTeam) continue;
-                  let pts = 1;
-                  if (pbCap === p.id) pts *= 2;
-                  const stars = (pbConf as Record<string, number>)?.[p.id] ?? 3;
-                  pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-                  pts = Math.round(pts * 100) / 100;
-                  pbBonus += pts;
-                  setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-                  setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'possession bonus', pts, minute: 90 }] }));
-                }
-                if (pbBonus > 0) {
-                  setLeaderboard(prev => {
-                    const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + pbBonus) * 100) / 100 } : e);
-                    return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-                  });
-                  setActiveToasts(prev => [{ id: `toast-poss-ft-${Date.now()}`, type: 'possession_bonus' as any, title: 'Possession Bonus', subtitle: `${domTeam} dominated`, value: `+${Math.round(pbBonus * 100) / 100} pts` }, ...prev]);
-                }
+              const totalPoss = p1c + p2c;
+              const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
+              const awayPct = 100 - homePct;
+              const h2HomeGoals = scoreRef.current.home - (htScoreRef.current?.home ?? 0);
+              const h2AwayGoals = scoreRef.current.away - (htScoreRef.current?.away ?? 0);
+              const ftStats: HalfStats = {
+                homeGoals:         Math.max(0, h2HomeGoals),
+                awayGoals:         Math.max(0, h2AwayGoals),
+                homeDangers:       halfDangerCountRef.current[1] ?? 0,
+                awayDangers:       halfDangerCountRef.current[2] ?? 0,
+                homeCorners:       halfCornerCountRef.current[1] ?? 0,
+                awayCorners:       halfCornerCountRef.current[2] ?? 0,
+                homePossessionPct: homePct,
+                awayPossessionPct: awayPct,
+              };
+              if (userLineupRef.current?.players?.length > 0) {
+                applyStatsBonuses(ftStats, 90);
               }
             }
           }
@@ -2030,6 +2078,30 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               if (!userLineupRef.current) continue;
               const { players, captain, confidence } = userLineupRef.current;
               const matched = players.find((p: any) => p?.id === ev.playerId);
+              // Indirect contribution: MID/SWG from scoring team when scorer not in lineup
+              if (ev.type === 'goal' && ev.team && !matched) {
+                let tcTotal = 0;
+                for (const p of (players as any[])) {
+                  if (!p?.id || p.id === ev.playerId) continue;
+                  if (p.team !== ev.team) continue;
+                  if (p.position !== 'MID' && p.position !== 'SWG') continue;
+                  let pts = 1;
+                  if (!appearedPlayersRef.current.has(p.id)) { pts += 2; appearedPlayersRef.current.add(p.id); }
+                  if (captain === p.id) pts *= 2;
+                  const tcSt = (confidence as Record<string, number>)?.[p.id] ?? 3;
+                  pts *= tcSt === 5 ? 1.5 : tcSt === 4 ? 1.35 : tcSt === 3 ? 1.2 : tcSt === 2 ? 1.1 : 1.0;
+                  pts = Math.round(pts * 100) / 100;
+                  tcTotal += pts;
+                  setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+                  setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'team contribution', pts, minute: ev.minute }] }));
+                }
+                if (tcTotal !== 0) {
+                  setLeaderboard(prev => {
+                    const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + tcTotal) * 100) / 100 } : e);
+                    return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+                  });
+                }
+              }
               if (!matched) continue;
               if (ev.type === 'goal' && matched.position === 'GK') continue;
               let rawPts = calculateEventPoints(ev.type, matched.position);
@@ -2109,6 +2181,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         // Telegram notifications are handled server-side by /api/cron/match-events
         // to avoid duplicates (cron has deduplication via notified_events table).
 
+        // Track per-half stats for corner kicks and danger attacks
+        for (const ev of newEvents) {
+          if (ev.type === 'corner_kick' && ev.team) {
+            const pNum = ev.team === fixture.homeTeam ? 1 : 2;
+            halfCornerCountRef.current[pNum] = (halfCornerCountRef.current[pNum] ?? 0) + 1;
+          }
+          // danger_attack tracking is already done in convertPossessionAction via halfDangerCountRef
+        }
+
         // Fantasy points + toasts for every event
         for (const ev of newEvents) {
           if (!userLineupRef.current) continue;
@@ -2146,6 +2227,30 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           let matched = players.find((p: any) => p && p.id === ev.playerId);
           if (!matched && (ev.type === 'goalkeeper_save' || ev.type === 'penalty_save') && !ev.playerId) {
             matched = (players as any[]).find((p: any) => p && p.position === 'GK' && p.team === ev.team);
+          }
+          // Indirect contribution: MID/SWG from scoring team when scorer not in lineup
+          if (ev.type === 'goal' && ev.team && !matched) {
+            let tcTotal = 0;
+            for (const p of (players as any[])) {
+              if (!p?.id || p.id === ev.playerId) continue;
+              if (p.team !== ev.team) continue;
+              if (p.position !== 'MID' && p.position !== 'SWG') continue;
+              let pts = 1;
+              if (!appearedPlayersRef.current.has(p.id)) { pts += 2; appearedPlayersRef.current.add(p.id); }
+              if (captain === p.id) pts *= 2;
+              const tcSt = (confidence as Record<string, number>)?.[p.id] ?? 3;
+              pts *= tcSt === 5 ? 1.5 : tcSt === 4 ? 1.35 : tcSt === 3 ? 1.2 : tcSt === 2 ? 1.1 : 1.0;
+              pts = Math.round(pts * 100) / 100;
+              tcTotal += pts;
+              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'team contribution', pts, minute: ev.minute }] }));
+            }
+            if (tcTotal !== 0) {
+              setLeaderboard(prev => {
+                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + tcTotal) * 100) / 100 } : e);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+              });
+            }
           }
           if (!matched) continue;
 
@@ -2495,6 +2600,51 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }));
       }
 
+      // ── Demo: half_time stats evaluation (H1 stats) ─────────────────────────
+      if (event.type === 'half_time') {
+        const htPastEvents = matchEvents.slice(0, currentEventIdx + 1);
+        const p1c = possessionCountRef.current[1] ?? 0;
+        const p2c = possessionCountRef.current[2] ?? 0;
+        const totalP = p1c + p2c;
+        const homePct = totalP > 0 ? Math.round((p1c / totalP) * 100) : 50;
+        const h1Stats: HalfStats = {
+          homeGoals:         htPastEvents.filter((e: any) => e.type === 'goal' && e.team === fixture.homeTeam).length,
+          awayGoals:         htPastEvents.filter((e: any) => e.type === 'goal' && e.team === fixture.awayTeam).length,
+          homeDangers:       htPastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.homeTeam).length,
+          awayDangers:       htPastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.awayTeam).length,
+          homeCorners:       htPastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.homeTeam).length,
+          awayCorners:       htPastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.awayTeam).length,
+          homePossessionPct: homePct,
+          awayPossessionPct: 100 - homePct,
+        };
+        htScoreRef.current = { ...scoreRef.current };
+        applyStatsBonuses(h1Stats, 45);
+      }
+
+      // ── Demo: full_time stats evaluation (H2 stats) ──────────────────────────
+      if (event.type === 'full_time') {
+        const htIdx = matchEvents.findIndex((e: any) => e.type === 'half_time');
+        const h2Start = htIdx >= 0 ? htIdx + 1 : 0;
+        const h2PastEvents = matchEvents.slice(h2Start, currentEventIdx + 1);
+        const p1c = possessionCountRef.current[1] ?? 0;
+        const p2c = possessionCountRef.current[2] ?? 0;
+        const totalP2 = p1c + p2c;
+        const homePct2 = totalP2 > 0 ? Math.round((p1c / totalP2) * 100) : 50;
+        const h2HomeGoals = scoreRef.current.home - (htScoreRef.current?.home ?? 0);
+        const h2AwayGoals = scoreRef.current.away - (htScoreRef.current?.away ?? 0);
+        const h2Stats: HalfStats = {
+          homeGoals:         Math.max(0, h2HomeGoals),
+          awayGoals:         Math.max(0, h2AwayGoals),
+          homeDangers:       h2PastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.homeTeam).length,
+          awayDangers:       h2PastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.awayTeam).length,
+          homeCorners:       h2PastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.homeTeam).length,
+          awayCorners:       h2PastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.awayTeam).length,
+          homePossessionPct: homePct2,
+          awayPossessionPct: 100 - homePct2,
+        };
+        applyStatsBonuses(h2Stats, 90);
+      }
+
       // At full_time: award clean sheet bonus to eligible lineup players
       if (event.type === 'full_time' && userLineupRef.current) {
         const { players: csPlayers, captain: csCaptain, confidence: csConf } = userLineupRef.current;
@@ -2586,6 +2736,56 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           ...prev,
           [pid]: [...(prev[pid] ?? []), { label: event.type.replace(/_/g, ' '), pts: rnd, minute: event.minute }],
         }));
+      }
+
+      // ── Indirect contribution (demo mode) ──────────────────────────────────────
+      // When a goal scorer is NOT in the lineup:
+      //   • MID / SWG from scoring team  → +1 (indirect contribution)
+      //   • GK / DEF on conceding team (no upcoming explicit event) → -1
+      if (event.type === 'goal' && event.team && userLineupRef.current) {
+        const { players: lpAll, captain: lpCap, confidence: lpConf } = userLineupRef.current;
+        const scoringTeam = event.team;
+        const scorerInLineup = !!(lpAll as any[]).find((p: any) => p?.id === event.playerId);
+        let indirectTotal = 0;
+
+        for (const p of (lpAll as any[])) {
+          if (!p?.id || p.id === event.playerId) continue;
+          const onScoringTeam = p.team === scoringTeam;
+          let basePts = 0;
+          let label = '';
+
+          if (!scorerInLineup && onScoringTeam && (p.position === 'MID' || p.position === 'SWG')) {
+            basePts = 1;
+            label = 'team contribution';
+          } else if (!onScoringTeam && (p.position === 'GK' || p.position === 'DEF')) {
+            // Skip if an explicit goal_conceded event is coming for this player
+            const hasExplicit = matchEvents
+              .slice(currentEventIdx + 1)
+              .some((me: any) => me.type === 'goal_conceded' && me.playerId === p.id);
+            if (!hasExplicit) { basePts = -1; label = 'goal conceded'; }
+          }
+
+          if (basePts === 0) continue;
+          let pts = basePts;
+          if (basePts > 0 && !appearedPlayersRef.current.has(p.id)) {
+            pts += 2;
+            appearedPlayersRef.current.add(p.id);
+          }
+          if (lpCap === p.id) pts *= 2;
+          const indSt = (lpConf as Record<string, number>)?.[p.id] ?? 3;
+          pts *= indSt === 5 ? 1.5 : indSt === 4 ? 1.35 : indSt === 3 ? 1.2 : indSt === 2 ? 1.1 : 1.0;
+          pts = Math.round(pts * 100) / 100;
+          indirectTotal += pts;
+          setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+          setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label, pts, minute: event.minute }] }));
+        }
+
+        if (indirectTotal !== 0) {
+          setLeaderboard(prev => {
+            const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + indirectTotal) * 100) / 100 } : e);
+            return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+          });
+        }
       }
 
       // Fantasy Point Notification Trigger (Safe single-trigger outside leaderboard setter)

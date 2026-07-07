@@ -220,7 +220,7 @@ export default function ContestsPage() {
           </a>
 
           {/* Header */}
-          <div style={{
+          <div className="contests-header-banner" style={{
             marginBottom: 40,
             display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20,
             position: 'relative',

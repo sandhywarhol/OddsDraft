@@ -3,6 +3,8 @@ import './globals.css';
 import { AudioProvider } from '@/context/AudioContext';
 import ClientWalletProvider from '@/components/ClientWalletProvider';
 import VideoBackground from '@/components/VideoBackground';
+import MobileSplash from '@/components/MobileSplash';
+import MobileTabBar from '@/components/MobileTabBar';
 
 export const metadata: Metadata = {
   title: 'OddsDraft — Predictive Fantasy Football | World Cup 2026',
@@ -26,8 +28,10 @@ export default function RootLayout({
       <body>
         <ClientWalletProvider>
           <AudioProvider>
+            <MobileSplash />
             <VideoBackground />
             {children}
+            <MobileTabBar />
           </AudioProvider>
         </ClientWalletProvider>
       </body>

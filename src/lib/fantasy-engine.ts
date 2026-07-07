@@ -1,22 +1,25 @@
 // Fantasy Points Engine — OddsDraft
 // Calculates fantasy points based on TxLINE Soccer API events
+// All scoring values are sourced from src/lib/scoring-bank.ts
 
+import { getPositionScore, POSITION_SCORING } from './scoring-bank';
+export { getPositionScore, POSITION_SCORING };
+
+// Legacy flat map — kept only for callers that pass a pre-computed event without a position.
+// Prefer getPositionScore(event, position) for all new code.
 export const POINT_MAP: Record<string, number> = {
-  // Negative events — available directly from TxLINE dataSoccer
   yellow_card:             -2,
   red_card:                -5,
   own_goal:                -6,
   penalty_conceded:        -3,
   penalty_missed:          -3,
   penalty_missed_shootout: -3,
-  // Positive flat-rate events
-  assist:           6,  // dataSoccer.assistPlayerId embedded in goal events
-  goalkeeper_save:  1,  // dataSoccer.save — GK only
-  penalty_save:     5,  // dataSoccer.penaltysave — GK only
-  possession_bonus: 1,  // inferred from possession stream at half/full time — MID only
-  sub_appearance:   1,  // dataSoccer.PlayerInId
-  penalty_scored:   5,  // goal during gameState=Penalties (shootout)
-  extra_time:       2,  // appearance bonus when gameState transitions to ExtraTime
+  assist:                   6,
+  goalkeeper_save:          1,
+  possession_bonus:         1,
+  sub_appearance:           1,
+  penalty_scored:           5,
+  extra_time:               2,
 };
 
 // Confidence multiplier: 1★ to 5★
@@ -82,61 +85,16 @@ export interface FantasyResult {
 }
 
 export function calculateEventPoints(eventType: string, position: string = 'ATT'): number {
-  switch (eventType) {
-    // Starting XI appearance — TxLINE lineups[].starter = true
-    case 'starting_xi':
-      return 2;
-    // Substitute appearance — TxLINE dataSoccer.PlayerInId
-    case 'sub_appearance':
-      return 1;
-    // Extra time appearance — TxLINE gameState = ExtraTime
-    case 'extra_time':
-      return 2;
-    // Goal — position-based (higher reward for unlikely goalscorers)
-    case 'goal':
-      if (position === 'GK') return 20;
-      if (position === 'DEF') return 15;
-      if (position === 'MID') return 12;
-      if (position === 'SWG') return 11; // winger — between MID and ATT
-      return 10; // ATT
-    // Penalty shootout goal — flat bonus for all
-    case 'penalty_scored':
-      return 5;
-    // Assist — TxLINE dataSoccer.assistPlayerId embedded in goal events
-    case 'assist':
-      return 6;
-    // Goalkeeper save — TxLINE dataSoccer.save, GK only
-    case 'goalkeeper_save':
-      return position === 'GK' ? 1 : 0;
-    // Penalty save — TxLINE dataSoccer.penaltysave, GK only
-    case 'penalty_save':
-      return position === 'GK' ? 5 : 0;
-    // Clean sheet — inferred from scoreSoccer.Total.Goals = 0 at full_time
-    case 'clean_sheet':
-      if (position === 'GK' || position === 'DEF') return 5;
-      if (position === 'MID' || position === 'SWG') return 1;
-      return 0;
-    // Penalty won — big bonus for defensive players who rarely win it
-    case 'penalty_won':
-      if (position === 'DEF' || position === 'GK') return 6;
-      if (position === 'SWG') return 4; // wingers dribble into the box often
-      return 3;
-    // Goal conceded — small penalty for GK/DEF only
-    case 'goal_conceded':
-      if (position === 'GK' || position === 'DEF') return -1;
-      return 0;
-    // Possession bonus — MID only, inferred from possession stream per half
-    case 'possession_bonus':
-      return position === 'MID' ? 1 : 0;
-    // Display-only events — no points
-    case 'danger_attack':
-    case 'corner_kick':
-    case 'var_review':
-    case 'substitution':
-      return 0;
-    default:
-      return POINT_MAP[eventType] ?? 0;
-  }
+  // Display-only events — skip bank lookup for performance
+  if (eventType === 'danger_attack' || eventType === 'corner_kick' ||
+      eventType === 'var_review'    || eventType === 'substitution') return 0;
+
+  // Delegate to the scoring bank (covers all known event types)
+  const banked = getPositionScore(eventType, position as any);
+  if (banked !== 0) return banked;
+
+  // Fall through to legacy flat map for any event the bank doesn't define
+  return POINT_MAP[eventType] ?? 0;
 }
 
 export function calculateFantasyPoints(

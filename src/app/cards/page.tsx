@@ -7,7 +7,6 @@ import SkillCardDisplay from '@/components/SkillCardDisplay';
 import {
   getCollectionWithDefs,
   equipCard,
-  unequipCard,
   getEquippedCardInstance,
   combineCards,
   canCombine,
@@ -640,7 +639,7 @@ export default function CardsPage() {
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 24px 80px' }}>
 
         {/* Header */}
-        <div style={{
+        <div className="contests-header-banner" style={{
           marginBottom: 40,
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 20,
           position: 'relative',
@@ -755,7 +754,7 @@ export default function CardsPage() {
           border: '1px solid rgba(33,150,243,0.15)',
           borderRadius: 12,
           padding: '14px 18px',
-          marginBottom: 24,
+          marginBottom: 16,
           fontSize: 12,
           color: 'rgba(255,255,255,0.6)',
           lineHeight: 1.6,
@@ -763,6 +762,71 @@ export default function CardsPage() {
           <span style={{ color: '#2196f3', fontWeight: 700 }}>How Cards Work: </span>
           Equip a Skill Card to a player before kickoff. After the Fantasy Engine calculates points, your card adds a fixed bonus for matching events (e.g. a Striker with "Golden Boot" earns +1.50 pts per goal scored). Cards are locked after kickoff.
           Cards are earned automatically after each match ends. Rarity ranges from Common to SSSR.
+        </div>
+
+        {/* Card Combine System */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(255,215,0,0.06) 0%, rgba(255,100,0,0.06) 100%)',
+          border: '1px solid rgba(255,215,0,0.2)',
+          borderRadius: 12,
+          padding: '20px 22px',
+          marginBottom: 24,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 20 }}>⚗️</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#ffd700', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Card Combine System</span>
+          </div>
+
+          {/* Steps */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+            {[
+              { step: '1', icon: '🎴', label: 'Collect 2 copies', desc: 'Earn the same card twice from match rewards. Duplicates stack automatically.' },
+              { step: '2', icon: '⚗️', label: 'Click COMBINE', desc: 'A ⚗️ COMBINE badge appears on the card. Click it to open the combine screen.' },
+              { step: '3', icon: '✨', label: 'Get higher rarity', desc: '2 source cards are consumed and you receive 1 random card of the next rarity tier.' },
+            ].map(item => (
+              <div key={item.step} style={{
+                flex: '1 1 160px',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,215,0,0.12)',
+                borderRadius: 10,
+                padding: '12px 14px',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: '50%',
+                    background: 'rgba(255,215,0,0.2)', border: '1px solid rgba(255,215,0,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 900, color: '#ffd700', flexShrink: 0,
+                  }}>{item.step}</div>
+                  <span style={{ fontSize: 13 }}>{item.icon}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{item.label}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5, paddingLeft: 30 }}>
+                  {item.desc}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Rarity chain */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginRight: 4 }}>RARITY CHAIN:</span>
+            {(['Common', 'Rare', 'Epic', 'Legendary', 'SSR', 'SSSR'] as const).map((r, i, arr) => (
+              <span key={r} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
+                  background: `${RARITY_COLOR[r]}18`,
+                  border: `1px solid ${RARITY_COLOR[r]}44`,
+                  color: RARITY_COLOR[r],
+                }}>{r}</span>
+                {i < arr.length - 1 && <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>→</span>}
+              </span>
+            ))}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+            SSSR is the maximum rarity. Cards at max rarity cannot be combined further.
+          </div>
         </div>
 
         {/* Filters + sort */}
@@ -883,7 +947,7 @@ export default function CardsPage() {
 
         {/* Card grid */}
         {filtered.length > 0 && (
-          <div style={{
+          <div className="cards-grid-mobile" style={{
             display: 'flex',
             flexWrap: 'wrap',
             gap: 16,

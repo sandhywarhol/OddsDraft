@@ -201,17 +201,10 @@ export default function Navbar() {
           zIndex: 200,
           boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
         }}>
-          <Link href="/contests" className={`navbar__link ${pathname === '/contests' || pathname?.startsWith('/lineup') ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>Match Schedule</Link>
-          <Link href="/teams" className={`navbar__link ${pathname === '/teams' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>Teams</Link>
-          <Link href="/leaderboard" className={`navbar__link ${pathname === '/leaderboard' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>Leaderboard</Link>
-          <Link href="/cards" className={`navbar__link ${pathname === '/cards' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>My Cards</Link>
-          <Link href="/how-it-works" className={`navbar__link ${pathname === '/how-it-works' ? 'navbar__link--active' : ''}`} onClick={() => setMobileOpen(false)}>How It Works</Link>
+          {/* Mobile dropdown: only show mode toggle (admin) + wallet. Nav links are in the bottom tab bar. */}
           {connected && (
             <Link href="/profile" className="navbar__link" onClick={() => setMobileOpen(false)}>Profile</Link>
           )}
-
-          {/* Divider */}
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '4px 0' }} />
 
           {/* Mode toggle — admin only */}
           {isAdmin && (

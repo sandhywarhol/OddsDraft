@@ -312,7 +312,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       }
     }
 
-    if (tutorialStep < 6) {
+    if (tutorialStep < 7) {
       const nextStep = tutorialStep + 1;
       const nextData = getTutorialData(nextStep);
       const targetId = nextData?.targetId;
@@ -934,7 +934,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   letterSpacing: '0.05em'
                 }}>
                   Click anywhere to continue 
-                  <span style={{ marginLeft: 8 }}>({tutorialStep}/6)</span>
+                  <span style={{ marginLeft: 8 }}>({tutorialStep}/7)</span>
                 </div>
               </div>
               
@@ -1329,7 +1329,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   }));
 
                   return (
-                    <div className="ro-window">
+                    <div className="ro-window" id="skill-card-section">
                       <div className="ro-window__header">
                         <span>🎴 Skill Card Equipment</span>
                         <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>Equip before kickoff — locked at match start</span>
@@ -1861,7 +1861,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 2:
       return {
         speakerTitle: 'Guide',
-        text: `"You need to fill these 5 specific positions: Goalkeeper, 2 Defenders, 1 Midfielder, and 1 Attacker."`,
+        text: `"You need to fill 5 positions: Goalkeeper, Defender, Midfielder, Swinger (wing player LW/RW), and Forward. Each position earns points differently!"`,
         image: '/NPC/NPC Guide Male.svg',
         position: 'right',
         targetId: 'lineup-grid',
@@ -1897,6 +1897,14 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
         image: '/NPC/NPC Guide Male.svg',
         position: 'right',
         targetId: 'submit-button',
+      };
+    case 7:
+      return {
+        speakerTitle: 'Guide',
+        text: `"Bonus tip! You can equip a Skill Card to each player for extra points. Earn cards after every match — and if you collect 2 copies of the same card, combine them into a higher rarity for even stronger bonuses. Check My Cards to manage your collection!"`,
+        image: '/NPC/NPC Guide Female.svg',
+        position: 'left',
+        targetId: 'skill-card-section',
       };
     default:
       return null;

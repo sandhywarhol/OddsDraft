@@ -4,7 +4,7 @@ import { sendMessage, formatMatchEvent } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
 import { calculateEventPoints } from '@/lib/fantasy-engine';
-import { matchPlayerName } from '@/lib/txline-bridge';
+import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 const supabase = createClient(
@@ -128,6 +128,12 @@ export async function GET(req: NextRequest) {
 
       if (newEvents.length === 0) continue;
 
+      // Build TxLINE PlayerId → internal player ID map for name resolution
+      const apiToken = process.env.TXODDS_API_TOKEN ?? process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
+      const playerIdMap: Record<string, string> = apiToken
+        ? await buildPlayerIdMap(apiToken, fixture.fixtureId, fixture.homeTeam, fixture.awayTeam)
+        : {};
+
       // Fetch subscribers for this match
       const { data: subs } = await supabase
         .from('telegram_subscriptions')
@@ -157,7 +163,10 @@ export async function GET(req: NextRequest) {
           const rawPName = d.PlayerName ?? ev.Player ?? ev.player ?? '';
           const participant: number = d.Participant ?? ev.Participant ?? 1;
           const tName = participant === 2 ? fixture.awayTeam : fixture.homeTeam;
-          const rId = rawPName ? matchPlayerName(rawPName, tName) : null;
+          const txPId = String(d.PlayerId ?? d.Player1Id ?? '');
+          const rId = rawPName
+            ? matchPlayerName(rawPName, tName)
+            : (txPId ? playerIdMap[txPId] : null);
           const rPlayer = rId ? WC2026_PLAYERS.find(p => p.id === rId) : null;
           return {
             fixture_id: fixture.fixtureId,
@@ -189,7 +198,10 @@ export async function GET(req: NextRequest) {
 
         // Resolve primary player name
         const rawPlayerName = evData.PlayerName ?? ev.Player ?? ev.player ?? '';
-        const resolvedId = rawPlayerName ? matchPlayerName(rawPlayerName, teamName) : null;
+        const txPId2 = String(evData.PlayerId ?? evData.Player1Id ?? '');
+        const resolvedId = rawPlayerName
+          ? matchPlayerName(rawPlayerName, teamName)
+          : (txPId2 ? playerIdMap[txPId2] : null);
         const resolvedPlayer = resolvedId ? WC2026_PLAYERS.find(p => p.id === resolvedId) : null;
         const playerName = resolvedPlayer?.name ?? rawPlayerName;
 
@@ -272,12 +284,15 @@ export async function GET(req: NextRequest) {
               for (const ev of scoringEvents) {
                 const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
                 const eventType = ACTION_MAP[rt] ?? rt;
-                const rawPName = (ev.Player ?? ev.player ?? '').trim();
-                const evTeam = (ev.Team ?? ev.team ?? '').trim();
-                if (!rawPName) continue;
-
-                // Resolve to our internal ID first (most reliable) then fall back to fuzzy name match
-                const txResolvedId = matchPlayerName(rawPName, evTeam);
+                const evData3 = ev.Data?.New ?? ev.Data ?? {};
+                const rawPName = (evData3.PlayerName ?? ev.Player ?? ev.player ?? '').trim();
+                const evParticipant: number = evData3.Participant ?? ev.Participant ?? 1;
+                const evTeam = evParticipant === 2 ? fixture.awayTeam : fixture.homeTeam;
+                const txPId3 = String(evData3.PlayerId ?? evData3.Player1Id ?? '');
+                const txResolvedId = rawPName
+                  ? matchPlayerName(rawPName, evTeam)
+                  : (txPId3 ? playerIdMap[txPId3] : null);
+                if (!txResolvedId && !rawPName) continue;
                 const displayName = txResolvedId
                   ? (WC2026_PLAYERS.find(p => p.id === txResolvedId)?.name ?? rawPName)
                   : rawPName;
