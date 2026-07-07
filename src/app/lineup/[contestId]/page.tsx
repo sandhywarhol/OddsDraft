@@ -809,6 +809,35 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const shouldBlurLineupBg = tutorialStep === 1;
   return (
     <>
+    {/* Floating Replay Tutorial button — always visible bottom-right */}
+    {tutorialStep === 0 && (
+      <button
+        onClick={() => {
+          localStorage.removeItem('hasSeenLineupTutorial');
+          setTutorialStep(1);
+        }}
+        style={{
+          position: 'fixed',
+          bottom: 88,
+          right: 16,
+          zIndex: 9980,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '8px 14px',
+          fontSize: '0.72rem', fontWeight: 700,
+          color: '#fbf0b9',
+          background: 'rgba(20,16,8,0.92)',
+          border: '1px solid rgba(251,240,185,0.35)',
+          borderRadius: 20,
+          cursor: 'pointer',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        ▶ Tutorial
+      </button>
+    )}
     <div style={{ minHeight: '100vh', paddingBottom: '100px', background: 'transparent', overflowX: 'hidden' }}>
       <Navbar />
 
@@ -946,31 +975,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           <div className="container">
             {/* Header */}
             <div style={{ marginBottom: 32 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <Link href="/contests" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  ← Back to Contests
-                </Link>
-                <button
-                  onClick={() => {
-                    localStorage.removeItem('hasSeenLineupTutorial');
-                    setTutorialStep(1);
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '5px 12px',
-                    fontSize: '0.72rem', fontWeight: 700,
-                    color: '#fbf0b9',
-                    background: 'rgba(251,240,185,0.08)',
-                    border: '1px solid rgba(251,240,185,0.3)',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  ▶ Tutorial
-                </button>
-              </div>
+              <Link href="/contests" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                ← Back to Contests
+              </Link>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <div id="lineup-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>
