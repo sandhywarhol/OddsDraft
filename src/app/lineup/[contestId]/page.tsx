@@ -426,6 +426,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     } else {
       localStorage.setItem('hasSeenLineupTutorial', 'true');
       setTutorialStep(0);
+      if (isReplayTutorial) {
+        router.push('/contests');
+        return;
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
       // Reset demo lineup
       setLineup([null, null, null, null, null]);
