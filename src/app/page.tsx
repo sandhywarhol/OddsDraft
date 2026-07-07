@@ -873,21 +873,27 @@ function Footer() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 32, marginBottom: 32 }}>
 
           {/* Logo + tagline */}
-          <div style={{ minWidth: 200 }}>
-            <div style={{ display: 'inline-block', background: '#030810', borderRadius: 8, padding: '6px 8px', border: '1px solid rgba(41,182,246,0.2)', marginBottom: 10 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#030810', borderRadius: 8, padding: '6px 12px', border: '1px solid rgba(41,182,246,0.2)', marginBottom: 10, width: 'fit-content' }}>
+              <img
+                src="/2026_FIFA_World_Cup_emblem.svg"
+                alt="World Cup 26 Logo"
+                style={{ height: '40px', objectFit: 'contain', display: 'block' }}
+              />
+              <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.2)' }} />
               <img
                 src="/Logo OddsDraft.svg"
                 alt="OddsDraft Logo"
-                style={{ height: '36px', objectFit: 'contain', display: 'block', mixBlendMode: 'screen' }}
+                style={{ height: '30px', objectFit: 'contain', display: 'block', mixBlendMode: 'screen' }}
               />
             </div>
-            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5, maxWidth: 200 }}>
+            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5, maxWidth: 240 }}>
               Fantasy Football.<br />On-chain. Real-time. World Cup '26.
             </p>
           </div>
 
           {/* Center — power stats */}
-          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center', flex: 1 }}>
             {[
               { label: 'DATA SOURCE', value: 'TxODDS', sub: 'Live Football API' },
               { label: 'BLOCKCHAIN', value: 'SOLANA', sub: 'Ultra-fast L1' },
@@ -902,15 +908,25 @@ function Footer() {
           </div>
 
           {/* Right — links */}
-          <div style={{ minWidth: 140 }}>
-            <div style={{ fontSize: '0.55rem', color: '#29b6f6', fontWeight: 700, letterSpacing: '0.15em', marginBottom: 10 }}>CONNECT</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 140, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <div style={{ width: '100%', maxWidth: 140 }}>
+              <div style={{ fontSize: '0.55rem', color: '#29b6f6', fontWeight: 700, letterSpacing: '0.15em', marginBottom: 10 }}>CONNECT</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <a href="https://t.me/OddsDraftBot" target="_blank" rel="noopener noreferrer"
                 style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#29b6f6')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.02 9.522c-.149.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.88 14.376l-2.95-.924c-.642-.2-.654-.642.136-.95l11.52-4.44c.535-.194 1.003.13.976.186z"/></svg>
                 Telegram
+              </a>
+              <a href="https://x.com/chainvolio" target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#1DA1F2')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                @ChainVolio
               </a>
               <a href="https://txline-docs.txodds.com" target="_blank" rel="noopener noreferrer"
                 style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
@@ -920,6 +936,7 @@ function Footer() {
                 TxODDS Docs
               </a>
             </div>
+            </div>
           </div>
         </div>
 
@@ -928,8 +945,9 @@ function Footer() {
 
         {/* Bottom bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>
-            © 2026 OddsDraft · All rights reserved
+          <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em', lineHeight: 1.6 }}>
+            © 2026 OddsDraft · All rights reserved <br />
+            Created by <span style={{ color: '#fff', fontWeight: 600 }}>Sandhy Warhol</span>, creator of <span style={{ color: '#00e5ff', fontWeight: 600 }}>ChainVolio</span>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {['BETA', 'SOLANA', 'WC26'].map(tag => (
