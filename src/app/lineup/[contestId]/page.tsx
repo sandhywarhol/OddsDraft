@@ -957,18 +957,18 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '4px 10px',
-                    fontSize: '0.7rem', fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    padding: '5px 12px',
+                    fontSize: '0.72rem', fontWeight: 700,
+                    color: '#fbf0b9',
+                    background: 'rgba(251,240,185,0.08)',
+                    border: '1px solid rgba(251,240,185,0.3)',
                     borderRadius: 6,
                     cursor: 'pointer',
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
                   }}
                 >
-                  ▶ Replay Tutorial
+                  ▶ Tutorial
                 </button>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
