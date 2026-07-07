@@ -21,7 +21,7 @@ export default function HomePage() {
   }, [router]);
 
   return (
-    <div style={{ minHeight: '100vh', background: 'transparent', overflowX: 'hidden' }}>
+    <main style={{ minHeight: '100vh', background: 'transparent', overflowX: 'hidden' }}>
       <Navbar />
 
       <HeroSection />
@@ -38,7 +38,7 @@ export default function HomePage() {
           color: #f8fafc;
         }
       `}</style>
-    </div>
+    </main>
   );
 }
 

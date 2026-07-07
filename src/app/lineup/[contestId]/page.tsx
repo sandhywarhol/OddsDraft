@@ -946,9 +946,31 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           <div className="container">
             {/* Header */}
             <div style={{ marginBottom: 32 }}>
-              <Link href="/contests" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                ← Back to Contests
-              </Link>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <Link href="/contests" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  ← Back to Contests
+                </Link>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('hasSeenLineupTutorial');
+                    setTutorialStep(1);
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '4px 10px',
+                    fontSize: '0.7rem', fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  ▶ Replay Tutorial
+                </button>
+              </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <div id="lineup-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>

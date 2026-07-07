@@ -633,7 +633,7 @@ export default function CardsPage() {
   });
 
   return (
-    <div style={{ minHeight: '100vh', background: 'transparent' }}>
+    <main style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '48px 24px 80px' }}>
@@ -1059,6 +1059,6 @@ export default function CardsPage() {
           onSuccess={() => { setCombineTarget(null); reload(); }}
         />
       )}
-    </div>
+    </main>
   );
 }
