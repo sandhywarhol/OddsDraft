@@ -34,7 +34,7 @@ export interface Contest {
 export interface LineupPlayer {
   id: string;
   name: string;
-  position: 'GK' | 'DEF' | 'MID' | 'ATT';
+  position: 'GK' | 'DEF' | 'MID' | 'ATT' | 'SWG';
   team: string;
   teamFlag: string;
   photoUrl?: string;
@@ -93,7 +93,7 @@ export interface PlayerRecommendation {
   undervalued: LineupPlayer & { reason: string };
 }
 
-export type Position = 'GK' | 'DEF' | 'MID' | 'ATT';
+export type Position = 'GK' | 'DEF' | 'MID' | 'ATT' | 'SWG';
 export type ContestStatus = 'upcoming' | 'lineup_open' | 'locked' | 'live' | 'finished';
 
 // Game rules
@@ -104,4 +104,5 @@ export const POSITION_LABELS: Record<Position, string> = {
   DEF: 'Defender',
   MID: 'Midfielder',
   ATT: 'Attacker',
+  SWG: 'Swinger',
 };

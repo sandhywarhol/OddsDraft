@@ -383,7 +383,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 4:
       return {
         speakerTitle: 'Guide',
-        text: `"Step 2: Build your lineup by picking 5 players (GK, DEF, MID, DEF, ATT) from the competing teams."`,
+        text: `"Step 2: Build your lineup by picking 5 players (GK, DEF, MID, SWG, FWD) from the competing teams."`,
         image: '/NPC/NPC Guide Male.svg',
         position: 'right',
         targetId: 'step-02',
@@ -984,7 +984,7 @@ function HowItWorksSection() {
     {
       step: '02',
       title: 'Build Your Lineup',
-      desc: 'Pick 5 players (GK, DEF, MID, DEF, ATT) from the two competing teams.',
+      desc: 'Pick 5 players (GK, DEF, MID, SWG, FWD) from the two competing teams. Swinger = wing player (LW/RW).',
       icon: '🧩',
       color: '#00e87a',
     },

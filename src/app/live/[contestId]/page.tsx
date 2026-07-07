@@ -3319,10 +3319,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                   fontWeight: 700, fontFamily: 'Inter, sans-serif',
                                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1,
                                 }}>
-                                  {p.position === 'GK' ? 'Goalkeeper' : p.position === 'DEF' ? 'Defender' : p.position === 'MID' ? 'Midfielder' : p.position === 'ATT' ? 'Attacker' : 'Forward'}
+                                  {p.position === 'GK' ? 'Goalkeeper' : p.position === 'DEF' ? 'Defender' : p.position === 'MID' ? 'Midfielder' : p.position === 'SWG' ? 'Swinger' : 'Forward'}
                                 </span>
                                 <span style={{
-                                  background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : '#6a1b9a',
+                                  background: p.position === 'GK' ? '#1565c0' : p.position === 'DEF' ? '#2e7d32' : p.position === 'MID' ? '#e65100' : p.position === 'SWG' ? '#c2410c' : '#6a1b9a',
                                   color: '#fff', border: '1px solid #36220f', borderRadius: 0,
                                   padding: '1px 3px', fontSize: `calc(0.38rem * ${cs})`, fontWeight: 900,
                                   fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', flexShrink: 0,

@@ -61,30 +61,30 @@ const SLOTS = [
   { label: 'GK', filter: 'GK' },
   { label: 'DEF (CB/LB/RB)', filter: 'DEF' },
   { label: 'MID (CMF/AMF)', filter: 'MID' },
-  { label: 'FLEX DEF', filter: 'DEF' },
-  { label: 'FWD (CF/SS/RW)', filter: 'ATT' },
+  { label: 'SWINGER (LW/RW)', filter: 'SWG' },
+  { label: 'FWD (CF/SS)', filter: 'ATT' },
 ];
 
 const getPositionColor = (label: string) => {
   if (label.includes('GK')) return '#1d4ed8'; // Blue
-  if (label.includes('DEF (CB')) return '#15803d'; // Green
+  if (label.includes('DEF')) return '#15803d'; // Green
   if (label.includes('MID')) return '#b45309'; // Amber/Orange
-  if (label.includes('FLEX')) return '#6d28d9'; // Purple
+  if (label.includes('SWINGER')) return '#c2410c'; // Orange-red — dynamic wide player
   if (label.includes('FWD')) return '#b91c1c'; // Red
   return '#36220f';
 };
 const getShortLabel = (label: string) => {
   if (label.includes('GK')) return 'GK';
-  if (label.includes('DEF (CB')) return 'DEF';
+  if (label.includes('DEF')) return 'DEF';
   if (label.includes('MID')) return 'MID';
-  if (label.includes('FLEX')) return 'FLEX';
+  if (label.includes('SWINGER')) return 'SWG';
   if (label.includes('FWD')) return 'FWD';
   return label;
 };
 
 const getPositionFullName = (label: string) => {
   if (label.includes('GK')) return 'Goalkeeper';
-  if (label.includes('FLEX')) return 'Flex';
+  if (label.includes('SWINGER')) return 'Swinger';
   if (label.includes('DEF')) return 'Defender';
   if (label.includes('MID')) return 'Midfielder';
   if (label.includes('FWD')) return 'Forward';
@@ -985,7 +985,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 )}
               </div>
               <p style={{ color: 'var(--text-secondary)', marginTop: 8 }}>
-                Pick your 5-a-side lineup (GK, DEF, MID, DEF, ATT) • Select a captain (2× pts) • Set confidence
+                Pick your 5-a-side lineup (GK, DEF, MID, SWG, FWD) • Select a captain (2× pts) • Set confidence
               </p>
             </div>
 

@@ -97,6 +97,7 @@ export function calculateEventPoints(eventType: string, position: string = 'ATT'
       if (position === 'GK') return 20;
       if (position === 'DEF') return 15;
       if (position === 'MID') return 12;
+      if (position === 'SWG') return 11; // winger — between MID and ATT
       return 10; // ATT
     // Penalty shootout goal — flat bonus for all
     case 'penalty_scored':
@@ -113,11 +114,12 @@ export function calculateEventPoints(eventType: string, position: string = 'ATT'
     // Clean sheet — inferred from scoreSoccer.Total.Goals = 0 at full_time
     case 'clean_sheet':
       if (position === 'GK' || position === 'DEF') return 5;
-      if (position === 'MID') return 1;
+      if (position === 'MID' || position === 'SWG') return 1;
       return 0;
     // Penalty won — big bonus for defensive players who rarely win it
     case 'penalty_won':
       if (position === 'DEF' || position === 'GK') return 6;
+      if (position === 'SWG') return 4; // wingers dribble into the box often
       return 3;
     // Goal conceded — small penalty for GK/DEF only
     case 'goal_conceded':
