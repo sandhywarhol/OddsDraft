@@ -3426,7 +3426,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               <div className="desktop-only" style={{ display: 'contents' }}>
               {/* User Fantasy Stats */}
-              <div className="card card--primary live-stats" style={{ marginBottom: 20 }}>
+              <div className="card card--primary live-stats live-fantasy-points" style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', gap: 'var(--live-stats-gap)', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
@@ -3811,7 +3811,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             {/* RIGHT: Match Events + Leaderboard */}
             <div className="live-col-right" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-              <div className="desktop-only" style={{ display: 'contents' }}>
+              <div className="desktop-only live-events-wrapper">
               {/* Match Events panel */}
               <div className="ro-window live-events" style={{ position: 'sticky', top: 80 }}>
                 <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
