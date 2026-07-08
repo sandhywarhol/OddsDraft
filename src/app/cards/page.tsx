@@ -706,6 +706,25 @@ export default function CardsPage() {
             <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
               Earn card packs after each match and equip cards to your lineup for bonus points.
             </p>
+
+            {/* How it works */}
+            <div className="desktop-only" style={{
+              background: 'rgba(33,150,243,0.06)',
+              border: '1px solid rgba(33,150,243,0.15)',
+              borderRadius: 12,
+              padding: '14px 18px',
+              marginTop: 24,
+              fontSize: 12,
+              color: 'rgba(255,255,255,0.6)',
+              lineHeight: 1.6,
+              maxWidth: 650,
+              position: 'relative',
+              zIndex: 10
+            }}>
+              <span style={{ color: '#2196f3', fontWeight: 700 }}>How Cards Work: </span>
+              Equip a Skill Card to a player before kickoff. After the Fantasy Engine calculates points, your card adds a fixed bonus for matching events (e.g. a Striker with "Golden Boot" earns +1.50 pts per goal scored). Cards are locked after kickoff.
+              Cards are earned automatically after each match ends. Rarity ranges from Common to SSSR.
+            </div>
           </div>
           <img 
             src="/fifa_world_cup_2026_logo.webp" 
@@ -752,21 +771,6 @@ export default function CardsPage() {
           </div>
         </div>
 
-        {/* How it works */}
-        <div className="desktop-only" style={{
-          background: 'rgba(33,150,243,0.06)',
-          border: '1px solid rgba(33,150,243,0.15)',
-          borderRadius: 12,
-          padding: '14px 18px',
-          marginBottom: 16,
-          fontSize: 12,
-          color: 'rgba(255,255,255,0.6)',
-          lineHeight: 1.6,
-        }}>
-          <span style={{ color: '#2196f3', fontWeight: 700 }}>How Cards Work: </span>
-          Equip a Skill Card to a player before kickoff. After the Fantasy Engine calculates points, your card adds a fixed bonus for matching events (e.g. a Striker with "Golden Boot" earns +1.50 pts per goal scored). Cards are locked after kickoff.
-          Cards are earned automatically after each match ends. Rarity ranges from Common to SSSR.
-        </div>
 
         {/* Card Combine System */}
         <div className="desktop-only" style={{
