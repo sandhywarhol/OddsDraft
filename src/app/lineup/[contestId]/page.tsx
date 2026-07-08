@@ -942,9 +942,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 alt="Guide"
                 className="npc-commentator2-img"
                 style={{
-                  bottom: '-25vh',
+                  bottom: '0',
                   right: tutorialData?.shiftEdge ? '-18%' : '2%',
-                  height: '105vh',
+                  height: '85vh',
+                  maxHeight: '700px',
                   zIndex: 10005,
                   transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, right 0.4s ease-out',
                   opacity: 1,
@@ -1061,7 +1062,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               )}
 
               {/* TOP: Fantasy Points Preview & Player Cards (Full Width) */}
-              <div style={{ opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}>
+              <div style={{ opacity: isLocked && tutorialStep === 0 ? 0.5 : 1, pointerEvents: isLocked && tutorialStep === 0 ? 'none' : 'auto' }}>
                 {/* Fantasy Points Preview (if lineup filled) */}
                 {fantasyPoints && (
                   <div className="card card--primary" style={{ marginBottom: 24, padding: 20 }}>
