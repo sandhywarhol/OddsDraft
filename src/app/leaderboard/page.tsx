@@ -91,8 +91,8 @@ export default function LeaderboardPage() {
         });
         setLiveLeaderboard(mapped);
       } catch (err: any) {
-        console.warn('[Leaderboard] fetch failed, using demo data:', err);
-        setLiveLeaderboard(DEMO_LEADERBOARD);
+        console.warn('[Leaderboard] fetch failed:', err);
+        setLiveLeaderboard([]);
       } finally {
         setIsLoading(false);
       }
