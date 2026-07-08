@@ -93,7 +93,7 @@ export default function HowItWorksPage() {
             {/* Step 2 */}
             <div className="ro-window" style={{ display: 'flex', flexDirection: 'column' }}>
               <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)' }}>
-                <span>2 // Captain & Confidence</span>
+                <span>2 // Multipliers & Boosts</span>
                 <span>⭐</span>
               </div>
               <div className="ro-window__body" style={{ padding: 24 }}>
@@ -107,7 +107,11 @@ export default function HowItWorksPage() {
                   </div>
                   <div style={{ background: 'rgba(0,0,0,0.3)', padding: 20, borderRadius: 8, border: '1px solid rgba(0,229,255,0.2)' }}>
                     <strong style={{ color: '#00e5ff', display: 'block', marginBottom: 8, fontSize: '1.1rem' }}>Confidence Rating (⭐1-5)</strong>
-                    <span style={{ color: '#94a3b8' }}>Assign a confidence rating to each player. A higher rating increases their positive points but also heavily penalizes negative points. High risk, high reward!</span>
+                    <span style={{ color: '#94a3b8' }}>Assign a confidence rating to each player (up to 1.5x points). A higher rating increases their positive points but also heavily penalizes negative points. High risk, high reward!</span>
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: 20, borderRadius: 8, border: '1px solid rgba(255,77,109,0.2)' }}>
+                    <strong style={{ color: '#ff4d6d', display: 'block', marginBottom: 8, fontSize: '1.1rem' }}>Skill Card Equipment</strong>
+                    <span style={{ color: '#94a3b8' }}>Equip a Skill Card to a player for an extra flat bonus on specific events (e.g. +10 pts for goals, +5 pts for clean sheets). This is applied before captain and confidence multipliers.</span>
                   </div>
                 </div>
               </div>
@@ -121,19 +125,38 @@ export default function HowItWorksPage() {
               </div>
               <div className="ro-window__body" style={{ padding: 24 }}>
                 <p style={{ color: '#cbd5e1', marginBottom: 16, lineHeight: 1.6 }}>
-                  Points are awarded based on real-time TxODDS data during the match:
+                  Points are awarded based on real-time TxODDS data. Different positions earn different points:
                 </p>
-                <table className="leaderboard" style={{ width: '100%', marginBottom: 0, border: 'none' }}>
-                  <tbody style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Goal</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+10 pts</td></tr>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Assist</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+6 pts</td></tr>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Shot on Target</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+2 pts</td></tr>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Save (GK only)</td><td style={{ color: '#00e87a', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>+1 pt</td></tr>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Yellow Card</td><td style={{ color: '#ff4d6d', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>-2 pts</td></tr>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Red Card</td><td style={{ color: '#ff4d6d', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>-5 pts</td></tr>
-                    <tr><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Own Goal</td><td style={{ color: '#ff4d6d', textAlign: 'right', fontWeight: 700, padding: '12px 16px' }}>-4 pts</td></tr>
-                  </tbody>
-                </table>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="leaderboard" style={{ width: '100%', marginBottom: 16, border: 'none', minWidth: '500px' }}>
+                    <thead style={{ background: 'rgba(0,0,0,0.4)', borderRadius: '8px 8px 0 0' }}>
+                      <tr>
+                        <th style={{ padding: '12px 16px', color: '#cbd5e1', textAlign: 'left' }}>Event</th>
+                        <th style={{ padding: '12px 16px', color: '#cbd5e1', textAlign: 'center' }}>GK</th>
+                        <th style={{ padding: '12px 16px', color: '#cbd5e1', textAlign: 'center' }}>DEF</th>
+                        <th style={{ padding: '12px 16px', color: '#cbd5e1', textAlign: 'center' }}>MID</th>
+                        <th style={{ padding: '12px 16px', color: '#cbd5e1', textAlign: 'center' }}>SWG</th>
+                        <th style={{ padding: '12px 16px', color: '#cbd5e1', textAlign: 'center' }}>ATT</th>
+                      </tr>
+                    </thead>
+                    <tbody style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '0 0 8px 8px' }}>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Goal</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+20</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+15</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+12</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+11</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+10</td></tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Assist / Pen Scored</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+6 / +5</td><td colSpan={4} style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+6 / +5 (All)</td></tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Clean Sheet</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+5</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+5</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+1</td><td style={{ color: '#00e87a', textAlign: 'center', fontWeight: 700 }}>+1</td><td style={{ color: '#cbd5e1', textAlign: 'center' }}>0</td></tr>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Yellow / Red Card</td><td colSpan={5} style={{ color: '#ff4d6d', textAlign: 'center', fontWeight: 700 }}>-2 / -5 (All)</td></tr>
+                      <tr><td style={{ padding: '12px 16px', color: '#cbd5e1' }}>Own Goal / Pen Miss</td><td colSpan={5} style={{ color: '#ff4d6d', textAlign: 'center', fontWeight: 700 }}>-6 / -3 (All)</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p style={{ color: '#cbd5e1', marginBottom: 16, lineHeight: 1.6 }}>
+                  Plus, get <strong>Stats-Based Bonuses</strong> evaluated twice per match (Half-Time & Full-Time) based on:
+                </p>
+                <ul style={{ color: '#94a3b8', paddingLeft: 20, marginBottom: 0, lineHeight: 1.8 }}>
+                  <li><strong>Possession Dominance:</strong> Team possession ≥ 50% (+1 to +2 pts based on position)</li>
+                  <li><strong>Attack Pressure:</strong> Team achieves ≥ 5 danger attacks or ≥ 4 corners</li>
+                  <li><strong>Defensive Solidity:</strong> Opponent limited to ≤ 2 danger attacks (+2 for GK, +1 for DEF)</li>
+                  <li><strong>Indirect Contributions:</strong> If a team scores, players on that team (even if they didn't score) get +1</li>
+                </ul>
               </div>
             </div>
 
