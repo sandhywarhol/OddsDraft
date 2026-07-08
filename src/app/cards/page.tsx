@@ -44,9 +44,9 @@ function CardDetailModal({
   onEquip,
 }: {
   card: SkillCard;
-  instance: OwnedCard;
+  instance?: OwnedCard;
   onClose: () => void;
-  onEquip: () => void;
+  onEquip?: () => void;
 }) {
   const rarityColor = RARITY_COLOR[card.rarity];
   const rarityLabel = RARITY_STARS[card.rarity];
@@ -171,25 +171,29 @@ function CardDetailModal({
           </div>
 
           {/* Obtained */}
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginBottom: 24 }}>
-            Obtained {new Date(instance.obtainedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-          </div>
+          {instance && (
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginBottom: 24 }}>
+              Obtained {new Date(instance.obtainedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+          )}
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              onClick={onEquip}
-              style={{
-                flex: 1, padding: '12px 0',
-                background: `linear-gradient(135deg, ${rarityColor}cc, ${rarityColor}88)`,
-                border: `1px solid ${rarityColor}`,
-                borderRadius: 8,
-                color: '#fff', fontWeight: 800, fontSize: 13,
-                cursor: 'pointer', letterSpacing: '0.06em',
-              }}
-            >
-              EQUIP CARD
-            </button>
+            {onEquip && instance && (
+              <button
+                onClick={onEquip}
+                style={{
+                  flex: 1, padding: '12px 0',
+                  background: `linear-gradient(135deg, ${rarityColor}cc, ${rarityColor}88)`,
+                  border: `1px solid ${rarityColor}`,
+                  borderRadius: 8,
+                  color: '#fff', fontWeight: 800, fontSize: 13,
+                  cursor: 'pointer', letterSpacing: '0.06em',
+                }}
+              >
+                EQUIP CARD
+              </button>
+            )}
             <button
               onClick={onClose}
               style={{
@@ -583,7 +587,7 @@ export default function CardsPage() {
   const [filterRarity, setFilterRarity] = useState<FilterRarity>('all');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [equipTarget, setEquipTarget] = useState<{ instance: OwnedCard; card: SkillCard } | null>(null);
-  const [viewTarget, setViewTarget] = useState<{ instance: OwnedCard; card: SkillCard } | null>(null);
+  const [viewTarget, setViewTarget] = useState<{ instance?: OwnedCard; card: SkillCard } | null>(null);
   const [combineTarget, setCombineTarget] = useState<SkillCard | null>(null);
   const [shimmerIds, setShimmerIds] = useState<Set<string>>(new Set());
 
@@ -744,8 +748,12 @@ export default function CardsPage() {
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center' }}>
               {SKILL_CARDS.slice(0, 8).map((card) => (
-                <div key={card.id} style={{ position: 'relative', overflow: 'hidden', borderRadius: 16 }}>
-                  <SkillCardDisplay card={card} width={240} />
+                <div 
+                  key={card.id} 
+                  onClick={() => setViewTarget({ card })}
+                  style={{ position: 'relative', borderRadius: 16, width: 240, cursor: 'pointer' }}
+                >
+                  <SkillCardDisplay card={card} width={240} selectable />
                 </div>
               ))}
             </div>
@@ -980,7 +988,7 @@ export default function CardsPage() {
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', width: '100%', maxWidth: 240 }}
                   onClick={() => handleCardClick(instance, card)}
                 >
-                  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, width: '100%' }}>
+                  <div style={{ position: 'relative', borderRadius: 16, width: '100%' }}>
                     <SkillCardDisplay
                       card={card}
                       instance={instance}
@@ -1047,7 +1055,7 @@ export default function CardsPage() {
           card={viewTarget.card}
           instance={viewTarget.instance}
           onClose={() => setViewTarget(null)}
-          onEquip={() => { setEquipTarget(viewTarget); setViewTarget(null); }}
+          onEquip={viewTarget.instance ? () => { setEquipTarget(viewTarget as { instance: OwnedCard; card: SkillCard }); setViewTarget(null); } : undefined}
         />
       )}
 

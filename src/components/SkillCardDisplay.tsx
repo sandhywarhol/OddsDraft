@@ -75,6 +75,14 @@ export default function SkillCardDisplay({
       }}
     >
       <style>{`
+        .skill-card-container {
+          transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease !important;
+        }
+        .skill-card-container:hover {
+          transform: ${selected ? 'scale(1.08)' : 'scale(1.05)'} !important;
+          box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+          z-index: 10;
+        }
         @keyframes card-sweep-shine {
           0% { transform: translateX(-150%) skewX(-25deg); opacity: 0; }
           15% { opacity: 0.6; }
