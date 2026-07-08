@@ -404,6 +404,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                     translateY = -280;
                   } else if (targetId === 'lineup-header') {
                     translateY = -150;
+                  } else if (targetId === 'skill-card-section') {
+                    translateY = -100;
                   }
                 } else {
                   if (targetId === 'submit-button') {
@@ -414,6 +416,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                     translateY = -140;
                   } else if (targetId === 'lineup-grid' && nextStep === 2) {
                     translateY = -35;
+                  } else if (targetId === 'skill-card-section') {
+                    translateY = 30;
                   }
                 }
                 
