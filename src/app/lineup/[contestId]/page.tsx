@@ -391,7 +391,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   } else if (targetId === 'lineup-grid' && nextStep === 4) {
                     translateY = -300;
                   } else if (targetId === 'lineup-grid' && nextStep === 2) {
-                    translateY = -220;
+                    translateY = -280;
                   } else if (targetId === 'lineup-header') {
                     translateY = -150;
                   }
