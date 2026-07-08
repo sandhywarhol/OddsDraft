@@ -717,7 +717,7 @@ export default function CardsPage() {
               fontSize: 12,
               color: 'rgba(255,255,255,0.6)',
               lineHeight: 1.6,
-              maxWidth: 650,
+              maxWidth: 'calc(100% - 140px)',
               position: 'relative',
               zIndex: 10
             }}>
