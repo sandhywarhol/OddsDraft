@@ -1430,7 +1430,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               }}>
 
                 {/* ── Skill Card Equipment panel ────────────────────────── */}
-                {filledPlayers.length > 0 && !isLocked && (() => {
+                {filledPlayers.length > 0 && (() => {
                   const collectionCards = filledPlayers.map(p => ({
                     player: p,
                     cards: getCardsForLineupPosition(p.position),
