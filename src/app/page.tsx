@@ -947,7 +947,7 @@ function Footer() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em', lineHeight: 1.6 }}>
             © 2026 OddsDraft · All rights reserved <br />
-            Created by <span style={{ color: '#fff', fontWeight: 600 }}>Sandhy Warhol</span>, creator of <span style={{ color: '#00e5ff', fontWeight: 600 }}>ChainVolio</span>
+            Created by <span style={{ color: '#fff', fontWeight: 600 }}>sandhy warhol</span>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {['BETA', 'SOLANA', 'WC26'].map(tag => (
