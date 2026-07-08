@@ -721,9 +721,20 @@ export interface DemoFixture {
   status: 'upcoming' | 'live' | 'finished';
   homeScore?: number;
   awayScore?: number;
+  isNonDemo?: boolean;
 }
 
 export const DEMO_FIXTURES: DemoFixture[] = [
+  {
+    fixtureId: 'special-arg-ger',
+    homeTeam: 'Argentina',
+    awayTeam: 'Germany',
+    homeFlag: '🇦🇷',
+    awayFlag: '🇩🇪',
+    kickoffAt: new Date(Date.now() + 86400000).toISOString(),
+    status: 'upcoming',
+    isNonDemo: true,
+  },
   {
     fixtureId: 'wc2026-arg-fra',
     homeTeam: 'Argentina',

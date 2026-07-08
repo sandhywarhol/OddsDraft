@@ -169,6 +169,19 @@ export default function ContestsPage() {
     };
   });
 
+  if (isDemo) {
+    mappedFixtures.unshift({
+      fixtureId: 'special-arg-ger',
+      kickoffAt: new Date(Date.now() + 86400000).toISOString(),
+      homeTeam: 'Argentina',
+      homeFlag: '🇦🇷',
+      awayTeam: 'Germany',
+      awayFlag: '🇩🇪',
+      status: 'upcoming',
+      isNonDemo: true,
+    } as any);
+  }
+
   const upcoming = mappedFixtures.filter((f) => f.status === 'upcoming');
   const live = mappedFixtures.filter((f) => f.status === 'live');
   // Newest match first — most recently finished at the top
@@ -511,7 +524,7 @@ export default function ContestsPage() {
               </div>
 
               {/* Demo mode notice inside modal */}
-              {isDemo && (
+              {isDemo && !selectedFixture.isNonDemo && (
                 <div style={{ marginBottom: 16, padding: '8px 12px', background: 'rgba(255,170,0,0.07)', border: '1px solid rgba(255,170,0,0.25)', borderRadius: 6, fontSize: '0.75rem', color: 'rgba(255,170,0,0.85)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>🎮</span>
                   <span>Demo Mode — this lineup is a simulation and requires no SOL. <button onClick={() => setSelectedFixture(null)} style={{ background: 'none', border: 'none', color: '#ffaa00', cursor: 'pointer', fontWeight: 700, padding: 0, textDecoration: 'underline', fontSize: 'inherit' }}>Switch to Live</button> to play for real.</span>
@@ -556,14 +569,14 @@ export default function ContestsPage() {
                               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entry</div>
                               <div style={{ fontWeight: 700, color: 'var(--color-accent)' }}>0.1 SOL</div>
                             </div>
-                            {showCount ? (
+                            {showCount || selectedFixture.isNonDemo ? (
                               <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{ctPlayers} joined</div>
                                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ffd700' }}>Pool: {ctPool.toFixed(2)} SOL</div>
                               </div>
                             ) : (
                               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'right' }}>
-                                {isDemo ? 'Demo mode' : 'Be first!'}
+                                {isDemo && !selectedFixture.isNonDemo ? 'Demo mode' : 'Be first!'}
                               </div>
                             )}
                           </>
