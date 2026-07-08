@@ -370,7 +370,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 if (isMobile) {
                   shift = (viewportWidth / 2) - currentCenterX;
                 } else {
-                  const targetCenterX = nextData?.position === 'left' ? viewportWidth * 0.78 : viewportWidth * 0.22;
+                  let targetRatio = nextData?.position === 'left' ? 0.78 : 0.22;
+                  if (targetId === 'submit-button') {
+                    targetRatio = nextData?.position === 'left' ? 0.58 : 0.42;
+                  }
+                  const targetCenterX = viewportWidth * targetRatio;
                   shift = targetCenterX - currentCenterX;
                 }
                 
@@ -395,17 +399,17 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   if (targetId === 'submit-button') {
                     translateY = -560;
                   } else if (targetId === 'confidence-panel') {
-                    translateY = -340;
+                    translateY = -180;
                   } else if (targetId === 'recruitment-terminal') {
                     translateY = -420;
                   } else if (targetId === 'lineup-grid' && nextStep === 4) {
                     translateY = -300;
                   } else if (targetId === 'lineup-grid' && nextStep === 2) {
-                    translateY = -280;
+                    translateY = -160;
                   } else if (targetId === 'lineup-header') {
                     translateY = -150;
                   } else if (targetId === 'skill-card-section') {
-                    translateY = -100;
+                    translateY = 80;
                   }
                 } else {
                   if (targetId === 'submit-button') {
@@ -933,37 +937,65 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               WebkitBackdropFilter: shouldBlurLineupBg ? 'blur(5px)' : 'none',
             }}
           >
-            {/* Step 8 Desktop Skill Cards Display */}
+            {/* Step 8 Skill Cards Display (Responsive) */}
             {tutorialStep === 8 && (
-              <div style={{
+              <div className="tutorial-step-8-cards" style={{
                 position: 'fixed',
-                top: '40%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
-                zIndex: 10000,
+                zIndex: 1004,
                 display: 'flex',
                 gap: '15px',
                 pointerEvents: 'none',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: '100vw'
+                width: '100vw',
+                flexWrap: 'wrap',
+                padding: '0 20px',
               }}>
+                <style>{`
+                  .tutorial-step-8-cards { top: 25%; }
+                  @media (min-width: 769px) {
+                    .tutorial-step-8-cards { top: 38%; }
+                  }
+                `}</style>
                 {DEMO_CARDS.map((card, i) => {
                   const def = SKILL_CARDS.find(c => c.id === card.cardId);
                   return (
                     <div key={card.instanceId} style={{
-                      width: 230,
-                      height: 287,
+                      width: 'clamp(100px, 18vw, 230px)',
+                      aspectRatio: '230/287',
                       transform: 'scale(1)',
-                      boxShadow: '0 20px 40px rgba(0,0,0,0.8), 0 0 50px rgba(255,255,255,0.2)',
-                      borderRadius: 16,
-                      background: 'rgba(0,0,0,0.5)',
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(255,255,255,0.1)',
+                      borderRadius: 12,
                     }}>
-                      {def ? <SkillCardDisplay card={def} /> : <div style={{color:'white', padding:'20px'}}>Missing {card.cardId}</div>}
+                      {def ? <SkillCardDisplay card={def} /> : <div style={{color:'white', padding:'10px', fontSize:'0.7rem'}}>Missing {card.cardId}</div>}
                     </div>
                   );
                 })}
               </div>
+            )}
+
+            {/* NPC Smooth Desktop Animations */}
+            {tutorialData && (
+              <style>{`
+                @media (min-width: 769px) {
+                  .smooth-npc-left {
+                    animation: npc-desktop-fade-slide-left 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+                  }
+                  .smooth-npc-right {
+                    animation: npc-desktop-fade-slide-right 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+                  }
+                  @keyframes npc-desktop-fade-slide-left {
+                    0% { opacity: 0; transform: translateX(-40px); }
+                    100% { opacity: 1; transform: translateX(0); }
+                  }
+                  @keyframes npc-desktop-fade-slide-right {
+                    0% { opacity: 0; transform: translateX(40px); }
+                    100% { opacity: 1; transform: translateX(0); }
+                  }
+                }
+              `}</style>
             )}
 
             {/* NPC Character Image (Female - Left) */}
@@ -971,7 +1003,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               <img
                 src="/NPC/NPC Guide Female.svg"
                 alt="Guide"
-                className="npc-commentator1-img"
+                className="npc-commentator1-img smooth-npc-left"
                 style={{
                   bottom: '0',
                   left: tutorialData?.shiftEdge ? '-18%' : '2%',
@@ -990,7 +1022,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               <img
                 src="/NPC/NPC Guide Male.svg"
                 alt="Guide"
-                className="npc-commentator2-img"
+                className="npc-commentator2-img smooth-npc-right"
                 style={{
                   bottom: '0',
                   right: tutorialData?.shiftEdge ? '-18%' : '2%',
@@ -1005,16 +1037,30 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             )}
 
             {/* Dialog Bubble */}
-            <div 
-              className="npc-jrpg-dialog-box"
-              style={{
-                position: 'absolute',
-                bottom: '12vh',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 1000010,
-              }}
-            >
+            <div style={{
+              position: 'absolute',
+              bottom: '12vh',
+              left: 0,
+              right: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              zIndex: 1000010,
+              pointerEvents: 'none',
+            }}>
+              <style>{`
+                @keyframes dialog-smooth-fade {
+                  0% { opacity: 0; transform: translateY(15px) scale(0.98); }
+                  100% { opacity: 1; transform: translateY(0) scale(1); }
+                }
+              `}</style>
+              <div 
+                className="npc-jrpg-dialog-box"
+                style={{
+                  pointerEvents: 'auto',
+                  animation: 'dialog-smooth-fade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                  margin: '0 auto',
+                }}
+              >
               <div 
                 className="npc-jrpg-speaker-tag"
                 style={{
@@ -1049,6 +1095,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 </div>
               </div>
               
+            </div>
             </div>
           </div>
         )}
@@ -1409,6 +1456,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                               fontWeight: 800, 
                               fontFamily: 'Bebas Neue, cursive',
                               fontStyle: 'italic',
+                              textAlign: 'center',
                             }}>
                               {slotConfig.label}
                             </div>
@@ -1427,7 +1475,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 flexDirection: 'column',
                 gap: 24,
                 maxWidth: 800,
-                margin: '0 auto',
+                margin: '60px auto 0 auto', /* added 60px top margin */
                 width: '100%'
               }}>
 

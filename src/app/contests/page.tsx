@@ -21,6 +21,8 @@ export default function ContestsPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
+  const isDemo = appMode === 'demo';
+
   const handleReplayTutorial = useCallback(() => {
     // Force tutorial using the Argentina vs Germany demo match so it's always upcoming and not locked
     const targetId = isDemo ? 'special-arg-ger' : (WC2026_FIXTURES.find(f => f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now())?.fixtureId ?? WC2026_FIXTURES[0]?.fixtureId);
@@ -68,7 +70,6 @@ export default function ContestsPage() {
     setEnteredContests(map);
   }, []);
 
-  const isDemo = appMode === 'demo';
 
   // Fetch real participant counts from Supabase for visible fixtures
   useEffect(() => {
