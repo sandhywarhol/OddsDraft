@@ -92,7 +92,7 @@ export default function Navbar() {
               onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
             >
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: (mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d', boxShadow: `0 0 4px ${(mounted && appMode === 'live') ? '#00e5ff' : '#ff4d6d'}` }} />
-              {(mounted && appMode === 'live') ? `LIVE · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : `DEMO · ${process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}`}
+              {(mounted && appMode === 'live') ? 'LIVE' : 'DEMO'}
             </button>
           ) : (
             <a
@@ -281,7 +281,7 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
         <WalletMultiButton style={{ 
           height: '24px', 
           borderRadius: '5px',
-          fontSize: '0.62rem', 
+          fontSize: '0.75rem', 
           fontWeight: 700,
           padding: '0 10px', 
           background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)', 
@@ -289,7 +289,9 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
           border: '1px solid rgba(255, 255, 255, 0.4)',
           boxShadow: '0 1px 8px rgba(255, 215, 0, 0.2)',
           lineHeight: '24px',
-          fontFamily: 'inherit',
+          fontFamily: 'var(--font-bebas), cursive',
+          fontStyle: 'italic',
+          letterSpacing: '0.05em',
           transition: 'all 0.3s ease'
         }} />
       </div>
@@ -324,7 +326,7 @@ function WalletDropdown({ isMuted, toggleMute }: { isMuted: boolean; toggleMute:
         ) : (
           <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#475569' }} />
         )}
-        <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>
+        <span style={{ fontSize: '0.58rem', fontWeight: 600, fontFamily: 'inherit' }}>
           {username}
         </span>
         <ChevronDown size={12} color="#ffd700" />

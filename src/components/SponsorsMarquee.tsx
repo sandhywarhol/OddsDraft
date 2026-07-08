@@ -24,8 +24,9 @@ export default function SponsorsMarquee() {
     overflow: 'hidden',
     whiteSpace: 'nowrap',
     background: '#ffffff',
-    padding: '4px 0',
+    padding: '2px 0',
     borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+    marginTop: '-1px',
   };
 
   const trackStyle: React.CSSProperties = {
@@ -62,7 +63,7 @@ export default function SponsorsMarquee() {
                 src={item.url}
                 alt={item.name}
                 style={{
-                  height: (item.name === 'SUPERTEAM' || item.name === 'SUPERTEAM HUB') ? '32px' : item.name === 'CHAINVOLIO' ? '24px' : '16px',
+                  height: (item.name === 'SUPERTEAM' || item.name === 'SUPERTEAM HUB') ? '24px' : item.name === 'CHAINVOLIO' ? '20px' : '14px',
                   objectFit: 'contain',
                   maxWidth: '120px',
                   opacity: 0.9,
@@ -73,7 +74,7 @@ export default function SponsorsMarquee() {
                 <span style={{ 
                   fontFamily: 'Trebuchet MS, sans-serif', 
                   fontWeight: 800, 
-                  fontSize: '0.9rem', 
+                  fontSize: '0.8rem', 
                   color: '#374151',
                   letterSpacing: '0.05em',
                 }}>
@@ -88,7 +89,7 @@ export default function SponsorsMarquee() {
                 fontFamily: item.font, 
                 fontStyle: item.italic ? 'italic' : 'normal',
                 fontWeight: 800, 
-                fontSize: '0.9rem', 
+                fontSize: '0.8rem', 
                 color: '#374151',
                 letterSpacing: '0.05em',
                 textTransform: 'uppercase',

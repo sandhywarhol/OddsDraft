@@ -6,27 +6,6 @@ import { useTxLine } from '@/context/TxLineContext';
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 
-const DEMO_LEADERBOARD = [
-  { rank: 1, user: 'CryptoGoalkeeper', wallet: 'Cx98...4mN', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=CryptoGoalkeeper', contests: 12, wins: 4, points: 1245.5, sol: 45.2 },
-  { rank: 2, user: 'MbappeObsessed', wallet: '7kPx...2sQ', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MbappeObsessed', contests: 15, wins: 3, points: 1180.0, sol: 28.5 },
-  { rank: 3, user: 'TacticalMaster', wallet: 'Rz33...9vT', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=TacticalMaster', contests: 10, wins: 3, points: 1150.2, sol: 22.0 },
-  { rank: 4, user: 'SolanaBaller', wallet: 'Lw8j...mX1', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SolanaBaller', contests: 8, wins: 2, points: 980.5, sol: 15.0 },
-  { rank: 5, user: 'FantasyKing', wallet: 'A1b2...c3D', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=FantasyKing', contests: 20, wins: 1, points: 950.0, sol: 8.5 },
-  { rank: 6, user: 'DiamondHandsFC', wallet: 'Dh88...xYz', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DiamondHandsFC', contests: 11, wins: 2, points: 430.0, sol: 4.8 },
-  { rank: 7, user: 'DegenStriker', wallet: 'Str1...k3r', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DegenStriker', contests: 19, wins: 1, points: 420.5, sol: 4.5 },
-  { rank: 9, user: 'WhaleWatcher', wallet: 'Wha1...34x', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=WhaleWatcher', contests: 7, wins: 1, points: 410.0, sol: 4.2 },
-  { rank: 10, user: 'NFTManager', wallet: 'NfT0...mNg', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NFTManager', contests: 14, wins: 1, points: 395.5, sol: 3.5 },
-  { rank: 11, user: 'PeleReborn', wallet: 'Pel3...rBn', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=PeleReborn', contests: 9, wins: 0, points: 380.0, sol: 2.0 },
-  { rank: 12, user: 'Web3Winger', wallet: 'Web3...wIn', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Web3Winger', contests: 22, wins: 0, points: 375.5, sol: 1.5 },
-  { rank: 13, user: 'DefiDefender', wallet: 'Def1...dFn', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DefiDefender', contests: 16, wins: 0, points: 360.0, sol: 1.0 },
-  { rank: 14, user: 'BullMarketFC', wallet: 'Bul1...mKt', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=BullMarketFC', contests: 8, wins: 0, points: 350.5, sol: 0.8 },
-  { rank: 15, user: 'BearSlayer', wallet: 'BeaR...sLy', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=BearSlayer', contests: 12, wins: 0, points: 340.0, sol: 0.5 },
-  { rank: 16, user: 'YieldFarmerXI', wallet: 'YieL...fRm', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=YieldFarmerXI', contests: 10, wins: 0, points: 330.5, sol: 0.2 },
-  { rank: 17, user: 'MetaverseMessi', wallet: 'Met4...mEs', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MetaverseMessi', contests: 25, wins: 0, points: 320.0, sol: 0.1 },
-  { rank: 18, user: 'CryptoRonaldo', wallet: 'CryP...r0n', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=CryptoRonaldo', contests: 13, wins: 0, points: 310.5, sol: 0.1 },
-  { rank: 19, user: 'ApeFutebol', wallet: 'Ap3F...utE', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ApeFutebol', contests: 5, wins: 0, points: 300.0, sol: 0.0 },
-  { rank: 20, user: 'MoonBoysUnited', wallet: 'M00n...b0y', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MoonBoysUnited', contests: 18, wins: 0, points: 290.5, sol: 0.0 },
-];
 
 export default function LeaderboardPage() {
   const { appMode } = useTxLine();
@@ -64,8 +43,6 @@ export default function LeaderboardPage() {
   }, [mounted, publicKey]);
 
   useEffect(() => {
-    if (appMode !== 'live') return;
-
     const fetchLeaderboard = async () => {
       try {
         setIsLoading(true);
@@ -102,10 +79,6 @@ export default function LeaderboardPage() {
   }, [appMode, publicKey]);
 
   if (!mounted) return null;
-
-  const isDemo = appMode === 'demo';
-  const displayLeaderboard = isDemo ? DEMO_LEADERBOARD : liveLeaderboard;
-
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />
@@ -159,7 +132,7 @@ export default function LeaderboardPage() {
                 Global Leaderboard
               </h1>
               <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
-                {isDemo ? 'Simulated rankings — switch to Live Mode for real data.' : 'Real-time global rankings based on SOL earned.'}
+                Real-time global rankings based on SOL earned.
               </p>
             </div>
             <img 
@@ -171,13 +144,6 @@ export default function LeaderboardPage() {
         </div>
 
         <div className="container-sm" style={{ maxWidth: 800, margin: '0 auto', padding: '0 16px' }}>
-          {/* DEMO banner */}
-          {isDemo && (
-            <div style={{ marginBottom: 20, padding: '10px 16px', background: 'rgba(255,170,0,0.07)', border: '1px solid rgba(255,170,0,0.25)', borderRadius: 8, fontSize: '0.78rem', color: 'rgba(255,170,0,0.85)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: '1rem' }}>🎮</span>
-              <span>The data below is a <strong>simulation</strong>. Rankings do not reflect real players. Switch to Live Mode to see the real leaderboard.</span>
-            </div>
-          )}
 
           {/* Your Position card — only show for connected users */}
           {publicKey && (
@@ -220,7 +186,7 @@ export default function LeaderboardPage() {
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
                   Loading real-time rankings...
                 </div>
-              ) : displayLeaderboard.length === 0 ? (
+              ) : liveLeaderboard.length === 0 ? (
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
                   No players found yet. Be the first to join a contest!
                 </div>
@@ -237,7 +203,7 @@ export default function LeaderboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayLeaderboard.map((entry) => (
+                    {liveLeaderboard.map((entry) => (
                       <tr key={entry.rawWallet || entry.wallet} style={{ 
                         background: entry.isUser ? 'rgba(244, 207, 126, 0.12)' : 'transparent',
                         borderBottom: '1px solid var(--border-subtle)'

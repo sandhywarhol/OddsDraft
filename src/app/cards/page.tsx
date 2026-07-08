@@ -4,15 +4,19 @@ import { useState, useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import SkillCardDisplay from '@/components/SkillCardDisplay';
+import CardPackOpener from '@/components/CardPackOpener';
 import {
   getCollectionWithDefs,
   equipCard,
   getEquippedCardInstance,
   combineCards,
   canCombine,
+  rollRandomCard,
+  addCardToCollection,
   type OwnedCard,
 } from '@/lib/card-collection';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useTxLine } from '@/context/TxLineContext';
 import {
   RARITY_ORDER,
   RARITY_COLOR,
@@ -457,8 +461,12 @@ function CombineModal({
                 width: '100%',
                 maxWidth: 140,
                 flex: 1,
-                opacity: phase === 'combining' ? 0.4 : 1,
-                transition: 'opacity 0.6s ease',
+                opacity: phase === 'combining' ? 0 : 1,
+                transform: phase === 'combining' 
+                  ? `translateX(${i === 0 ? '140px' : '-140px'}) scale(0.2) rotate(${i === 0 ? '45deg' : '-45deg'})` 
+                  : 'translateX(0) scale(1) rotate(0deg)',
+                transition: 'all 1.2s cubic-bezier(0.5, 0, 0.2, 1)',
+                zIndex: 2,
               }}>
                 <SkillCardDisplay
                   card={card}
@@ -468,17 +476,15 @@ function CombineModal({
             ))}
 
             {/* Arrow */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1,
+              opacity: phase === 'combining' ? 0 : 1,
+              transition: 'opacity 0.5s',
+            }}>
               <div style={{
-                fontSize: phase === 'combining' ? '2rem' : '1.5rem',
-                transition: 'font-size 0.3s',
-                animation: phase === 'combining' ? 'pulse 0.6s ease infinite' : undefined,
+                fontSize: '1.5rem',
               }}>
-                {phase === 'combining' ? '✨' : '→'}
+                →
               </div>
-              {phase === 'combining' && (
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>Combining…</div>
-              )}
             </div>
 
             {/* Result slot */}
@@ -489,13 +495,14 @@ function CombineModal({
               <div style={{
                 width: '100%', height: 'auto', aspectRatio: '1086 / 1448', borderRadius: 16,
                 background: phase === 'combining'
-                  ? `linear-gradient(135deg, ${nextRarityColor}33, rgba(0,0,0,0.6))`
+                  ? `linear-gradient(135deg, ${nextRarityColor}, #fff)`
                   : 'rgba(255,255,255,0.04)',
-                border: `2px dashed ${phase === 'combining' ? nextRarityColor : 'rgba(255,255,255,0.15)'}`,
+                border: `2px dashed ${phase === 'combining' ? 'transparent' : 'rgba(255,255,255,0.15)'}`,
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
-                transition: 'all 0.6s ease',
-                boxShadow: phase === 'combining' ? `0 0 24px ${nextRarityColor}55` : 'none',
-                animation: phase === 'combining' ? 'pulse 0.8s ease infinite' : undefined,
+                transition: 'all 1.2s ease',
+                boxShadow: phase === 'combining' ? `0 0 60px 20px ${nextRarityColor}, inset 0 0 30px #fff` : 'none',
+                animation: phase === 'combining' ? 'combine-flash 1.8s ease-in forwards' : undefined,
+                zIndex: 0,
               }}>
                 {phase === 'combining' ? (
                   <>
@@ -518,7 +525,7 @@ function CombineModal({
 
         {/* Result reveal */}
         {phase === 'done' && resultCard && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 32 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 32, animation: 'pop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards' }}>
             <SkillCardDisplay card={resultCard} width={200} />
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', maxWidth: 320 }}>
               {resultCard.effectText}
@@ -574,6 +581,16 @@ function CombineModal({
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.7; transform: scale(1.06); }
           }
+          @keyframes combine-flash {
+            0% { filter: brightness(1) hue-rotate(0deg); transform: scale(1); opacity: 1; }
+            50% { filter: brightness(2) hue-rotate(90deg); transform: scale(1.1); opacity: 1; }
+            90% { filter: brightness(4) hue-rotate(180deg); transform: scale(0); opacity: 0; }
+            100% { transform: scale(0); opacity: 0; }
+          }
+          @keyframes pop-in {
+            0% { transform: scale(0.4); opacity: 0; filter: blur(10px); }
+            100% { transform: scale(1); opacity: 1; filter: blur(0); }
+          }
         `}</style>
       </div>
     </div>
@@ -582,7 +599,9 @@ function CombineModal({
 
 export default function CardsPage() {
   const { connected } = useWallet();
+  const { appMode } = useTxLine();
   const [allCards, setAllCards] = useState<{ instance: OwnedCard; card: SkillCard }[]>([]);
+  const [showDemoOpener, setShowDemoOpener] = useState(false);
   const [filterPos, setFilterPos] = useState<FilterPos>('all');
   const [filterRarity, setFilterRarity] = useState<FilterRarity>('all');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
@@ -606,6 +625,10 @@ export default function CardsPage() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  const handleDemoOpenCard = () => {
+    setShowDemoOpener(true);
+  };
 
   const filtered = allCards
     .filter(({ card }) => filterPos === 'all' || card.position === filterPos)
@@ -704,9 +727,24 @@ export default function CardsPage() {
                 Fantasy Skill Cards
               </span>
             </div>
-            <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 8, lineHeight: 1.1 }}>
-              My Collection
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
+              <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, margin: 0, lineHeight: 1.1 }}>
+                My Collection
+              </h1>
+              {appMode === 'demo' && connected && (
+                <button 
+                  onClick={handleDemoOpenCard}
+                  style={{
+                    background: '#ffd700', color: '#000', border: 'none', borderRadius: 8,
+                    padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(255, 215, 0, 0.25)',
+                    letterSpacing: '0.05em'
+                  }}
+                >
+                  + DEMO: OPEN CARD
+                </button>
+              )}
+            </div>
             <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
               Earn card packs after each match and equip cards to your lineup for bonus points.
             </p>
@@ -1014,6 +1052,7 @@ export default function CardsPage() {
                         style={{
                           position: 'absolute', bottom: 8, left: '50%',
                           transform: 'translateX(-50%)',
+                          zIndex: 20,
                           background: `linear-gradient(135deg, ${RARITY_COLOR[card.rarity]}, ${RARITY_COLOR[RARITY_ORDER[RARITY_ORDER.indexOf(card.rarity) + 1] ?? card.rarity]})`,
                           border: 'none', borderRadius: 20,
                           color: '#000', fontWeight: 900, fontSize: 9,
@@ -1029,6 +1068,7 @@ export default function CardsPage() {
                     {copyCount > 1 && !isCombineable && (
                       <div style={{
                         position: 'absolute', top: 6, right: 6,
+                        zIndex: 20,
                         background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)',
                         borderRadius: 10, padding: '2px 7px',
                         fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 700,
@@ -1074,6 +1114,27 @@ export default function CardsPage() {
           card={combineTarget}
           onClose={() => setCombineTarget(null)}
           onSuccess={() => { setCombineTarget(null); reload(); }}
+        />
+      )}
+
+      {/* Demo pack opener */}
+      {showDemoOpener && (
+        <CardPackOpener
+          contestId="demo-pack"
+          onOpen={() => {
+            const newCardDef = rollRandomCard();
+            const instance = {
+              instanceId: 'demo_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+              cardId: newCardDef.id,
+              obtainedAt: new Date().toISOString(),
+            };
+            addCardToCollection(instance);
+            return { instance, card: newCardDef };
+          }}
+          onClose={() => {
+            setShowDemoOpener(false);
+            reload();
+          }}
         />
       )}
     </main>

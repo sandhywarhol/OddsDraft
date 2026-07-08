@@ -1,7 +1,6 @@
 /* OddsDraft — Global Design System */
 /* Dark theme with electric green accents — football energy */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap');
 
 /* ============================================================
    LIVE LINEUP LAYOUT CLASSES
@@ -129,7 +128,7 @@ html {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   background-color: transparent;
   background-image: 
     repeating-linear-gradient(45deg, rgba(0, 232, 122, 0.008) 0px, rgba(0, 232, 122, 0.008) 1px, transparent 1px, transparent 12px),
@@ -151,12 +150,12 @@ body {
    TYPOGRAPHY
    ============================================================ */
 .font-display {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   letter-spacing: normal;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-style: normal;
   text-transform: none;
   letter-spacing: normal;
@@ -239,7 +238,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .navbar__logo-text {
-  font-family: 'Bebas Neue', cursive;
+  font-family: var(--font-bebas), cursive;
   font-size: 1.75rem;
   letter-spacing: 0.05em;
   background: linear-gradient(135deg, var(--color-primary), #00B4E8);
@@ -405,7 +404,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-5);
   border-radius: var(--radius-sm);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-style: normal;
   font-weight: 700;
   font-size: 0.95rem;
@@ -469,7 +468,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 12px;
   padding: 16px 36px;
   border-radius: 12px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 900;
   font-size: 1.15rem;
   font-style: italic;
@@ -517,7 +516,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 10px;
   padding: 14px 32px;
   border-radius: 12px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 600;
   font-size: 1.05rem;
   letter-spacing: 0.02em;
@@ -600,7 +599,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 4px;
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-style: normal;
   font-size: 0.75rem;
   font-weight: 700;
@@ -717,7 +716,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .leaderboard__points {
   font-weight: 700;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-size: 1.05rem;
   color: var(--color-primary);
   letter-spacing: normal;
@@ -830,7 +829,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .player-slot__points {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-size: 0.85rem;
   color: var(--color-primary);
   letter-spacing: normal;
@@ -857,7 +856,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .float-points {
   position: absolute;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 700;
   font-size: 1.1rem;
   color: var(--color-primary);
@@ -890,7 +889,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .countdown__value {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 700;
   font-size: 1.3rem;
   line-height: 1;
@@ -949,7 +948,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .stat-item__value {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-weight: 800;
   font-size: 1.5rem;
   letter-spacing: normal;
@@ -1012,7 +1011,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .score-bug__score {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-style: normal;
   font-weight: 800;
   font-size: 3rem;
@@ -1023,7 +1022,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .score-bug__separator {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   font-size: 1.5rem;
   color: var(--text-muted);
   margin: 0 var(--space-2);
@@ -1373,7 +1372,7 @@ a {
   font-size: 0.9rem;
   letter-spacing: 0.05em;
   color: #ffffff;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-inter), sans-serif;
   text-transform: uppercase;
   box-shadow: inset 0 1px 0px rgba(255, 255, 255, 0.25);
 }
@@ -1690,7 +1689,7 @@ a {
   padding: 6px 24px;
   font-size: 1rem;
   font-weight: 800;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-inter), sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   box-shadow: 2px 2px 0px #ebdac0;
@@ -1701,7 +1700,7 @@ a {
   color: #1a1008;
   font-size: clamp(1.15rem, 2.6vw, 1.6rem);
   font-weight: 700;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: var(--font-inter), sans-serif;
   line-height: 1.6;
   padding-right: 36px;
 }
@@ -1982,7 +1981,7 @@ a {
 
 /* Title - Blue Lock Theme */
 .wallet-adapter-modal-title {
-  font-family: 'Bebas Neue', cursive !important;
+  font-family: var(--font-bebas), cursive;
   font-size: 1.4rem !important;
   font-weight: 400 !important;
   letter-spacing: 0.15em !important;
@@ -1999,7 +1998,7 @@ a {
 
 /* Subtitle / subheading */
 .wallet-adapter-modal-middle .wallet-adapter-button {
-  font-family: 'Bebas Neue', cursive !important;
+  font-family: var(--font-bebas), cursive;
 }
 
 /* Wallet list */
@@ -2020,7 +2019,7 @@ a {
   border: 1px solid rgba(0, 240, 255, 0.4) !important;
   border-radius: 0 !important;
   color: #fff !important;
-  font-family: 'Bebas Neue', cursive !important;
+  font-family: var(--font-bebas), cursive;
   font-size: 1.5rem !important;
   font-weight: 400 !important;
   font-style: italic !important;
@@ -2046,7 +2045,7 @@ a {
 .wallet-adapter-modal-list .wallet-adapter-button-end-icon,
 .wallet-adapter-modal-list li p {
   color: rgba(0, 240, 255, 0.8) !important;
-  font-family: 'Bebas Neue', cursive !important;
+  font-family: var(--font-bebas), cursive;
   font-size: 1.1rem !important;
   font-weight: 400 !important;
   letter-spacing: 0.1em !important;
@@ -2098,7 +2097,7 @@ a {
 .wallet-adapter-button-trigger {
   background: linear-gradient(135deg, #b8952a 0%, #ffd700 50%, #b8952a 100%) !important;
   color: #0a0a0a !important;
-  font-family: 'Bebas Neue', cursive !important;
+  font-family: var(--font-bebas), cursive;
   font-size: 0.85rem !important;
   letter-spacing: 0.1em !important;
   border-radius: 4px !important;
@@ -2305,4 +2304,12 @@ a {
     grid-column: 2;
     grid-row: 3;
   }
+}
+
+/* Twemoji Styling for cross-platform identical emojis */
+img.twemoji {
+  height: 1.2em;
+  width: 1.2em;
+  margin: 0 .05em 0 .1em;
+  vertical-align: -0.1em;
 }
