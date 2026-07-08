@@ -22,11 +22,10 @@ export default function ContestsPage() {
   const [mounted, setMounted] = useState(false);
 
   const handleReplayTutorial = useCallback(() => {
-    // Pick first upcoming/live match — ?replay=1 forces tutorial even if already entered
-    const upcoming = WC2026_FIXTURES.find(f => f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now() - 4 * 3600 * 1000);
-    const targetId = liveFixtures?.[0]?.fixtureId ?? upcoming?.fixtureId ?? WC2026_FIXTURES[0]?.fixtureId;
+    // Force tutorial using the Argentina vs Germany demo match so it's always upcoming and not locked
+    const targetId = isDemo ? 'special-arg-ger' : (WC2026_FIXTURES.find(f => f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now())?.fixtureId ?? WC2026_FIXTURES[0]?.fixtureId);
     if (targetId) router.push(`/lineup/${targetId}?replay=1`);
-  }, [liveFixtures, router]);
+  }, [isDemo, router]);
   const [enteredContests, setEnteredContests] = useState<Record<string, string[]>>({});
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);
   const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number }>>({});

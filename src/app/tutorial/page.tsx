@@ -15,20 +15,20 @@ import SkillCardDisplay from '@/components/SkillCardDisplay';
 // Famous players with reliable TheSportsDB photos
 const TUTORIAL_PLAYERS = [
   { id: 'ger-neuer',   name: 'Manuel Neuer',     team: 'Germany',     teamFlag: '🇩🇪', position: 'GK',  rating: 87 },
-  { id: 'bra-marquinhos', name: 'Marquinhos', team: 'Brazil', teamFlag: '🇧🇷', position: 'DEF', rating: 87 },
-  { id: 'por-ronaldo', name: 'Cristiano Ronaldo', team: 'Portugal',    teamFlag: '🇵🇹', position: 'MID', rating: 88 },
-  { id: 'arg-messi',   name: 'Lionel Messi',      team: 'Argentina',   teamFlag: '🇦🇷', position: 'SWG', rating: 94 },
-  { id: 'eng-kane',    name: 'Harry Kane',        team: 'England',     teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', position: 'ATT', rating: 90 },
+  { id: 'ger-tah',     name: 'Jonathan Tah',     team: 'Germany',     teamFlag: '🇩🇪', position: 'DEF', rating: 84 },
+  { id: 'arg-paul',    name: 'Rodrigo De Paul',  team: 'Argentina',   teamFlag: '🇦🇷', position: 'MID', rating: 84 },
+  { id: 'arg-messi',   name: 'Lionel Messi',     team: 'Argentina',   teamFlag: '🇦🇷', position: 'SWG', rating: 94 },
+  { id: 'arg-alvarez', name: 'Julián Álvarez',   team: 'Argentina',   teamFlag: '🇦🇷', position: 'ATT', rating: 86 },
 ];
 
 const CAPTAIN_ID = 'arg-messi';
 
 const TUTORIAL_CONFIDENCE: Record<string, number> = {
   'ger-neuer':   3,
-  'bra-marquinhos': 3,
-  'por-ronaldo': 4,
+  'ger-tah':     3,
+  'arg-paul':    4,
   'arg-messi':   5,
-  'eng-kane':    4,
+  'arg-alvarez': 4,
 };
 
 // Demo skill cards equipped on the tutorial squad
@@ -41,11 +41,11 @@ const DEMO_CARDS: OwnedCard[] = [
 ];
 
 const EQUIPPED_CARDS: Record<string, string> = {
-  'ger-neuer':      'tutorial-demo-gk',
-  'bra-marquinhos': 'tutorial-demo-def',
-  'por-ronaldo':    'tutorial-demo-mid',
-  'arg-messi':      'tutorial-demo-swg',
-  'eng-kane':       'tutorial-demo-att',
+  'ger-neuer':   'tutorial-demo-gk',
+  'ger-tah':     'tutorial-demo-def',
+  'arg-paul':    'tutorial-demo-mid',
+  'arg-messi':   'tutorial-demo-swg',
+  'arg-alvarez': 'tutorial-demo-att',
 };
 
 // ── Tutorial dialog data ───────────────────────────────────────────────────

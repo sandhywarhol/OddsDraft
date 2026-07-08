@@ -454,13 +454,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
   useEffect(() => {
     if (tutorialStep === 4) {
-      // Use world-famous players so the tutorial feels real and recognisable
+      // Use Argentina and Germany players so the tutorial feels real and matches the Argentina vs Germany match
       const allWC = WC2026_PLAYERS as unknown as Player[];
-      const gk = allWC.find(p => p.id === 'bra-alisson');
-      const cb = allWC.find(p => p.id === 'bra-marquinhos');
-      const mf = allWC.find(p => p.id === 'spa-rodri');
+      const gk = allWC.find(p => p.id === 'ger-neuer');
+      const cb = allWC.find(p => p.id === 'ger-rudiger' || p.id === 'ger-tah');
+      const mf = allWC.find(p => p.id === 'arg-paul' || p.id === 'arg-depaul');
       const sw = allWC.find(p => p.id === 'arg-messi');
-      const cf = allWC.find(p => p.id === 'nor-haaland');
+      const cf = allWC.find(p => p.id === 'arg-alvarez');
 
       if (gk && cb && mf && sw && cf) {
         setLineup([
@@ -478,6 +478,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           { instanceId: 'tutorial-demo-gk',  cardId: 'gk-rare',       obtainedAt: new Date().toISOString() },
           { instanceId: 'tutorial-demo-def', cardId: 'def-rare',      obtainedAt: new Date().toISOString() },
           { instanceId: 'tutorial-demo-mid', cardId: 'mid-rare',      obtainedAt: new Date().toISOString() },
+          { instanceId: 'tutorial-demo-swg', cardId: 'win-epic',      obtainedAt: new Date().toISOString() },
           { instanceId: 'tutorial-demo-att', cardId: 'str-legendary', obtainedAt: new Date().toISOString() },
         ];
         demoCards.forEach(c => {
@@ -491,6 +492,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           [gk.id]: 'tutorial-demo-gk',
           [cb.id]: 'tutorial-demo-def',
           [mf.id]: 'tutorial-demo-mid',
+          [sw.id]: 'tutorial-demo-swg',
           [cf.id]: 'tutorial-demo-att',
         });
       }
