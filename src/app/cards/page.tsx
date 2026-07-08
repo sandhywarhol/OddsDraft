@@ -483,7 +483,7 @@ function CombineModal({
               minHeight: 'auto',
             }}>
               <div style={{
-                width: '100%', height: 'auto', aspectRatio: '810 / 1012.5', borderRadius: 12,
+                width: '100%', height: 'auto', aspectRatio: '810 / 1012.5', borderRadius: 16,
                 background: phase === 'combining'
                   ? `linear-gradient(135deg, ${nextRarityColor}33, rgba(0,0,0,0.6))`
                   : 'rgba(255,255,255,0.04)',
@@ -744,7 +744,7 @@ export default function CardsPage() {
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center' }}>
               {SKILL_CARDS.slice(0, 8).map((card) => (
-                <div key={card.id} style={{ position: 'relative', overflow: 'hidden', borderRadius: 12 }}>
+                <div key={card.id} style={{ position: 'relative', overflow: 'hidden', borderRadius: 16 }}>
                   <SkillCardDisplay card={card} width={240} />
                 </div>
               ))}
@@ -980,7 +980,7 @@ export default function CardsPage() {
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer', width: '100%', maxWidth: 240 }}
                   onClick={() => handleCardClick(instance, card)}
                 >
-                  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 12, width: '100%' }}>
+                  <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, width: '100%' }}>
                     <SkillCardDisplay
                       card={card}
                       instance={instance}

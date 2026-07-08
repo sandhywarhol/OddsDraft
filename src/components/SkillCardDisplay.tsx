@@ -70,7 +70,7 @@ export default function SkillCardDisplay({
         cursor: selectable ? 'pointer' : 'default',
         transition: 'transform 0.15s ease',
         transform: selected ? 'scale(1.04)' : 'scale(1)',
-        borderRadius: '12px',
+        borderRadius: '16px',
         overflow: 'hidden',
       }}
     >
@@ -94,8 +94,8 @@ export default function SkillCardDisplay({
           inset: 0,
           width: '100%',
           height: '100%',
-          objectFit: 'contain',
-          borderRadius: '12px',
+          objectFit: 'cover',
+          borderRadius: '16px',
           userSelect: 'none',
         }}
       />

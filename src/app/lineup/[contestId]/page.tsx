@@ -967,7 +967,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       aspectRatio: '230/287',
                       transform: 'scale(1)',
                       boxShadow: '0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(255,255,255,0.1)',
-                      borderRadius: 12,
+                      borderRadius: 16,
                     }}>
                       {def ? <SkillCardDisplay card={def} /> : <div style={{color:'white', padding:'10px', fontSize:'0.7rem'}}>Missing {card.cardId}</div>}
                     </div>
