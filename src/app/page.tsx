@@ -882,7 +882,7 @@ function Footer() {
               />
               <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.2)' }} />
               <img
-                src="/Logo OddsDraft.svg"
+                src="/logo_oddsdraft.svg"
                 alt="OddsDraft Logo"
                 style={{ height: '30px', objectFit: 'contain', display: 'block', mixBlendMode: 'screen' }}
               />

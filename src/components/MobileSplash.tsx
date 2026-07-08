@@ -29,7 +29,7 @@ export default function MobileSplash() {
       pointerEvents: 'none',
     }}>
       <img
-        src="/Logo OddsDraft.svg"
+        src="/logo_oddsdraft.svg"
         alt="OddsDraft"
         style={{
           height: 72,
