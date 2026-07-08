@@ -10,7 +10,7 @@ import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
 import { calculateFantasyPoints } from '@/lib/fantasy-engine';
 import { getCardsForLineupPosition, getCardById, addCardToCollection, type OwnedCard } from '@/lib/card-collection';
-import { RARITY_COLOR } from '@/lib/skill-cards';
+import { RARITY_COLOR, SKILL_CARDS } from '@/lib/skill-cards';
 import { formatDistanceToNow } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
@@ -18,6 +18,7 @@ import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana
 import PlayerAvatar from '@/components/PlayerAvatar';
 import FlagImage from '@/components/FlagImage';
 import { prefetchPlayerPhotos } from '@/lib/player-photos';
+import SkillCardDisplay from '@/components/SkillCardDisplay';
 // ── AI Recommendation badges ──────────────────────────────────────────────────
 // Rule-based picks derived from rating + position. Called per-player with the
 // full list so we can identify the single "top pick" relative to peers.
@@ -55,6 +56,15 @@ const DEMO_EVENTS = [
   { playerId: 'fra-griezmann', playerName: 'Griezmann', eventType: 'yellow_card', minute: 41, points: -2 },
   { playerId: 'arg-lautaro', playerName: 'L. Martínez', eventType: 'goal', minute: 57, points: 10 },
   { playerId: 'fra-mbappe', playerName: 'Mbappé', eventType: 'goal', minute: 78, points: 10 },
+];
+
+// Demo skill cards equipped on the tutorial squad
+const DEMO_CARDS: OwnedCard[] = [
+  { instanceId: 'tutorial-demo-gk',  cardId: 'gk-common',     obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-def', cardId: 'def-uncommon',  obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-mid', cardId: 'mid-rare',      obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-swg', cardId: 'win-epic',      obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-att', cardId: 'str-legendary', obtainedAt: new Date().toISOString() },
 ];
 
 const SLOTS = [
@@ -917,6 +927,39 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               WebkitBackdropFilter: shouldBlurLineupBg ? 'blur(5px)' : 'none',
             }}
           >
+            {/* Step 8 Desktop Skill Cards Display */}
+            {tutorialStep === 8 && (
+              <div style={{
+                position: 'fixed',
+                top: '40%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 10000,
+                display: 'flex',
+                gap: '15px',
+                pointerEvents: 'none',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100vw'
+              }}>
+                {DEMO_CARDS.map((card, i) => {
+                  const def = SKILL_CARDS.find(c => c.id === card.cardId);
+                  return (
+                    <div key={card.instanceId} style={{
+                      width: 230,
+                      height: 287,
+                      transform: 'scale(1)',
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.8), 0 0 50px rgba(255,255,255,0.2)',
+                      borderRadius: 16,
+                      background: 'rgba(0,0,0,0.5)',
+                    }}>
+                      {def ? <SkillCardDisplay card={def} /> : <div style={{color:'white', padding:'20px'}}>Missing {card.cardId}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* NPC Character Image (Female - Left) */}
             {tutorialData?.position === 'left' && (
               <img
@@ -924,9 +967,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                 alt="Guide"
                 className="npc-commentator1-img"
                 style={{
-                  bottom: '-25vh',
+                  bottom: '0',
                   left: tutorialData?.shiftEdge ? '-18%' : '2%',
-                  height: '105vh',
+                  height: '85vh',
+                  maxHeight: '700px',
                   zIndex: 10005,
                   transition: 'opacity 0.4s ease-out, transform 0.4s ease-out, left 0.4s ease-out',
                   opacity: 1,
