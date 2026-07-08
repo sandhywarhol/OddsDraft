@@ -3813,7 +3813,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               <div className="desktop-only live-events-wrapper">
               {/* Match Events panel */}
-              <div className="ro-window live-events" style={{ position: 'sticky', top: 80 }}>
+              <div className="ro-window live-events" style={{ position: 'sticky', top: 80, maxHeight: 'calc(100vh - 100px)' }}>
                 <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>⚡ Match Events</span>
                   {appMode === 'live' ? (
@@ -3836,7 +3836,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     ⓘ base pts
                   </span>
                 </div>
-                <div className="ro-window__body" style={{ padding: 12 }}>
+                <div className="ro-window__body" style={{ padding: 12, display: 'flex', flexDirection: 'column' }}>
                   {events.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                       {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
@@ -3865,7 +3865,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       )}
                     </div>
                   )}
-                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflowY: 'auto' }}>
                     {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
                       <div
                         key={event.id}
