@@ -61,7 +61,7 @@ export default function Navbar() {
       <div className="container navbar__inner">
         {/* Logo (Flex 1 to push nav to center) */}
         <Link href="/" className="navbar__logo" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-          <img src="/logo_oddsdraft.svg" alt="OddsDraft Logo" style={{ height: '48px', width: 'auto', mixBlendMode: 'screen' }} />
+          <img src="/logo_oddsdraft.svg" alt="OddsDraft Logo" style={{ height: '48px', width: 'auto' }} />
         </Link>
 
         {/* Desktop Nav (Center) */}

@@ -34,7 +34,6 @@ export default function MobileSplash() {
         style={{
           height: 72,
           width: 'auto',
-          mixBlendMode: 'screen',
           transform: phase === 'in' ? 'scale(0.85)' : 'scale(1)',
           transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}

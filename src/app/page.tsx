@@ -884,7 +884,7 @@ function Footer() {
               <img
                 src="/logo_oddsdraft.svg"
                 alt="OddsDraft Logo"
-                style={{ height: '30px', objectFit: 'contain', display: 'block', mixBlendMode: 'screen' }}
+                style={{ height: '30px', objectFit: 'contain', display: 'block' }}
               />
             </div>
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5, maxWidth: 240 }}>
