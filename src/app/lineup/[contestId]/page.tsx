@@ -964,7 +964,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   return (
                     <div key={card.instanceId} style={{
                       width: 'clamp(100px, 18vw, 230px)',
-                      aspectRatio: '230/287',
+                      aspectRatio: '1086/1448',
                       transform: 'scale(1)',
                       boxShadow: '0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(255,255,255,0.1)',
                       borderRadius: 16,

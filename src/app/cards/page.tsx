@@ -483,7 +483,7 @@ function CombineModal({
               minHeight: 'auto',
             }}>
               <div style={{
-                width: '100%', height: 'auto', aspectRatio: '810 / 1012.5', borderRadius: 16,
+                width: '100%', height: 'auto', aspectRatio: '1086 / 1448', borderRadius: 16,
                 background: phase === 'combining'
                   ? `linear-gradient(135deg, ${nextRarityColor}33, rgba(0,0,0,0.6))`
                   : 'rgba(255,255,255,0.04)',

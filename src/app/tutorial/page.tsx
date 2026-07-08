@@ -387,7 +387,7 @@ export default function TutorialPage() {
                 return (
                   <div key={card.instanceId} style={{
                     width: 230,
-                    height: 287,
+                    height: 307,
                     transform: 'scale(1)',
                     boxShadow: '0 20px 40px rgba(0,0,0,0.8), 0 0 50px rgba(255,255,255,0.2)',
                     borderRadius: 16,

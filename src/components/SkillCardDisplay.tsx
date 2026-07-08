@@ -36,7 +36,7 @@ export default function SkillCardDisplay({
   selected = false,
   onSelect,
 }: SkillCardDisplayProps) {
-  const height = Math.round(width * (1012.5 / 810));
+  const height = Math.round(width * (1448 / 1086));
   const rarityColor = RARITY_COLOR[card.rarity];
   const posColor =
     card.position === 'Goalkeeper' ? '#1565c0' :
@@ -64,7 +64,7 @@ export default function SkillCardDisplay({
         position: 'relative',
         width: '100%',
         maxWidth: width, // Respect the max width passed via prop on desktop
-        aspectRatio: '810 / 1012.5',
+        aspectRatio: '1086 / 1448',
         height: 'auto',
         flexShrink: 0,
         cursor: selectable ? 'pointer' : 'default',
@@ -94,7 +94,7 @@ export default function SkillCardDisplay({
           inset: 0,
           width: '100%',
           height: '100%',
-          objectFit: 'cover',
+          objectFit: 'contain',
           borderRadius: '16px',
           userSelect: 'none',
         }}
