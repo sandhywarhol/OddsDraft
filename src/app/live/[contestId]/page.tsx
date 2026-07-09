@@ -3522,9 +3522,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         const cardRarityColor = equippedCard ? RARITY_COLOR[equippedCard.rarity] : null;
                         const cardRarityStars = equippedCard ? RARITY_STARS[equippedCard.rarity] : null;
                         const lScoreTop  = '16%';
-                        const lNameTop   = '64%';
-                        const lNationTop = '73%';
-                        const lPosTop    = '82%';
+                        const lNameTop   = '66%';
+                        const lNationTop = '75%';
+                        const lPosTop    = '84%';
                         return (
                           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0, width: cw, paddingTop: 0 }}>
                             {/* Player card — High Score variant when pts > 10 */}
