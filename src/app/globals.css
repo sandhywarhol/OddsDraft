@@ -2266,9 +2266,9 @@ a {
   .live-grid {
     display: grid !important;
     grid-template-columns: 1fr 360px !important;
-    grid-template-rows: auto !important;
+    grid-template-rows: max-content max-content 1fr auto !important;
     gap: 16px !important;
-    align-items: stretch !important;
+    align-items: start !important;
   }
   .live-col-left, .live-col-right {
     display: contents !important;
@@ -2278,6 +2278,7 @@ a {
   .live-fantasy-points {
     grid-column: 1;
     grid-row: 1;
+    padding: 12px 20px;
   }
   .live-my-lineup {
     grid-column: 1;
@@ -2291,7 +2292,7 @@ a {
   /* Right Column Items */
   .live-events-wrapper {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
     display: flex;
     flex-direction: column;
   }
@@ -2302,7 +2303,7 @@ a {
   
   .live-leaderboard {
     grid-column: 2;
-    grid-row: 3;
+    grid-row: 4;
   }
 }
 

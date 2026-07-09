@@ -3323,7 +3323,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           {/* MOBILE ONLY User Stats (Right below score) */}
           <div className="mobile-only" style={{ marginBottom: 20 }}>
 {/* User Fantasy Stats */}
-              <div className="card card--primary live-stats-mobile" style={{ marginBottom: 20 }}>
+              <div className="card card--primary live-stats-mobile" style={{ padding: '12px 20px' }}>
                 <div style={{ display: 'flex', gap: 'var(--live-stats-gap)', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
@@ -3436,7 +3436,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               <div className="desktop-only" style={{ display: 'contents' }}>
               {/* User Fantasy Stats */}
-              <div className="card card--primary live-stats live-fantasy-points" style={{ marginBottom: 20 }}>
+              <div className="card card--primary live-stats live-fantasy-points">
                 <div style={{ display: 'flex', gap: 'var(--live-stats-gap)', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
