@@ -2271,8 +2271,15 @@ a {
     gap: 16px !important;
     align-items: start !important;
   }
-  .live-col-left, .live-col-right {
+  .live-col-left {
     display: contents !important;
+  }
+  .live-col-right {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    display: flex !important;
+    flex-direction: column;
+    gap: 16px;
   }
   
   /* Left Column Items */
@@ -2292,8 +2299,6 @@ a {
 
   /* Right Column Items */
   .live-events-wrapper {
-    grid-column: 2;
-    grid-row: 1 / span 3;
     display: flex;
     flex-direction: column;
   }
@@ -2303,12 +2308,8 @@ a {
   }
   
   .live-leaderboard {
-    grid-column: 2;
-    grid-row: 4;
   }
   .live-point-reference {
-    grid-column: 2;
-    grid-row: 5;
   }
 }
 
