@@ -10,7 +10,7 @@ import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
 import { calculateFantasyPoints } from '@/lib/fantasy-engine';
 import { getCardsForLineupPosition, getCardById, addCardToCollection, type OwnedCard } from '@/lib/card-collection';
-import { RARITY_COLOR, SKILL_CARDS, type SkillCard } from '@/lib/skill-cards';
+import { RARITY_COLOR, SKILL_CARDS, type SkillCard, getUpgradedEffectText } from '@/lib/skill-cards';
 import { formatDistanceToNow } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
@@ -1633,7 +1633,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                                         </div>
                                       )}
                                     </div>
-                                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{card.effectText}</div>
+                                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                                      {instance.upgradeCredits && instance.upgradeCredits > 0 
+                                        ? getUpgradedEffectText(card, instance.upgradeCredits) 
+                                        : card.effectText}
+                                    </div>
                                   </div>
                                   <span style={{
                                     fontSize: 10, fontWeight: 700,
