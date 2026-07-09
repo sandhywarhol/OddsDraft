@@ -3833,8 +3833,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               <div className="desktop-only live-events-wrapper">
               {/* Match Events panel */}
-              <div className="ro-window live-events" style={{ position: 'sticky', top: 80, height: 680 }}>
-                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="ro-window live-events" style={{ position: 'sticky', top: 80, height: 680, display: 'flex', flexDirection: 'column' }}>
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <span>⚡ Match Events</span>
                   {appMode === 'live' ? (
                     <span
@@ -3856,7 +3856,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     ⓘ base pts
                   </span>
                 </div>
-                <div className="ro-window__body" style={{ padding: 12, display: 'flex', flexDirection: 'column' }}>
+                <div className="ro-window__body" style={{ padding: 12, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                   {events.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                       {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
