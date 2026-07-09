@@ -3828,7 +3828,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               <div className="desktop-only live-events-wrapper">
               {/* Match Events panel */}
-              <div className="ro-window live-events" style={{ position: 'sticky', top: 80, maxHeight: 'calc(100vh - 100px)' }}>
+              <div className="ro-window live-events" style={{ position: 'sticky', top: 80, height: 680 }}>
                 <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>⚡ Match Events</span>
                   {appMode === 'live' ? (
