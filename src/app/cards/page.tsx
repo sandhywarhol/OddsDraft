@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import SkillCardDisplay from '@/components/SkillCardDisplay';
@@ -15,6 +15,7 @@ import {
   rollRandomCard,
   addCardToCollection,
   openCardPack,
+  openUpgradeCardPack,
   getUpgradeCollection,
   addUpgradeCardToCollection,
   upgradeSkillCard,
@@ -1287,6 +1288,7 @@ export default function CardsPage() {
   const [activeTab, setActiveTab] = useState<'skill' | 'upgrade'>('skill');
   const [upgradeTarget, setUpgradeTarget] = useState<{ instance: OwnedUpgradeCard; card: UpgradeCard } | null>(null);
   const [showDemoOpener, setShowDemoOpener] = useState(false);
+  const [showDemoUpgradeOpener, setShowDemoUpgradeOpener] = useState(false);
   const [filterPos, setFilterPos] = useState<FilterPos>('all');
   const [filterRarity, setFilterRarity] = useState<FilterRarity>('all');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
@@ -1327,6 +1329,10 @@ export default function CardsPage() {
     setShowDemoOpener(true);
   };
 
+  const handleDemoOpenUpgradeCard = () => {
+    setShowDemoUpgradeOpener(true);
+  };
+
   const filtered = allCards
     .filter(({ card }) => filterPos === 'all' || card.position === filterPos)
     .filter(({ card }) => filterRarity === 'all' || card.rarity === filterRarity)
@@ -1346,6 +1352,32 @@ export default function CardsPage() {
       }
       return a.card.name.localeCompare(b.card.name);
     });
+
+  const groupedFiltered = useMemo(() => {
+    const groups = new Map<string, { instances: OwnedCard[], card: SkillCard }>();
+    filtered.forEach(item => {
+      const key = `${item.card.id}-${item.instance.upgradeCredits || 0}`;
+      if (!groups.has(key)) {
+        groups.set(key, { instances: [item.instance], card: item.card });
+      } else {
+        groups.get(key)!.instances.push(item.instance);
+      }
+    });
+    return Array.from(groups.values());
+  }, [filtered]);
+
+  const groupedUpgradeCards = useMemo(() => {
+    const groups = new Map<string, { instances: OwnedUpgradeCard[], card: UpgradeCard }>();
+    upgradeCards.forEach(item => {
+      const key = item.card.id;
+      if (!groups.has(key)) {
+        groups.set(key, { instances: [item.instance], card: item.card });
+      } else {
+        groups.get(key)!.instances.push(item.instance);
+      }
+    });
+    return Array.from(groups.values());
+  }, [upgradeCards]);
 
   const rarityCount: Partial<Record<Rarity, number>> = {};
   allCards.forEach(({ card }) => {
@@ -1429,17 +1461,30 @@ export default function CardsPage() {
                 My Collection
               </h1>
               {appMode === 'demo' && connected && (
-                <button 
-                  onClick={handleDemoOpenCard}
-                  style={{
-                    background: '#ffd700', color: '#000', border: 'none', borderRadius: 8,
-                    padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(255, 215, 0, 0.25)',
-                    letterSpacing: '0.05em'
-                  }}
-                >
-                  + DEMO: OPEN CARD
-                </button>
+                <>
+                  <button 
+                    onClick={handleDemoOpenCard}
+                    style={{
+                      background: '#ffd700', color: '#000', border: 'none', borderRadius: 8,
+                      padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(255, 215, 0, 0.25)',
+                      letterSpacing: '0.05em'
+                    }}
+                  >
+                    + DEMO: OPEN CARD
+                  </button>
+                  <button 
+                    onClick={handleDemoOpenUpgradeCard}
+                    style={{
+                      background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 8,
+                      padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(139, 92, 246, 0.25)',
+                      letterSpacing: '0.05em'
+                    }}
+                  >
+                    + DEMO: UPGRADE PACK
+                  </button>
+                </>
               )}
             </div>
             <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
@@ -1755,7 +1800,9 @@ export default function CardsPage() {
                 100% { transform: translateX(230%) skewX(-20deg); opacity: 0; }
               }
             `}</style>
-            {filtered.map(({ instance, card }) => {
+            {groupedFiltered.map(({ instances, card }) => {
+              const instance = instances[0];
+              const count = instances.length;
               const isShimmering = shimmerIds.has(instance.instanceId);
               const copyCount = cardIdCount[instance.cardId] ?? 1;
               const isCombineable = copyCount >= 2 && canCombine(instance.cardId);
@@ -1828,16 +1875,25 @@ export default function CardsPage() {
                         ⚗️ COMBINE ×{copyCount}
                       </button>
                     )}
-                    {/* Duplicate count badge (when > 1 but not yet combineable) */}
-                    {copyCount > 1 && !isCombineable && (
+                    {/* Gaming Duplicates Badge */}
+                    {count > 1 && (
                       <div style={{
-                        position: 'absolute', top: 6, right: 6,
+                        position: 'absolute', bottom: 4, right: 0,
                         zIndex: 20,
-                        background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)',
-                        borderRadius: 10, padding: '2px 7px',
-                        fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 700,
+                        background: '#dc2626',
+                        color: '#fff',
+                        fontSize: '1.2rem',
+                        fontWeight: 900,
+                        padding: '2px 10px',
+                        border: '3px solid #000',
+                        transform: 'rotate(-8deg)',
+                        boxShadow: '2px 4px 10px rgba(0,0,0,0.5)',
+                        fontFamily: '"Impact", "Arial Black", sans-serif',
+                        letterSpacing: '1px',
+                        textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
+                        pointerEvents: 'none' // allow clicking the card under it
                       }}>
-                        ×{copyCount}
+                        x{count}
                       </div>
                     )}
                   </div>
@@ -1949,9 +2005,11 @@ export default function CardsPage() {
             )}
 
             {/* Upgrade card grid */}
-            {upgradeCards.length > 0 && (
+            {groupedUpgradeCards.length > 0 && (
               <div className="cards-grid-mobile" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between' }}>
-                {upgradeCards.map(({ instance, card }) => {
+                {groupedUpgradeCards.map(({ instances, card }) => {
+                  const instance = instances[0];
+                  const count = instances.length;
                   const rarityColor = UPGRADE_RARITY_COLOR[card.rarity];
                   return (
                     <div
@@ -1961,13 +2019,38 @@ export default function CardsPage() {
                         display: 'flex', flexDirection: 'column',
                         transition: 'transform 0.2s',
                         cursor: 'pointer',
+                        position: 'relative'
                       }}
                       onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
                       onClick={() => setViewUpgradeTarget({ instance, card })}
                     >
                       {/* Card image and stats */}
-                      <UpgradeCardDisplay card={card} width={220} />
+                      <div style={{ position: 'relative' }}>
+                        <UpgradeCardDisplay card={card} width={220} />
+                        
+                        {/* Gaming Duplicates Badge */}
+                        {count > 1 && (
+                          <div style={{
+                            position: 'absolute', bottom: 4, right: 0,
+                            zIndex: 20,
+                            background: '#dc2626',
+                            color: '#fff',
+                            fontSize: '1.2rem',
+                            fontWeight: 900,
+                            padding: '2px 10px',
+                            border: '3px solid #000',
+                            transform: 'rotate(-8deg)',
+                            boxShadow: '2px 4px 10px rgba(0,0,0,0.5)',
+                            fontFamily: '"Impact", "Arial Black", sans-serif',
+                            letterSpacing: '1px',
+                            textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
+                            pointerEvents: 'none'
+                          }}>
+                            x{count}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Obtained Date */}
                       <div style={{ padding: '8px 4px 0', display: 'flex', flexDirection: 'column' }}>
@@ -2053,6 +2136,20 @@ export default function CardsPage() {
           }}
           onClose={() => {
             setShowDemoOpener(false);
+            reload();
+          }}
+        />
+      )}
+
+      {/* Demo Upgrade pack opener */}
+      {showDemoUpgradeOpener && (
+        <CardPackOpener
+          upgradePackMode={true}
+          onOpen={() => {
+            return openUpgradeCardPack();
+          }}
+          onClose={() => {
+            setShowDemoUpgradeOpener(false);
             reload();
           }}
         />

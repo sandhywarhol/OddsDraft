@@ -240,6 +240,15 @@ export function openCardPack(contestId: string): {
   return { instance, card };
 }
 
+export function openUpgradeCardPack(): {
+  upgradeInstance: OwnedUpgradeCard;
+  upgradeCard: UpgradeCard;
+} {
+  const upgradeCard = rollUpgradeCard();
+  const upgradeInstance = addUpgradeCardToCollection(upgradeCard.id);
+  return { upgradeInstance, upgradeCard };
+}
+
 export function hasOpenedPack(contestId: string): boolean {
   if (typeof window === 'undefined') return true;
   return localStorage.getItem(`${PACK_OPENED_PREFIX}${contestId}`) === '1';

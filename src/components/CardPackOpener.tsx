@@ -12,16 +12,18 @@ import SkillCardDisplay from './SkillCardDisplay';
 import UpgradeCardDisplay from './UpgradeCardDisplay';
 
 interface CardPackOpenerProps {
-  contestId: string;
-  onOpen: () => { instance: OwnedCard; card: SkillCard; upgradeInstance?: OwnedUpgradeCard; upgradeCard?: UpgradeCard };
-  onClose: (card: SkillCard) => void;
+  contestId?: string;
+  upgradePackMode?: boolean;
+  onOpen: () => { instance?: OwnedCard; card?: SkillCard; upgradeInstance?: OwnedUpgradeCard; upgradeCard?: UpgradeCard };
+  onClose: () => void;
 }
 
 type Phase = 'idle' | 'shaking' | 'flip-out' | 'flip-in' | 'done';
 
-export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackOpenerProps) {
+export default function CardPackOpener({ contestId, upgradePackMode, onOpen, onClose }: CardPackOpenerProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [revealedCard, setRevealedCard] = useState<SkillCard | null>(null);
+  const [revealedUpgradeCard, setRevealedUpgradeCard] = useState<UpgradeCard | null>(null);
   const [bonusUpgradeCard, setBonusUpgradeCard] = useState<UpgradeCard | null>(null);
   const [particles, setParticles] = useState<{ id: number; x: number; y: number; color: string; size: number }[]>([]);
 
@@ -40,13 +42,20 @@ export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackO
       // Roll the card at the midpoint of the flip (when invisible)
       setTimeout(() => {
         const result = onOpen();
-        setRevealedCard(result.card);
-        if (result.upgradeCard) {
-          setBonusUpgradeCard(result.upgradeCard);
+        
+        if (upgradePackMode) {
+          if (result.upgradeCard) setRevealedUpgradeCard(result.upgradeCard);
+        } else {
+          if (result.card) setRevealedCard(result.card);
+          if (result.upgradeCard) {
+            setBonusUpgradeCard(result.upgradeCard);
+          }
         }
 
         // Spawn rarity-coloured particles
-        const color = RARITY_COLOR[result.card.rarity];
+        const activeCard = upgradePackMode ? result.upgradeCard : result.card;
+        const color = activeCard ? (upgradePackMode ? UPGRADE_RARITY_COLOR[activeCard.rarity as keyof typeof UPGRADE_RARITY_COLOR] : RARITY_COLOR[activeCard.rarity as keyof typeof RARITY_COLOR]) : '#ffd700';
+        
         setParticles(
           Array.from({ length: 24 }, (_, i) => ({
             id: i,
@@ -75,7 +84,7 @@ export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackO
     }
   }, [phase]);
 
-  const rarityColor = revealedCard ? RARITY_COLOR[revealedCard.rarity] : '#ffd700';
+  const rarityColor = revealedCard ? RARITY_COLOR[revealedCard.rarity as keyof typeof RARITY_COLOR] : revealedUpgradeCard ? UPGRADE_RARITY_COLOR[revealedUpgradeCard.rarity as keyof typeof UPGRADE_RARITY_COLOR] : '#ffd700';
 
   return (
     <div style={{
@@ -100,15 +109,16 @@ export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackO
           🎴 Match Reward
         </div>
         <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', textShadow: '0 0 24px rgba(255,215,0,0.5)' }}>
-          {phase === 'done' && revealedCard ? `${revealedCard.name} Obtained!` : 'You Earned a Card Pack!'}
+          {phase === 'done' && (revealedCard || revealedUpgradeCard) ? `${revealedCard?.name || revealedUpgradeCard?.name} Obtained!` : 'You Earned a Card Pack!'}
         </div>
-        {phase === 'done' && revealedCard && (
+        {phase === 'done' && (revealedCard || revealedUpgradeCard) && (
           <div style={{
             fontSize: 13, marginTop: 6, fontWeight: 700,
             color: rarityColor, textShadow: `0 0 10px ${rarityColor}`,
             letterSpacing: 2, textTransform: 'uppercase',
           }}>
-            {RARITY_STARS[revealedCard.rarity]} {revealedCard.rarity}
+            {revealedCard && `${RARITY_STARS[revealedCard.rarity as keyof typeof RARITY_STARS]} ${revealedCard.rarity}`}
+            {revealedUpgradeCard && `${RARITY_STARS[revealedUpgradeCard.rarity as keyof typeof RARITY_STARS] || '⭐'} ${revealedUpgradeCard.rarity}`}
           </div>
         )}
         {phase === 'idle' && (
@@ -234,6 +244,12 @@ export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackO
                   width={CARD_W}
                 />
               )}
+              {revealedUpgradeCard && (
+                <UpgradeCardDisplay
+                  card={revealedUpgradeCard}
+                  width={CARD_W}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -263,7 +279,7 @@ export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackO
       </div>
 
       {/* Post-reveal actions */}
-      {phase === 'done' && revealedCard && (
+      {phase === 'done' && (revealedCard || revealedUpgradeCard) && (
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -273,7 +289,7 @@ export default function CardPackOpener({ contestId, onOpen, onClose }: CardPackO
         }}>
           <div style={{ display: 'flex', gap: 12 }}>
             <button
-              onClick={() => onClose(revealedCard)}
+              onClick={() => onClose()}
               style={{
                 padding: '12px 24px',
                 background: 'transparent',
