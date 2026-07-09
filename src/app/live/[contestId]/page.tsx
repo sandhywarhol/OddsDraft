@@ -4265,7 +4265,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             </div>
 
               {/* Point Reference */}
-              <div className="card">
+              <div className="card live-point-reference desktop-only">
                 <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Fantasy Points Reference
                 </h4>
