@@ -316,6 +316,11 @@ export function getCardDefByInstanceId(instanceId: string): SkillCard | undefine
   return getCardById(instance.cardId);
 }
 
+export function getCardInstanceById(instanceId: string): OwnedCard | undefined {
+  const col = getCollection();
+  return col.cards.find(c => c.instanceId === instanceId);
+}
+
 export function equipCard(contestId: string, playerId: string, instanceId: string): void {
   const lineup = readLineup(contestId);
   if (!lineup) return;
@@ -333,21 +338,27 @@ export function equipCard(contestId: string, playerId: string, instanceId: strin
 // Flat bonus this card adds for a single event type.
 // Reduction cards (goal_conceded_reduction, yellow_card_reduction) return a positive
 // value that offsets the negative base points.
-export function getCardBonusForEvent(card: SkillCard, eventType: string): number {
+export function getCardBonusForEvent(card: SkillCard, eventType: string, upgradeCredits: number = 0): number {
+  let baseValue = 0;
   switch (card.modifierType) {
-    case 'goal_bonus':              return eventType === 'goal'             ? card.modifierValue : 0;
-    case 'assist_bonus':            return eventType === 'assist'            ? card.modifierValue : 0;
-    case 'goalkeeper_save_bonus':   return eventType === 'goalkeeper_save'   ? card.modifierValue : 0;
-    case 'goal_conceded_reduction': return eventType === 'goal_conceded'     ? card.modifierValue : 0;
-    case 'clean_sheet_bonus':       return eventType === 'clean_sheet'       ? card.modifierValue : 0;
-    case 'yellow_card_reduction':   return eventType === 'yellow_card'       ? card.modifierValue : 0;
-    case 'possession_bonus_extra':  return eventType === 'possession_bonus'  ? card.modifierValue : 0;
-    case 'penalty_save_bonus':      return eventType === 'penalty_save'      ? card.modifierValue : 0;
-    case 'penalty_scored_bonus':    return eventType === 'penalty_scored'    ? card.modifierValue : 0;
-    case 'appearance_bonus':
-      return (eventType === 'starting_xi' || eventType === 'sub_appearance') ? card.modifierValue : 0;
-    default: return 0;
+    case 'goal_bonus':              baseValue = eventType === 'goal'             ? card.modifierValue : 0; break;
+    case 'assist_bonus':            baseValue = eventType === 'assist'            ? card.modifierValue : 0; break;
+    case 'goalkeeper_save_bonus':   baseValue = eventType === 'goalkeeper_save'   ? card.modifierValue : 0; break;
+    case 'goal_conceded_reduction': baseValue = eventType === 'goal_conceded'     ? card.modifierValue : 0; break;
+    case 'clean_sheet_bonus':       baseValue = eventType === 'clean_sheet'       ? card.modifierValue : 0; break;
+    case 'yellow_card_reduction':   baseValue = eventType === 'yellow_card'       ? card.modifierValue : 0; break;
+    case 'possession_bonus_extra':  baseValue = eventType === 'possession_bonus'  ? card.modifierValue : 0; break;
+    case 'penalty_save_bonus':      baseValue = eventType === 'penalty_save'      ? card.modifierValue : 0; break;
+    case 'penalty_scored_bonus':    baseValue = eventType === 'penalty_scored'    ? card.modifierValue : 0; break;
+    case 'appearance_bonus':        baseValue = (eventType === 'starting_xi' || eventType === 'sub_appearance') ? card.modifierValue : 0; break;
+    default:                        baseValue = 0;
   }
+  
+  if (baseValue === 0 || !upgradeCredits) return baseValue;
+  
+  const credits = Math.min(upgradeCredits, 10);
+  const multiplier = 1 + (credits / 10) * 0.3;
+  return baseValue * multiplier;
 }
 
 export function unequipCard(contestId: string, playerId: string): void {

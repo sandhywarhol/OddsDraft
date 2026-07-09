@@ -13,7 +13,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import FantasyToast, { type FantasyNotificationItem } from '@/components/FantasyToast';
 import CardPackOpener from '@/components/CardPackOpener';
 import SkillCardDisplay from '@/components/SkillCardDisplay';
-import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEvent } from '@/lib/card-collection';
+import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEvent, getCardInstanceById, type OwnedCard } from '@/lib/card-collection';
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
@@ -907,6 +907,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
   const equippedCardDefsRef = useRef<Record<string, SkillCard | null>>({});
+  const equippedCardInstancesRef = useRef<Record<string, OwnedCard | null>>({});
 
   // Keep ref current so poll closure always uses latest JWT without needing guestJwt in deps
   useEffect(() => { guestJwtRef.current = guestJwt; }, [guestJwt]);
@@ -932,10 +933,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         userLineupRef.current = parsed;
         setUserLineup(parsed);
         const defs: Record<string, SkillCard | null> = {};
+        const instances: Record<string, OwnedCard | null> = {};
         for (const [pid, instId] of Object.entries(parsed.equippedCards ?? {})) {
           defs[pid] = getCardDefByInstanceId(instId as string) ?? null;
+          instances[pid] = getCardInstanceById(instId as string) ?? null;
         }
         equippedCardDefsRef.current = defs;
+        equippedCardInstancesRef.current = instances;
       } else {
         userLineupRef.current = null;
         setUserLineup(null);
@@ -2107,7 +2111,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               let rawPts = calculateEventPoints(ev.type, matched.position);
               if (!appearedPlayersRef.current.has(ev.playerId)) { rawPts += 2; appearedPlayersRef.current.add(ev.playerId); }
               const cardDef = equippedCardDefsRef.current[ev.playerId];
-              if (cardDef) rawPts += getCardBonusForEvent(cardDef, ev.type);
+              const cardInst = equippedCardInstancesRef.current[ev.playerId];
+              if (cardDef) rawPts += getCardBonusForEvent(cardDef, ev.type, cardInst?.upgradeCredits || 0);
               let delta = rawPts;
               if (captain === ev.playerId) delta *= 2;
               const stars = confidence?.[ev.playerId] ?? 3;
@@ -2273,7 +2278,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           appearedPlayersRef.current.add(ev.playerId);
           // Apply equipped skill card bonus before captain/confidence multipliers
           const cardDefLive = equippedCardDefsRef.current[ev.playerId];
-          if (cardDefLive) rawPts += getCardBonusForEvent(cardDefLive, ev.type);
+          const cardInstLive = equippedCardInstancesRef.current[ev.playerId];
+          if (cardDefLive) rawPts += getCardBonusForEvent(cardDefLive, ev.type, cardInstLive?.upgradeCredits || 0);
           let delta = rawPts;
           let isCap = false;
           if (captain === ev.playerId) { delta *= 2; isCap = true; }
@@ -2494,7 +2500,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (gcBase === 0) continue;
           let gcDelta = gcBase * goalsAgainst;
           const cardDef = equippedCardDefsRef.current[p.id];
-          if (cardDef) gcDelta += getCardBonusForEvent(cardDef, 'goal_conceded') * goalsAgainst;
+          const cardInst = equippedCardInstancesRef.current[p.id];
+          if (cardDef) gcDelta += getCardBonusForEvent(cardDef, 'goal_conceded', cardInst?.upgradeCredits || 0) * goalsAgainst;
           if (captain === p.id) gcDelta *= 2;
           const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
           gcDelta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
@@ -2516,7 +2523,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (alreadyHasCS) continue;
           let csBase = calculateEventPoints('clean_sheet', p.position);
           const cardDef = equippedCardDefsRef.current[p.id];
-          if (cardDef) csBase += getCardBonusForEvent(cardDef, 'clean_sheet');
+          const cardInst = equippedCardInstancesRef.current[p.id];
+          if (cardDef) csBase += getCardBonusForEvent(cardDef, 'clean_sheet', cardInst?.upgradeCredits || 0);
           if (csBase <= 0) continue;
           let csDelta = captain === p.id ? csBase * 2 : csBase;
           const csStars = (confidence as Record<string, number>)?.[p.id] ?? 3;
@@ -2666,7 +2674,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           let csBase = calculateEventPoints('clean_sheet', p.position);
           // Skill card clean_sheet_bonus applied before captain/confidence
           const cardDefCs = equippedCardDefsRef.current[p.id];
-          if (cardDefCs) csBase += getCardBonusForEvent(cardDefCs, 'clean_sheet');
+          const cardInstCs = equippedCardInstancesRef.current[p.id];
+          if (cardDefCs) csBase += getCardBonusForEvent(cardDefCs, 'clean_sheet', cardInstCs?.upgradeCredits || 0);
           if (csBase === 0) continue;
           let csDelta = csCaptain === p.id ? csBase * 2 : csBase;
           const csStars = csConf?.[p.id] ?? 3;
@@ -2707,7 +2716,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           appearedPlayersRef.current.add(event.playerId);
           // Apply equipped skill card bonus before captain/confidence multipliers
           const cardDefDemo = equippedCardDefsRef.current[event.playerId];
-          if (cardDefDemo) rawPoints += getCardBonusForEvent(cardDefDemo, event.type);
+          const cardInstDemo = equippedCardInstancesRef.current[event.playerId];
+          if (cardDefDemo) rawPoints += getCardBonusForEvent(cardDefDemo, event.type, cardInstDemo?.upgradeCredits || 0);
           delta = rawPoints;
 
           if (captain === event.playerId) {
@@ -3599,19 +3609,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             </div>
 
                             {/* Equipped skill card indicator */}
-                            {equippedCard && cardRarityColor && cardRarityStars && (
-                              <div style={{
-                                width: '100%', textAlign: 'center',
-                                fontSize: `calc(0.4rem * ${cs})`, lineHeight: 1.3,
-                              }}>
-                                <span style={{ color: cardRarityColor, fontWeight: 800, letterSpacing: '0.03em' }}>
-                                  {cardRarityStars}
-                                </span>
-                                <span style={{ display: 'block', color: cardRarityColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {equippedCard.name}
-                                </span>
-                              </div>
-                            )}
+                            {equippedCard && cardRarityColor && cardRarityStars && (() => {
+                              const inst = equippedCardInstancesRef.current[p.id];
+                              const credits = Math.min(inst?.upgradeCredits || 0, 10);
+                              const upgLabel = credits > 0 ? ` (+${credits * 3}%)` : '';
+                              return (
+                                <div style={{
+                                  width: '100%', textAlign: 'center',
+                                  fontSize: `calc(0.4rem * ${cs})`, lineHeight: 1.3,
+                                }}>
+                                  <span style={{ color: cardRarityColor, fontWeight: 800, letterSpacing: '0.03em' }}>
+                                    {cardRarityStars}
+                                  </span>
+                                  <span style={{ display: 'block', color: cardRarityColor, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {equippedCard.name}{upgLabel}
+                                  </span>
+                                </div>
+                              );
+                            })()}
 
                             {/* Live total pts */}
                             <div style={{ textAlign: 'center', lineHeight: 1 }}>
