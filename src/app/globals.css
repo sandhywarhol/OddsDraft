@@ -2265,7 +2265,8 @@ a {
 @media (min-width: 769px) {
   .live-grid {
     display: grid !important;
-    grid-template-columns: 1fr 360px !important;
+    grid-template-columns: minmax(auto, 680px) 360px !important;
+    justify-content: center !important;
     grid-template-rows: max-content max-content 1fr auto !important;
     gap: 16px !important;
     align-items: start !important;
