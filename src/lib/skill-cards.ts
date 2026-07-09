@@ -28,6 +28,27 @@ export interface SkillCard {
   flavorText: string;
 }
 
+export function getUpgradedEffectText(card: SkillCard, upgradeCredits: number = 0): string {
+  if (!upgradeCredits) return card.effectText;
+  
+  const credits = Math.min(upgradeCredits, 10);
+  const multiplier = 1 + (credits / 10) * 0.3;
+  const newMod = card.modifierValue * multiplier;
+  
+  const match = card.effectText.match(/(→\s*)([+-]?[\d.]+)/);
+  if (match) {
+    const originalModMatch = card.effectText.match(/([+-]?[\d.]+)\s*→/);
+    if (originalModMatch) {
+      const baseValue = parseFloat(originalModMatch[1]);
+      const finalValue = baseValue + newMod;
+      const sign = finalValue > 0 ? '+' : '';
+      const formatted = `${sign}${finalValue.toFixed(2)}`;
+      return card.effectText.replace(match[0], `${match[1]}${formatted}`);
+    }
+  }
+  return card.effectText;
+}
+
 export const RARITY_ORDER: Rarity[] = [
   'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic', 'SSR', 'SSSR',
 ];

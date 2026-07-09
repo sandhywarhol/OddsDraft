@@ -20,7 +20,7 @@ describe('Fantasy Analytics', () => {
           redCards: 0,
           saves: 0,
           ownGoals: 0,
-          participant: 1,
+          participant: 1 as 1 | 2,
         },
         'stones': {
           playerId: 'stones',
@@ -30,12 +30,12 @@ describe('Fantasy Analytics', () => {
           redCards: 0,
           saves: 0,
           ownGoals: 0,
-          participant: 1,
+          participant: 1 as 1 | 2,
         },
       };
 
       const homeTeamStats = {
-        participant: 1,
+        participant: 1 as 1 | 2,
         teamName: 'England',
         goalsFor: 1,
         goalsAgainst: 0, // Clean sheet
@@ -50,7 +50,7 @@ describe('Fantasy Analytics', () => {
       };
 
       const awayTeamStats = {
-        participant: 2,
+        participant: 2 as 1 | 2,
         teamName: 'France',
         goalsFor: 0,
         goalsAgainst: 1,
@@ -86,11 +86,11 @@ describe('Fantasy Analytics', () => {
         redCards: 0,
         saves: 0,
         ownGoals: 0,
-        participant: 1,
+        participant: 1 as 1 | 2,
       };
 
       const homeTeamStats = {
-        participant: 1,
+        participant: 1 as 1 | 2,
         teamName: 'England',
         goalsFor: 2,
         goalsAgainst: 0,
@@ -105,7 +105,7 @@ describe('Fantasy Analytics', () => {
       };
 
       const awayTeamStats = {
-        participant: 2,
+        participant: 2 as 1 | 2,
         teamName: 'France',
         goalsFor: 0,
         goalsAgainst: 2,
@@ -198,11 +198,11 @@ if (typeof describe === 'undefined') {
       redCards: 0,
       saves: 0,
       ownGoals: 0,
-      participant: 1,
+      participant: 1 as 1 | 2,
     };
 
     const home = {
-      participant: 1,
+      participant: 1 as 1 | 2,
       teamName: 'England',
       goalsFor: 1,
       goalsAgainst: 0,
@@ -217,7 +217,7 @@ if (typeof describe === 'undefined') {
     };
 
     const away = {
-      participant: 2,
+      participant: 2 as 1 | 2,
       teamName: 'France',
       goalsFor: 0,
       goalsAgainst: 1,

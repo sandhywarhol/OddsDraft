@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import SkillCardDisplay from '@/components/SkillCardDisplay';
+import UpgradeCardDisplay from '@/components/UpgradeCardDisplay';
 import CardPackOpener from '@/components/CardPackOpener';
 import {
   getCollectionWithDefs,
@@ -13,8 +14,23 @@ import {
   canCombine,
   rollRandomCard,
   addCardToCollection,
+  openCardPack,
+  getUpgradeCollection,
+  addUpgradeCardToCollection,
+  upgradeSkillCard,
   type OwnedCard,
+  type OwnedUpgradeCard,
 } from '@/lib/card-collection';
+import {
+  UPGRADE_CARDS,
+  getUpgradeCardById,
+  getUpgradeMultiplier,
+  MAX_UPGRADE_CREDITS,
+  UPGRADE_RARITY_COLOR,
+  UPGRADE_CREDITS,
+  type UpgradeCard,
+  type UpgradePosition,
+} from '@/lib/upgrade-cards';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useTxLine } from '@/context/TxLineContext';
 import {
@@ -22,6 +38,7 @@ import {
   RARITY_COLOR,
   RARITY_STARS,
   SKILL_CARDS,
+  getUpgradedEffectText,
   type Rarity,
   type CardPosition,
   type SkillCard,
@@ -85,7 +102,8 @@ function CardDetailModal({
         style={{
           display: 'flex', gap: 40, alignItems: 'flex-start', flexWrap: 'wrap',
           justifyContent: 'center',
-          maxWidth: 720,
+          maxWidth: 880,
+          width: '100%',
         }}
       >
         {/* Enlarged card */}
@@ -170,7 +188,18 @@ function CardDetailModal({
               color: 'rgba(255,255,255,0.85)',
               lineHeight: 1.6,
             }}>
-              {colorizeEffect(card.effectText)}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span>{colorizeEffect(getUpgradedEffectText(card, instance?.upgradeCredits || 0))}</span>
+                {instance?.upgradeCredits ? (
+                  <span style={{
+                    fontSize: 11, fontWeight: 800, color: '#4ade80',
+                    background: 'rgba(74, 222, 128, 0.15)', padding: '2px 8px', borderRadius: 12,
+                    display: 'inline-flex', alignItems: 'center', gap: 4, letterSpacing: '0.02em',
+                  }}>
+                    ⬆ {instance.upgradeCredits >= 10 ? 'MAX' : `+${instance.upgradeCredits}%`}
+                  </span>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -195,7 +224,7 @@ function CardDetailModal({
                   cursor: 'pointer', letterSpacing: '0.06em',
                 }}
               >
-                EQUIP CARD
+                SET AS DEFAULT
               </button>
             )}
             <button
@@ -210,6 +239,149 @@ function CardDetailModal({
               }}
             >
               ✕
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UpgradeCardDetailModal({
+  card,
+  instance,
+  onClose,
+}: {
+  card: UpgradeCard;
+  instance?: OwnedUpgradeCard;
+  onClose: () => void;
+}) {
+  const rarityColor = UPGRADE_RARITY_COLOR[card.rarity];
+  const posColor =
+    card.position === 'Goalkeeper' ? '#1565c0' :
+    card.position === 'Defender'   ? '#2e7d32' :
+    card.position === 'Midfielder' ? '#e65100' :
+    card.position === 'Winger'     ? '#00838f' : '#6a1b9a';
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.88)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 9000,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          display: 'flex', gap: 40, alignItems: 'flex-start', flexWrap: 'wrap',
+          justifyContent: 'center',
+          maxWidth: 720,
+        }}
+      >
+        <UpgradeCardDisplay card={card} width={280} />
+
+        {/* Info panel */}
+        <div style={{ minWidth: 240, flex: 1 }}>
+          <div style={{
+            display: 'inline-block',
+            padding: '3px 12px', borderRadius: 4,
+            background: `${rarityColor}22`,
+            border: `1px solid ${rarityColor}66`,
+            color: rarityColor,
+            fontSize: 11, fontWeight: 900,
+            letterSpacing: '0.12em',
+            marginBottom: 12,
+            textShadow: `0 0 6px ${rarityColor}88`,
+          }}>
+            {card.rarity.toUpperCase()}
+          </div>
+
+          <div style={{ fontSize: 26, fontWeight: 900, color: '#fff', marginBottom: 6, lineHeight: 1.1 }}>
+            {card.name}
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <span style={{
+              background: posColor,
+              color: '#fff',
+              fontSize: 11, fontWeight: 900,
+              padding: '3px 10px', borderRadius: 3,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+            }}>
+              {card.position}
+            </span>
+          </div>
+
+          <div style={{
+            marginBottom: 18,
+            background: `linear-gradient(135deg, ${rarityColor}0d, rgba(0,0,0,0.4))`,
+            border: `1px solid ${rarityColor}33`,
+            borderRadius: 8,
+            padding: '14px 16px',
+          }}>
+            <div style={{
+              fontSize: 9, fontWeight: 900, letterSpacing: '0.18em',
+              color: rarityColor, fontFamily: '"Cinzel Decorative", Cinzel, serif',
+              marginBottom: 8, textTransform: 'uppercase',
+              textShadow: `0 0 8px ${rarityColor}88`,
+            }}>
+              ◆ Lore ◆
+            </div>
+            <div style={{
+              fontSize: 13, color: 'rgba(255,255,255,0.6)',
+              fontStyle: 'italic', lineHeight: 1.7,
+            }}>
+              "{card.flavorText}"
+            </div>
+          </div>
+
+          <div style={{
+            marginBottom: 24,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.09)',
+            borderRadius: 8,
+            padding: '12px 16px',
+          }}>
+            <div style={{
+              fontSize: 9, fontWeight: 900, letterSpacing: '0.18em',
+              color: 'rgba(255,255,255,0.35)', marginBottom: 8, textTransform: 'uppercase',
+            }}>
+              Upgrade Stats
+            </div>
+            <div style={{
+              fontSize: 14, fontWeight: 600,
+              color: 'rgba(255,255,255,0.85)',
+              lineHeight: 1.6,
+            }}>
+              {card.description}
+            </div>
+          </div>
+
+          {instance && (
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginBottom: 24 }}>
+              Obtained {new Date(instance.obtainedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: '12px 16px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 8,
+                color: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              ✕ CLOSE
             </button>
           </div>
         </div>
@@ -597,18 +769,535 @@ function CombineModal({
   );
 }
 
+// Component to animate progress bar from old to new value
+function UpgradeProgressBar({
+  oldCredits,
+  newCredits,
+  isMaxed,
+  rarityColor = '#2196F3',
+}: {
+  oldCredits: number;
+  newCredits: number;
+  isMaxed: boolean;
+  rarityColor?: string;
+}) {
+  const [credits, setCredits] = useState(oldCredits);
+
+  useEffect(() => {
+    // Trigger transition shortly after mount
+    const timer = setTimeout(() => setCredits(newCredits), 50);
+    return () => clearTimeout(timer);
+  }, [newCredits]);
+
+  return (
+    <div style={{ margin: '16px 0', background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16 }}>
+      <div style={{ height: 10, borderRadius: 5, background: 'rgba(0,0,0,0.5)', overflow: 'hidden', position: 'relative' }}>
+        <div style={{
+          height: '100%',
+          width: `${(credits / MAX_UPGRADE_CREDITS) * 100}%`,
+          background: isMaxed ? '#ffd700' : `linear-gradient(90deg, ${rarityColor}, ${rarityColor}88)`,
+          borderRadius: 5,
+          transition: 'width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Progress</div>
+        <div style={{ fontSize: 13, color: '#fff', fontWeight: 900 }}>
+          {newCredits} / {MAX_UPGRADE_CREDITS}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// SkillUpgradeModal — given a skill card, select an upgrade card to apply
+function SkillUpgradeModal({
+  targetCard,
+  targetInstance,
+  availableUpgrades,
+  onClose,
+  onSuccess,
+}: {
+  targetCard: SkillCard;
+  targetInstance: OwnedCard;
+  availableUpgrades: { instance: OwnedUpgradeCard; card: UpgradeCard }[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [result, setResult] = useState<{ success: boolean; message: string; newCredits?: number; oldCredits?: number; isMaxed?: boolean } | null>(null);
+  const [animationState, setAnimationState] = useState<'idle' | 'upgrading' | 'success_flash'>('idle');
+  
+  const handleApply = (upgradeInstanceId: string) => {
+    setAnimationState('upgrading');
+    setTimeout(() => {
+      const res = upgradeSkillCard(targetInstance.instanceId, upgradeInstanceId);
+      if (res.success) {
+        setAnimationState('success_flash');
+        setTimeout(() => {
+          setResult({
+            success: true,
+            message: res.isMaxed
+              ? `Card reached MAX upgrade! (+30% bonus permanently applied)`
+              : `Upgrade applied! Progress: ${res.newCredits} / ${MAX_UPGRADE_CREDITS} credits`,
+            newCredits: res.newCredits,
+            oldCredits: targetInstance.upgradeCredits || 0,
+            isMaxed: res.isMaxed,
+          });
+          setAnimationState('idle');
+        }, 2000); // 2s success delay so user can read it
+      } else {
+        setResult({ success: false, message: res.error || 'Upgrade failed.' });
+        setAnimationState('idle');
+      }
+    }, 1200); // 1.2s dramatic pause
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+      zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
+    }}>
+      <div style={{
+        background: '#111', border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 24, width: '100%', maxWidth: 460,
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '90vh', overflow: 'hidden',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: '#fff' }}>Upgrade {targetCard.name}</h2>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+            Select an upgrade card to apply
+          </div>
+        </div>
+        
+        {/* Body */}
+        <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
+          <style>{`
+            @keyframes intense-shake {
+              0% { transform: translate(2px, 1px) rotate(0deg) scale(1); filter: brightness(1); }
+              10% { transform: translate(-1px, -2px) rotate(-2deg) scale(1.02); filter: brightness(1.2); }
+              20% { transform: translate(-3px, 0px) rotate(2deg) scale(1.04); filter: brightness(1.4); }
+              30% { transform: translate(0px, 2px) rotate(0deg) scale(1.06); filter: brightness(1.6); }
+              40% { transform: translate(1px, -1px) rotate(2deg) scale(1.08); filter: brightness(1.8); }
+              50% { transform: translate(-1px, 2px) rotate(-2deg) scale(1.1); filter: brightness(2) drop-shadow(0 0 40px #fff); }
+              60% { transform: translate(-3px, 1px) rotate(0deg) scale(1.08); filter: brightness(1.8); }
+              70% { transform: translate(2px, 1px) rotate(-2deg) scale(1.06); filter: brightness(1.6); }
+              80% { transform: translate(-1px, -1px) rotate(2deg) scale(1.04); filter: brightness(1.4); }
+              90% { transform: translate(2px, 2px) rotate(0deg) scale(1.02); filter: brightness(1.2); }
+              100% { transform: translate(1px, -2px) rotate(-2deg) scale(1); filter: brightness(1); }
+            }
+            .animate-upgrade-shake {
+              animation: intense-shake 0.15s infinite cubic-bezier(0.36, 0.07, 0.19, 0.97);
+            }
+            @keyframes white-flash {
+              0% { filter: brightness(2) drop-shadow(0 0 40px #fff); transform: scale(1.1); }
+              20% { filter: brightness(4) drop-shadow(0 0 100px #fff); transform: scale(1.2); }
+              100% { filter: brightness(1.2) drop-shadow(0 0 20px #fff); transform: scale(1.05); }
+            }
+            .animate-success-flash {
+              animation: white-flash 1s ease-out forwards;
+            }
+            @keyframes pop-in {
+              0% { transform: scale(0.5); opacity: 0; }
+              50% { transform: scale(1.2); opacity: 1; }
+              100% { transform: scale(1); opacity: 1; }
+            }
+          `}</style>
+          
+          {animationState !== 'idle' ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+              <div style={{ position: 'relative' }}>
+                <div className={animationState === 'success_flash' ? 'animate-success-flash' : 'animate-upgrade-shake'} style={{ width: 200 }}>
+                  <SkillCardDisplay card={targetCard} instance={targetInstance} width={200} />
+                </div>
+                <div style={{ 
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%) rotate(-15deg)',
+                  fontSize: 32,
+                  fontWeight: 900,
+                  fontFamily: '"Palatino", "Georgia", serif',
+                  fontStyle: 'italic',
+                  color: animationState === 'success_flash' ? '#4ade80' : '#ef4444', 
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase', 
+                  animation: animationState === 'success_flash' ? 'pop-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' : 'pulse 1s infinite',
+                  textShadow: '3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 10px 20px rgba(0,0,0,0.9)',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  zIndex: 10
+                }}>
+                  {animationState === 'success_flash' ? 'SUCCESS!' : 'UPGRADING'}
+                </div>
+              </div>
+            </div>
+          ) : result ? (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>{result.success ? '✨' : '❌'}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: result.success ? '#4CAF50' : '#f44336', marginBottom: 12 }}>
+                {result.message}
+              </div>
+              
+              {result.success && result.newCredits !== undefined && result.oldCredits !== undefined && (
+                <UpgradeProgressBar
+                  oldCredits={result.oldCredits}
+                  newCredits={result.newCredits}
+                  isMaxed={!!result.isMaxed}
+                />
+              )}
+              
+              <button
+                onClick={() => {
+                  if (result.success) onSuccess();
+                  else setResult(null);
+                }}
+                style={{
+                  padding: '12px 24px', background: '#fff', color: '#000',
+                  border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: 'pointer'
+                }}
+              >
+                {result.success ? 'Continue' : 'Try Again'}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {availableUpgrades.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                  No compatible upgrade cards available in your collection.<br />
+                  <span style={{ fontSize: 12, marginTop: 8, display: 'inline-block' }}>Open Card Packs to find more Upgrade Cards!</span>
+                </div>
+              ) : (
+                availableUpgrades.map(({ instance, card }) => (
+                  <div
+                    key={instance.instanceId}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: 12, background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 40, height: 40, borderRadius: 8,
+                        background: UPGRADE_RARITY_COLOR[card.rarity],
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 20, color: '#000'
+                      }}>
+                        ⬆️
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{card.name}</div>
+                        <div style={{ fontSize: 11, color: UPGRADE_RARITY_COLOR[card.rarity], fontWeight: 800 }}>
+                          Lv.{card.level} • {card.rarity}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleApply(instance.instanceId)}
+                      style={{
+                        padding: '8px 16px', background: UPGRADE_RARITY_COLOR[card.rarity],
+                        color: '#000', border: 'none', borderRadius: 8,
+                        fontSize: 12, fontWeight: 800, cursor: 'pointer'
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!result && (
+          <div style={{ padding: 16, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: '10px 20px', background: 'transparent', color: '#fff',
+                border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8,
+                fontSize: 13, fontWeight: 700, cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// UpgradeModal — pick a compatible Skill Card to apply upgrade to
+function UpgradeModal({
+  upgradeCard,
+  upgradeInstance,
+  onClose,
+  onSuccess,
+}: {
+  upgradeCard: UpgradeCard;
+  upgradeInstance: OwnedUpgradeCard;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const rarityColor = UPGRADE_RARITY_COLOR[upgradeCard.rarity];
+  const [result, setResult] = useState<{ success: boolean; message: string; newCredits?: number; oldCredits?: number; isMaxed?: boolean } | null>(null);
+  const [upgradingCard, setUpgradingCard] = useState<{ instance: OwnedCard, card: SkillCard } | null>(null);
+  const [animationState, setAnimationState] = useState<'idle' | 'upgrading' | 'success_flash'>('idle');
+
+  // Get compatible Skill Cards (matching position, not yet maxed)
+  const allSkillCards = getCollectionWithDefs();
+  const compatible = allSkillCards.filter(({ card }) => card.position === upgradeCard.position);
+
+  const handleApply = (skillInstanceId: string) => {
+    const skillCardObj = compatible.find(c => c.instance.instanceId === skillInstanceId);
+    setUpgradingCard(skillCardObj || null);
+    setAnimationState('upgrading');
+    
+    setTimeout(() => {
+      const skillInstance = skillCardObj?.instance;
+      const res = upgradeSkillCard(skillInstanceId, upgradeInstance.instanceId);
+      if (res.success) {
+        setAnimationState('success_flash');
+        setTimeout(() => {
+          setResult({
+            success: true,
+            message: res.isMaxed
+              ? `Card reached MAX upgrade! (+30% bonus permanently applied)`
+              : `Upgrade applied! Progress: ${res.newCredits} / ${MAX_UPGRADE_CREDITS} credits`,
+            newCredits: res.newCredits,
+            oldCredits: skillInstance?.upgradeCredits || 0,
+            isMaxed: res.isMaxed,
+          });
+          setUpgradingCard(null);
+          setAnimationState('idle');
+        }, 2000); // 2s success delay
+      } else {
+        setResult({ success: false, message: res.error ?? 'Failed to apply upgrade.' });
+        setUpgradingCard(null);
+        setAnimationState('idle');
+      }
+    }, 1200);
+  };
+
+  return (
+    <div
+      onClick={result ? undefined : onClose}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.88)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 9200,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#0d1520', border: `1px solid ${rarityColor}55`,
+        borderRadius: 18, padding: 28, maxWidth: 520, width: '100%',
+        boxShadow: `0 0 40px ${rarityColor}22`,
+      }}>
+        {upgradingCard && animationState !== 'idle' ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <style>{`
+              @keyframes intense-shake {
+                0% { transform: translate(2px, 1px) rotate(0deg) scale(1); filter: brightness(1); }
+                10% { transform: translate(-1px, -2px) rotate(-2deg) scale(1.02); filter: brightness(1.2); }
+                20% { transform: translate(-3px, 0px) rotate(2deg) scale(1.04); filter: brightness(1.4); }
+                30% { transform: translate(0px, 2px) rotate(0deg) scale(1.06); filter: brightness(1.6); }
+                40% { transform: translate(1px, -1px) rotate(2deg) scale(1.08); filter: brightness(1.8); }
+                50% { transform: translate(-1px, 2px) rotate(-2deg) scale(1.1); filter: brightness(2) drop-shadow(0 0 40px #fff); }
+                60% { transform: translate(-3px, 1px) rotate(0deg) scale(1.08); filter: brightness(1.8); }
+                70% { transform: translate(2px, 1px) rotate(-2deg) scale(1.06); filter: brightness(1.6); }
+                80% { transform: translate(-1px, -1px) rotate(2deg) scale(1.04); filter: brightness(1.4); }
+                90% { transform: translate(2px, 2px) rotate(0deg) scale(1.02); filter: brightness(1.2); }
+                100% { transform: translate(1px, -2px) rotate(-2deg) scale(1); filter: brightness(1); }
+              }
+              .animate-upgrade-shake {
+                animation: intense-shake 0.15s infinite cubic-bezier(0.36, 0.07, 0.19, 0.97);
+              }
+              @keyframes white-flash {
+                0% { filter: brightness(2) drop-shadow(0 0 40px #fff); transform: scale(1.1); }
+                20% { filter: brightness(4) drop-shadow(0 0 100px #fff); transform: scale(1.2); }
+                100% { filter: brightness(1.2) drop-shadow(0 0 20px #fff); transform: scale(1.05); }
+              }
+              .animate-success-flash {
+                animation: white-flash 1s ease-out forwards;
+              }
+              @keyframes pop-in {
+                0% { transform: scale(0.5); opacity: 0; }
+                50% { transform: scale(1.2); opacity: 1; }
+                100% { transform: scale(1); opacity: 1; }
+              }
+            `}</style>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ position: 'relative' }}>
+                <div className={animationState === 'success_flash' ? 'animate-success-flash' : 'animate-upgrade-shake'} style={{ width: 200 }}>
+                  <SkillCardDisplay card={upgradingCard.card} instance={upgradingCard.instance} width={200} />
+                </div>
+                <div style={{ 
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%) rotate(-15deg)',
+                  fontSize: 32,
+                  fontWeight: 900,
+                  fontFamily: '"Palatino", "Georgia", serif',
+                  fontStyle: 'italic',
+                  color: animationState === 'success_flash' ? '#4ade80' : '#ef4444', 
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase', 
+                  animation: animationState === 'success_flash' ? 'pop-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' : 'pulse 1s infinite',
+                  textShadow: '3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 10px 20px rgba(0,0,0,0.9)',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  zIndex: 10
+                }}>
+                  {animationState === 'success_flash' ? 'SUCCESS!' : 'UPGRADING'}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : result ? (
+          // Result state
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>{result.success ? (result.isMaxed ? '💥' : '⬆') : '❌'}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: result.success ? '#4caf50' : '#f44336', marginBottom: 8 }}>
+              {result.success ? (result.isMaxed ? 'MAX UPGRADE REACHED!' : 'Upgrade Applied!') : 'Upgrade Failed'}
+            </div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginBottom: 8, lineHeight: 1.6 }}>{result.message}</div>
+            {result.success && result.newCredits !== undefined && result.oldCredits !== undefined && (
+              <UpgradeProgressBar
+                oldCredits={result.oldCredits}
+                newCredits={result.newCredits}
+                isMaxed={!!result.isMaxed}
+                rarityColor={rarityColor}
+              />
+            )}
+            <button onClick={() => { onSuccess(); onClose(); }} style={{
+              marginTop: 8, padding: '10px 28px', background: '#4caf50',
+              border: 'none', borderRadius: 8, color: '#000', fontWeight: 700, cursor: 'pointer', fontSize: 14,
+            }}>Done</button>
+          </div>
+        ) : (
+          // Selection state
+          <>
+            {/* Header */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: rarityColor, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6 }}>
+                ⬆ Apply Upgrade Card
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#fff', marginBottom: 4 }}>{upgradeCard.name}</div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                Level {upgradeCard.level} · +{UPGRADE_CREDITS[upgradeCard.level]} credits · For {upgradeCard.position} cards
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', marginBottom: 18 }} />
+
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Select Skill Card to Upgrade:
+            </div>
+
+            {compatible.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                No compatible {upgradeCard.position} Skill Cards in your collection.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 340, overflowY: 'auto' }}>
+                {compatible.map(({ instance, card }) => {
+                  const credits = instance.upgradeCredits ?? 0;
+                  const isMaxed = credits >= MAX_UPGRADE_CREDITS;
+                  const pct = (credits / MAX_UPGRADE_CREDITS) * 100;
+                  const skillRarityColor = RARITY_COLOR[card.rarity];
+                  return (
+                    <div
+                      key={instance.instanceId}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 14,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${skillRarityColor}33`,
+                        borderRadius: 12, padding: '12px 14px',
+                        opacity: isMaxed ? 0.5 : 1,
+                      }}
+                    >
+                      {/* Rarity dot */}
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: skillRarityColor, flexShrink: 0, boxShadow: `0 0 6px ${skillRarityColor}88` }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{card.name}</div>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>{card.rarity} · {card.effectText}</div>
+                        {/* Progress bar */}
+                        <div style={{ height: 5, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', width: `${pct}%`,
+                            background: isMaxed ? '#ffd700' : `linear-gradient(90deg, ${rarityColor}, ${rarityColor}88)`,
+                            borderRadius: 4, transition: 'width 0.4s',
+                          }} />
+                        </div>
+                        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginTop: 3 }}>
+                          {isMaxed ? '💥 MAX UPGRADE' : `${credits} / ${MAX_UPGRADE_CREDITS} credits (${Math.round(getUpgradeMultiplier(credits) * 100)}% bonus)`}
+                        </div>
+                      </div>
+                      <button
+                        disabled={isMaxed}
+                        onClick={() => handleApply(instance.instanceId)}
+                        style={{
+                          padding: '8px 14px',
+                          background: isMaxed ? 'rgba(255,255,255,0.05)' : `linear-gradient(135deg, ${rarityColor}cc, ${rarityColor}88)`,
+                          border: isMaxed ? '1px solid rgba(255,255,255,0.1)' : `1px solid ${rarityColor}`,
+                          borderRadius: 8, color: isMaxed ? 'rgba(255,255,255,0.3)' : '#fff',
+                          fontWeight: 800, fontSize: 11, cursor: isMaxed ? 'not-allowed' : 'pointer',
+                          letterSpacing: '0.05em', flexShrink: 0,
+                        }}
+                      >
+                        {isMaxed ? 'MAXED' : 'APPLY'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <button onClick={onClose} style={{
+              marginTop: 20, padding: '10px 0', width: '100%',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8, color: 'rgba(255,255,255,0.4)',
+              fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            }}>Cancel</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CardsPage() {
   const { connected } = useWallet();
   const { appMode } = useTxLine();
   const [allCards, setAllCards] = useState<{ instance: OwnedCard; card: SkillCard }[]>([]);
+  const [upgradeCards, setUpgradeCards] = useState<{ instance: OwnedUpgradeCard; card: UpgradeCard }[]>([]);
+  const [activeTab, setActiveTab] = useState<'skill' | 'upgrade'>('skill');
+  const [upgradeTarget, setUpgradeTarget] = useState<{ instance: OwnedUpgradeCard; card: UpgradeCard } | null>(null);
   const [showDemoOpener, setShowDemoOpener] = useState(false);
   const [filterPos, setFilterPos] = useState<FilterPos>('all');
   const [filterRarity, setFilterRarity] = useState<FilterRarity>('all');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [equipTarget, setEquipTarget] = useState<{ instance: OwnedCard; card: SkillCard } | null>(null);
   const [viewTarget, setViewTarget] = useState<{ instance?: OwnedCard; card: SkillCard } | null>(null);
+  const [viewUpgradeTarget, setViewUpgradeTarget] = useState<{ instance?: OwnedUpgradeCard; card: UpgradeCard } | null>(null);
   const [combineTarget, setCombineTarget] = useState<SkillCard | null>(null);
+  const [skillUpgradeTarget, setSkillUpgradeTarget] = useState<{ instance: OwnedCard; card: SkillCard } | null>(null);
   const [shimmerIds, setShimmerIds] = useState<Set<string>>(new Set());
+  const [isCombineInfoExpanded, setIsCombineInfoExpanded] = useState(true);
+  const [isUpgradeInfoExpanded, setIsUpgradeInfoExpanded] = useState(true);
 
   const handleCardClick = (instance: OwnedCard, card: SkillCard) => {
     setShimmerIds(prev => new Set(prev).add(instance.instanceId));
@@ -620,6 +1309,14 @@ export default function CardsPage() {
 
   const reload = useCallback(() => {
     setAllCards(getCollectionWithDefs());
+    const upgCol = getUpgradeCollection();
+    const upgWithDefs = upgCol.cards
+      .map(inst => {
+        const card = getUpgradeCardById(inst.upgradeCardId);
+        return card ? { instance: inst, card } : null;
+      })
+      .filter((x): x is { instance: OwnedUpgradeCard; card: UpgradeCard } => x !== null);
+    setUpgradeCards(upgWithDefs);
   }, []);
 
   useEffect(() => {
@@ -775,7 +1472,34 @@ export default function CardsPage() {
           />
         </div>
 
-        {/* Stats Info */}
+        {/* ── Tab switcher ── */}
+        {connected && (
+          <div style={{ display: 'flex', gap: 12, marginBottom: 28 }}>
+            {([{ key: 'skill', label: '🎴 Skill Cards', count: allCards.length }, { key: 'upgrade', label: '⬆ Upgrade Cards', count: upgradeCards.length }] as const).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  padding: '14px 28px',
+                  background: activeTab === tab.key ? '#ffd700' : 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  color: activeTab === tab.key ? '#000' : 'rgba(255,255,255,0.8)',
+                  fontWeight: activeTab === tab.key ? 900 : 600,
+                  fontSize: 16,
+                  cursor: 'pointer',
+                  letterSpacing: '0.05em',
+                  transition: 'all 0.2s',
+                  borderRadius: '12px',
+                  boxShadow: activeTab === tab.key ? '0 4px 12px rgba(255,215,0,0.3)' : 'none',
+                }}
+              >
+                {tab.label} {tab.count > 0 && <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>({tab.count})</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Stats Info — only shown in Skill Cards tab */}
         {!connected ? (
           <div style={{ textAlign: 'center', marginTop: 40 }}>
             <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', marginBottom: 12 }}>
@@ -796,7 +1520,7 @@ export default function CardsPage() {
               ))}
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'skill' ? (
           <>
             <div className="card card--glass" style={{ marginBottom: 32, padding: 'var(--space-4) var(--space-6)' }}>
           <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -804,7 +1528,8 @@ export default function CardsPage() {
               {[ 
                 { label: 'Total Cards', value: allCards.length },
                 { label: 'Legendary+', value: rareCount },
-                { label: 'Rarities', value: Object.keys(RARITY_ORDER).length }
+                { label: 'Rarities', value: Object.keys(RARITY_ORDER).length },
+                { label: 'Upgrade Cards', value: upgradeCards.length }
               ].map((item) => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div>
@@ -826,61 +1551,76 @@ export default function CardsPage() {
           padding: '20px 22px',
           marginBottom: 24,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <span style={{ fontSize: 20 }}>⚗️</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: '#ffd700', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Card Combine System</span>
+          <div 
+            onClick={() => setIsCombineInfoExpanded(!isCombineInfoExpanded)}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCombineInfoExpanded ? 14 : 0, cursor: 'pointer' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>⚗️</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#ffd700', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Card Combine System</span>
+            </div>
+            <div style={{
+              color: '#ffd700', fontSize: 14, transition: 'transform 0.2s',
+              transform: isCombineInfoExpanded ? 'rotate(180deg)' : 'rotate(0deg)'
+            }}>
+              ▼
+            </div>
           </div>
 
-          {/* Steps */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-            {[
-              { step: '1', icon: '🎴', label: 'Collect 2 copies', desc: 'Earn the same card twice from match rewards. Duplicates stack automatically.' },
-              { step: '2', icon: '⚗️', label: 'Click COMBINE', desc: 'A ⚗️ COMBINE badge appears on the card. Click it to open the combine screen.' },
-              { step: '3', icon: '✨', label: 'Get higher rarity', desc: '2 source cards are consumed and you receive 1 random card of the next rarity tier.' },
-            ].map(item => (
-              <div key={item.step} style={{
-                flex: '1 1 160px',
-                background: 'rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,215,0,0.12)',
-                borderRadius: 10,
-                padding: '12px 14px',
-                display: 'flex', flexDirection: 'column', gap: 6,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{
-                    width: 22, height: 22, borderRadius: '50%',
-                    background: 'rgba(255,215,0,0.2)', border: '1px solid rgba(255,215,0,0.4)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 900, color: '#ffd700', flexShrink: 0,
-                  }}>{item.step}</div>
-                  <span style={{ fontSize: 13 }}>{item.icon}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{item.label}</span>
-                </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5, paddingLeft: 30 }}>
-                  {item.desc}
-                </div>
+          {isCombineInfoExpanded && (
+            <div style={{ animation: 'fadeIn 0.2s' }}>
+              {/* Steps */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+                {[
+                  { step: '1', icon: '🎴', label: 'Collect 2 copies', desc: 'Earn the same card twice from match rewards. Duplicates stack automatically.' },
+                  { step: '2', icon: '⚗️', label: 'Click COMBINE', desc: 'A ⚗️ COMBINE badge appears on the card. Click it to open the combine screen.' },
+                  { step: '3', icon: '✨', label: 'Get higher rarity', desc: '2 source cards are consumed and you receive 1 random card of the next rarity tier.' },
+                ].map(item => (
+                  <div key={item.step} style={{
+                    flex: '1 1 160px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,215,0,0.12)',
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 22, height: 22, borderRadius: '50%',
+                        background: 'rgba(255,215,0,0.2)', border: '1px solid rgba(255,215,0,0.4)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, fontWeight: 900, color: '#ffd700', flexShrink: 0,
+                      }}>{item.step}</div>
+                      <span style={{ fontSize: 13 }}>{item.icon}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{item.label}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5, paddingLeft: 30 }}>
+                      {item.desc}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Rarity chain */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginRight: 4 }}>RARITY CHAIN:</span>
-            {(['Common', 'Rare', 'Epic', 'Legendary', 'SSR', 'SSSR'] as const).map((r, i, arr) => (
-              <span key={r} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
-                  background: `${RARITY_COLOR[r]}18`,
-                  border: `1px solid ${RARITY_COLOR[r]}44`,
-                  color: RARITY_COLOR[r],
-                }}>{r}</span>
-                {i < arr.length - 1 && <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>→</span>}
-              </span>
-            ))}
-          </div>
-          <div style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
-            SSSR is the maximum rarity. Cards at max rarity cannot be combined further.
-          </div>
+              {/* Rarity chain */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginRight: 4 }}>RARITY CHAIN:</span>
+                {(['Common', 'Rare', 'Epic', 'Legendary', 'SSR', 'SSSR'] as const).map((r, i, arr) => (
+                  <span key={r} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
+                      background: `${RARITY_COLOR[r]}18`,
+                      border: `1px solid ${RARITY_COLOR[r]}44`,
+                      color: RARITY_COLOR[r],
+                    }}>{r}</span>
+                    {i < arr.length - 1 && <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>→</span>}
+                  </span>
+                ))}
+              </div>
+              <div style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+                SSSR is the maximum rarity. Cards at max rarity cannot be combined further.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Filters + sort */}
@@ -1019,6 +1759,9 @@ export default function CardsPage() {
               const isShimmering = shimmerIds.has(instance.instanceId);
               const copyCount = cardIdCount[instance.cardId] ?? 1;
               const isCombineable = copyCount >= 2 && canCombine(instance.cardId);
+              const credits = instance.upgradeCredits ?? 0;
+              const isMaxed = credits >= MAX_UPGRADE_CREDITS;
+              const hasCompatibleUpgrade = !isMaxed && upgradeCards.some(u => u.card.position === card.position);
               return (
                 <div
                   className="card-responsive-wrapper"
@@ -1045,15 +1788,36 @@ export default function CardsPage() {
                         }} />
                       </div>
                     )}
+                    {/* Upgrade badge */}
+                    {hasCompatibleUpgrade && (
+                      <button
+                        className="action-badge"
+                        onClick={e => { e.stopPropagation(); setSkillUpgradeTarget({ instance, card }); }}
+                        style={{
+                          position: 'absolute', bottom: isCombineable ? 32 : 8, left: '50%',
+                          transform: 'translateX(-50%)',
+                          zIndex: 20,
+                          background: `linear-gradient(135deg, #e0c367, #c49a37)`,
+                          border: 'none', borderRadius: 20,
+                          color: '#000', fontWeight: 900, fontSize: 9,
+                          padding: '4px 10px', cursor: 'pointer',
+                          letterSpacing: 0.5, whiteSpace: 'nowrap',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                        }}
+                      >
+                        ⬆️ UPGRADE
+                      </button>
+                    )}
                     {/* Combine badge */}
                     {isCombineable && (
                       <button
+                        className="action-badge"
                         onClick={e => { e.stopPropagation(); setCombineTarget(card); }}
                         style={{
                           position: 'absolute', bottom: 8, left: '50%',
                           transform: 'translateX(-50%)',
                           zIndex: 20,
-                          background: `linear-gradient(135deg, ${RARITY_COLOR[card.rarity]}, ${RARITY_COLOR[RARITY_ORDER[RARITY_ORDER.indexOf(card.rarity) + 1] ?? card.rarity]})`,
+                          background: `linear-gradient(135deg, #e0c367, #c49a37)`,
                           border: 'none', borderRadius: 20,
                           color: '#000', fontWeight: 900, fontSize: 9,
                           padding: '4px 10px', cursor: 'pointer',
@@ -1086,6 +1850,137 @@ export default function CardsPage() {
           </div>
         )}
           </>
+        ) : null}
+
+        {/* ── UPGRADE CARDS TAB ─────────────────────────────────────────────── */}
+        {connected && activeTab === 'upgrade' && (
+          <>
+            {/* Info banner */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(156,39,176,0.12), rgba(33,150,243,0.08))',
+              border: '1px solid rgba(156,39,176,0.3)',
+              borderRadius: 12,
+              padding: '18px 22px',
+              marginBottom: 24,
+            }}>
+              <div 
+                onClick={() => setIsUpgradeInfoExpanded(!isUpgradeInfoExpanded)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isUpgradeInfoExpanded ? 12 : 0, cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 20 }}>⬆</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#ce93d8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Upgrade Card System</span>
+                </div>
+                <div style={{
+                  color: '#ce93d8', fontSize: 14, transition: 'transform 0.2s',
+                  transform: isUpgradeInfoExpanded ? 'rotate(180deg)' : 'rotate(0deg)'
+                }}>
+                  ▼
+                </div>
+              </div>
+              
+              {isUpgradeInfoExpanded && (
+                <div style={{ animation: 'fadeIn 0.2s' }}>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {[
+                      { icon: '🎲', label: 'Drop from packs', desc: '~15% chance to receive a bonus upgrade card after each match reward.' },
+                      { icon: '⬆', label: 'Apply to Skill Card', desc: 'Click USE on an upgrade card, then pick a compatible Skill Card to boost.' },
+                      { icon: '📈', label: 'Stacks up to MAX', desc: 'Level 1 (×4), Level 2 (×2), or Level 3 (×1) to reach max +30% modifier boost.' },
+                    ].map(item => (
+                      <div key={item.label} style={{
+                        flex: '1 1 160px',
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(156,39,176,0.15)',
+                        borderRadius: 10,
+                        padding: '12px 14px',
+                      }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                          <span>{item.icon}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{item.label}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>{item.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+                    MAX upgrade = +30% to the Skill Card's modifier value. Progress carries over across games.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Demo: add upgrade card button */}
+            {appMode === 'demo' && connected && (
+              <div style={{ marginBottom: 20 }}>
+                <button
+                  onClick={() => {
+                    const positions: UpgradePosition[] = ['Goalkeeper', 'Defender', 'Midfielder', 'Winger', 'Striker'];
+                    const levels = [1, 2, 3] as const;
+                    const pos = positions[Math.floor(Math.random() * positions.length)];
+                    const lvl = levels[Math.floor(Math.random() * levels.length)];
+                    const card = UPGRADE_CARDS.find(c => c.position === pos && c.level === lvl);
+                    if (card) { addUpgradeCardToCollection(card.id); reload(); }
+                  }}
+                  style={{
+                    background: 'rgba(156,39,176,0.25)', color: '#ce93d8',
+                    border: '1px solid rgba(156,39,176,0.5)', borderRadius: 8,
+                    padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                    letterSpacing: '0.05em'
+                  }}
+                >
+                  + DEMO: ADD UPGRADE CARD
+                </button>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {upgradeCards.length === 0 && (
+              <div style={{
+                textAlign: 'center', padding: '60px 20px',
+                background: 'rgba(255,255,255,0.02)', borderRadius: 16,
+                border: '1px dashed rgba(255,255,255,0.1)',
+              }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>⬆</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 8 }}>No Upgrade Cards Yet</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', maxWidth: 320, margin: '0 auto' }}>
+                  Upgrade cards have a ~15% chance to drop alongside your Skill Card after each match reward.
+                </div>
+              </div>
+            )}
+
+            {/* Upgrade card grid */}
+            {upgradeCards.length > 0 && (
+              <div className="cards-grid-mobile" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'space-between' }}>
+                {upgradeCards.map(({ instance, card }) => {
+                  const rarityColor = UPGRADE_RARITY_COLOR[card.rarity];
+                  return (
+                    <div
+                      key={instance.instanceId}
+                      style={{
+                        width: '100%', maxWidth: 220,
+                        display: 'flex', flexDirection: 'column',
+                        transition: 'transform 0.2s',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
+                      onClick={() => setViewUpgradeTarget({ instance, card })}
+                    >
+                      {/* Card image and stats */}
+                      <UpgradeCardDisplay card={card} width={220} />
+
+                      {/* Obtained Date */}
+                      <div style={{ padding: '8px 4px 0', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>
+                          Obtained {new Date(instance.obtainedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1096,6 +1991,15 @@ export default function CardsPage() {
           instance={viewTarget.instance}
           onClose={() => setViewTarget(null)}
           onEquip={viewTarget.instance ? () => { setEquipTarget(viewTarget as { instance: OwnedCard; card: SkillCard }); setViewTarget(null); } : undefined}
+        />
+      )}
+
+      {/* Upgrade Card detail modal */}
+      {viewUpgradeTarget && (
+        <UpgradeCardDetailModal
+          card={viewUpgradeTarget.card}
+          instance={viewUpgradeTarget.instance}
+          onClose={() => setViewUpgradeTarget(null)}
         />
       )}
 
@@ -1117,19 +2021,35 @@ export default function CardsPage() {
         />
       )}
 
+      {/* Skill Card Upgrade modal */}
+      {skillUpgradeTarget && (
+        <SkillUpgradeModal
+          targetCard={skillUpgradeTarget.card}
+          targetInstance={skillUpgradeTarget.instance}
+          availableUpgrades={upgradeCards.filter(u => u.card.position === skillUpgradeTarget.card.position)}
+          onClose={() => setSkillUpgradeTarget(null)}
+          onSuccess={() => { setSkillUpgradeTarget(null); reload(); }}
+        />
+      )}
+
+      {/* Upgrade modal */}
+      {upgradeTarget && (
+        <UpgradeModal
+          upgradeCard={upgradeTarget.card}
+          upgradeInstance={upgradeTarget.instance}
+          onClose={() => setUpgradeTarget(null)}
+          onSuccess={() => { setUpgradeTarget(null); reload(); }}
+        />
+      )}
+
       {/* Demo pack opener */}
       {showDemoOpener && (
         <CardPackOpener
-          contestId="demo-pack"
+          contestId={`demo-pack-${Date.now()}`}
           onOpen={() => {
-            const newCardDef = rollRandomCard();
-            const instance = {
-              instanceId: 'demo_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-              cardId: newCardDef.id,
-              obtainedAt: new Date().toISOString(),
-            };
-            addCardToCollection(instance);
-            return { instance, card: newCardDef };
+            // Use openCardPack so upgrade card 15% drop logic is included
+            const result = openCardPack(`demo-pack-${Date.now()}`);
+            return result;
           }}
           onClose={() => {
             setShowDemoOpener(false);
@@ -1137,6 +2057,16 @@ export default function CardsPage() {
           }}
         />
       )}
+
+      <style>{`
+        .action-badge {
+          transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease !important;
+        }
+        .action-badge:hover {
+          transform: translateX(-50%) scale(1.08) !important;
+          filter: brightness(1.2) drop-shadow(0 4px 12px rgba(224, 195, 103, 0.4)) !important;
+        }
+      `}</style>
     </main>
   );
 }

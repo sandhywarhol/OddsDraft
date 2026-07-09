@@ -9,7 +9,7 @@
 //   • Position text box       : top 73.5%, left 10%,   width 52%
 //   • Description text area   : top 80.5%, left 10%,   width 62%
 
-import { type SkillCard, RARITY_COLOR } from '@/lib/skill-cards';
+import { type SkillCard, RARITY_COLOR, getUpgradedEffectText } from '@/lib/skill-cards';
 import type { OwnedCard } from '@/lib/card-collection';
 
 interface SkillCardDisplayProps {
@@ -108,6 +108,17 @@ export default function SkillCardDisplay({
         }}
       />
 
+      {/* Continuous Shine Overlay */}
+      <div style={{
+        position: 'absolute', top: 0, bottom: 0,
+        width: '55%',
+        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+        animation: 'card-sweep-shine 4s ease-in-out infinite',
+        pointerEvents: 'none',
+        zIndex: 5,
+        borderRadius: '16px',
+      }} />
+
       {/* ── SKILL NAME ── */}
       <div style={{
         position: 'absolute',
@@ -184,7 +195,7 @@ export default function SkillCardDisplay({
           {card.flavorText}
         </span>
         <span style={{ fontWeight: 700, color: '#111', marginTop: 2, display: 'block' }}>
-          {colorizeEffect(card.effectText)}
+          {colorizeEffect(getUpgradedEffectText(card, instance?.upgradeCredits || 0))}
         </span>
       </div>
 
@@ -225,6 +236,26 @@ export default function SkillCardDisplay({
           SELECTED
         </div>
       )}
+
+      {/* ── UPGRADED badge ───────────────────────────────────────────────────── */}
+      {instance?.upgradeCredits && instance.upgradeCredits > 0 ? (
+        <div style={{
+          position: 'absolute',
+          top: equipped || selected ? '8%' : '1.5%',
+          left: '7%',
+          background: '#ffd700',
+          color: '#000',
+          fontSize: fs(5.5),
+          fontWeight: 900,
+          padding: '1px 5px',
+          borderRadius: 4,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.4)'
+        }}>
+          ⬆ {instance.upgradeCredits >= 10 ? 'MAX' : `+${instance.upgradeCredits}`}
+        </div>
+      ) : null}
 
       {/* ── SHINE / HOLO EFFECT ── */}
       <div style={{

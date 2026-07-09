@@ -11,6 +11,16 @@ import {
   LINEUP_POS_TO_CARD_POS,
 } from './skill-cards';
 
+import {
+  UPGRADE_CARDS,
+  UPGRADE_PACK_DROP_CHANCE,
+  rollUpgradeCard,
+  getUpgradeCardById,
+  getUpgradeMultiplier,
+  MAX_UPGRADE_CREDITS,
+  type UpgradeCard,
+} from './upgrade-cards';
+
 // ── Combine system ────────────────────────────────────────────────────────────
 // 2 copies of the same card (same cardId) → 1 card of the next rarity,
 // same position, randomly selected from that position's pool.
@@ -72,6 +82,25 @@ export interface OwnedCard {
   instanceId: string;
   cardId: string;
   obtainedAt: string; // ISO date
+  upgradeCredits?: number; // 0–10, drives the upgrade multiplier
+}
+
+// ── Upgrade Card Inventory ────────────────────────────────────────────────────
+export interface OwnedUpgradeCard {
+  instanceId: string;
+  upgradeCardId: string;
+  obtainedAt: string;
+}
+
+export interface UpgradeCardCollection {
+  cards: OwnedUpgradeCard[];
+}
+
+export interface UpgradeResult {
+  success: boolean;
+  newCredits: number;
+  isMaxed: boolean;
+  error?: string;
 }
 
 export interface CardCollection {
@@ -80,6 +109,7 @@ export interface CardCollection {
 
 const COLLECTION_KEY = 'oddsdraft_card_collection';
 const PACK_OPENED_PREFIX = 'oddsdraft_pack_opened_';
+const UPGRADE_COLLECTION_KEY = 'oddsdraft_upgrade_collection';
 
 export function getCollection(): CardCollection {
   if (typeof window === 'undefined') return { cards: [] };
@@ -92,6 +122,76 @@ export function getCollection(): CardCollection {
 
 function saveCollection(col: CardCollection): void {
   localStorage.setItem(COLLECTION_KEY, JSON.stringify(col));
+}
+
+// ── Upgrade Card Collection Storage ─────────────────────────────────────────
+export function getUpgradeCollection(): UpgradeCardCollection {
+  if (typeof window === 'undefined') return { cards: [] };
+  try {
+    const stored = localStorage.getItem(UPGRADE_COLLECTION_KEY);
+    if (stored) return JSON.parse(stored) as UpgradeCardCollection;
+  } catch {}
+  return { cards: [] };
+}
+
+function saveUpgradeCollection(col: UpgradeCardCollection): void {
+  localStorage.setItem(UPGRADE_COLLECTION_KEY, JSON.stringify(col));
+}
+
+export function addUpgradeCardToCollection(upgradeCardId: string): OwnedUpgradeCard {
+  const col = getUpgradeCollection();
+  const instance: OwnedUpgradeCard = {
+    instanceId: `upg-${upgradeCardId}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    upgradeCardId,
+    obtainedAt: new Date().toISOString(),
+  };
+  col.cards.unshift(instance);
+  saveUpgradeCollection(col);
+  return instance;
+}
+
+// ── Apply Upgrade Card to Skill Card ─────────────────────────────────────────
+// Consumes 1 upgrade card instance, adds credits to the target skill card instance.
+export function upgradeSkillCard(
+  skillCardInstanceId: string,
+  upgradeCardInstanceId: string
+): UpgradeResult {
+  const upgCol = getUpgradeCollection();
+  const upgradeInstance = upgCol.cards.find(c => c.instanceId === upgradeCardInstanceId);
+  if (!upgradeInstance) {
+    return { success: false, newCredits: 0, isMaxed: false, error: 'Upgrade card not found.' };
+  }
+
+  const upgradeCard = getUpgradeCardById(upgradeInstance.upgradeCardId);
+  if (!upgradeCard) {
+    return { success: false, newCredits: 0, isMaxed: false, error: 'Upgrade card definition not found.' };
+  }
+
+  const col = getCollection();
+  const skillInstance = col.cards.find(c => c.instanceId === skillCardInstanceId);
+  if (!skillInstance) {
+    return { success: false, newCredits: 0, isMaxed: false, error: 'Skill card instance not found.' };
+  }
+
+  const currentCredits = skillInstance.upgradeCredits ?? 0;
+  if (currentCredits >= MAX_UPGRADE_CREDITS) {
+    return { success: false, newCredits: currentCredits, isMaxed: true, error: 'Card is already at max upgrade level.' };
+  }
+
+  // Add credits (capped at max)
+  const newCredits = Math.min(currentCredits + upgradeCard.upgradeCredits, MAX_UPGRADE_CREDITS);
+  skillInstance.upgradeCredits = newCredits;
+
+  // Consume the upgrade card
+  upgCol.cards = upgCol.cards.filter(c => c.instanceId !== upgradeCardInstanceId);
+  saveUpgradeCollection(upgCol);
+  saveCollection(col);
+
+  return {
+    success: true,
+    newCredits,
+    isMaxed: newCredits >= MAX_UPGRADE_CREDITS,
+  };
 }
 
 export function addCardToCollection(card: OwnedCard): void {
@@ -115,7 +215,12 @@ export function rollRandomCard(): SkillCard {
   return commons[Math.floor(Math.random() * commons.length)];
 }
 
-export function openCardPack(contestId: string): { instance: OwnedCard; card: SkillCard } {
+export function openCardPack(contestId: string): {
+  instance: OwnedCard;
+  card: SkillCard;
+  upgradeInstance?: OwnedUpgradeCard;
+  upgradeCard?: UpgradeCard;
+} {
   const card = rollRandomCard();
   const instance: OwnedCard = {
     instanceId: `${contestId}-${Date.now()}`,
@@ -124,6 +229,14 @@ export function openCardPack(contestId: string): { instance: OwnedCard; card: Sk
   };
   addCardToCollection(instance);
   localStorage.setItem(`${PACK_OPENED_PREFIX}${contestId}`, '1');
+
+  // Bonus: ~15% chance to also drop an upgrade card
+  if (Math.random() < UPGRADE_PACK_DROP_CHANCE) {
+    const upgradeCard = rollUpgradeCard();
+    const upgradeInstance = addUpgradeCardToCollection(upgradeCard.id);
+    return { instance, card, upgradeInstance, upgradeCard };
+  }
+
   return { instance, card };
 }
 
@@ -251,19 +364,25 @@ export function applySkillModifier(
   const card = getEquippedCardDef(contestId, playerId);
   if (!card) return { bonus: 0, cardName: null, cardRarity: null };
 
+  // Get upgrade multiplier from the equipped card instance's upgradeCredits
+  const instance = getEquippedCardInstance(contestId, playerId);
+  const upgradeCredits = instance?.upgradeCredits ?? 0;
+  const upgradeMultiplier = getUpgradeMultiplier(upgradeCredits);
+  const effectiveValue = card.modifierValue * (1 + upgradeMultiplier);
+
   let bonus = 0;
   for (const ev of playerEvents) {
     switch (card.modifierType) {
-      case 'goal_bonus':               if (ev.type === 'goal') bonus += card.modifierValue; break;
-      case 'assist_bonus':             if (ev.type === 'assist') bonus += card.modifierValue; break;
-      case 'goalkeeper_save_bonus':    if (ev.type === 'goalkeeper_save') bonus += card.modifierValue; break;
-      case 'goal_conceded_reduction':  if (ev.type === 'goal_conceded') bonus += card.modifierValue; break;
-      case 'clean_sheet_bonus':        if (ev.type === 'clean_sheet') bonus += card.modifierValue; break;
-      case 'yellow_card_reduction':    if (ev.type === 'yellow_card') bonus += card.modifierValue; break;
-      case 'possession_bonus_extra':   if (ev.type === 'possession_bonus') bonus += card.modifierValue; break;
-      case 'penalty_save_bonus':       if (ev.type === 'penalty_save') bonus += card.modifierValue; break;
-      case 'appearance_bonus':         if (ev.type === 'starting_xi' || ev.type === 'sub_appearance') bonus += card.modifierValue; break;
-      case 'penalty_scored_bonus':     if (ev.type === 'penalty_scored') bonus += card.modifierValue; break;
+      case 'goal_bonus':               if (ev.type === 'goal') bonus += effectiveValue; break;
+      case 'assist_bonus':             if (ev.type === 'assist') bonus += effectiveValue; break;
+      case 'goalkeeper_save_bonus':    if (ev.type === 'goalkeeper_save') bonus += effectiveValue; break;
+      case 'goal_conceded_reduction':  if (ev.type === 'goal_conceded') bonus += effectiveValue; break;
+      case 'clean_sheet_bonus':        if (ev.type === 'clean_sheet') bonus += effectiveValue; break;
+      case 'yellow_card_reduction':    if (ev.type === 'yellow_card') bonus += effectiveValue; break;
+      case 'possession_bonus_extra':   if (ev.type === 'possession_bonus') bonus += effectiveValue; break;
+      case 'penalty_save_bonus':       if (ev.type === 'penalty_save') bonus += effectiveValue; break;
+      case 'appearance_bonus':         if (ev.type === 'starting_xi' || ev.type === 'sub_appearance') bonus += effectiveValue; break;
+      case 'penalty_scored_bonus':     if (ev.type === 'penalty_scored') bonus += effectiveValue; break;
     }
   }
 
