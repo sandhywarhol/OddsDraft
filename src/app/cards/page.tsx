@@ -1553,12 +1553,13 @@ export default function CardsPage() {
             <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: 40, maxWidth: 460, margin: '0 auto 40px' }}>
               Here is a preview of the Skill Cards you can collect. Log in and participate in contests to earn them!
             </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center' }}>
+            <div className="cards-grid-mobile" style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center' }}>
               {SKILL_CARDS.slice(0, 8).map((card) => (
                 <div 
+                  className="card-responsive-wrapper"
                   key={card.id} 
                   onClick={() => setViewTarget({ card })}
-                  style={{ position: 'relative', borderRadius: 16, width: 240, cursor: 'pointer' }}
+                  style={{ position: 'relative', borderRadius: 16, width: '100%', maxWidth: 240, cursor: 'pointer' }}
                 >
                   <SkillCardDisplay card={card} width={240} selectable />
                 </div>
