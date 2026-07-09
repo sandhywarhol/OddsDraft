@@ -2261,6 +2261,27 @@ a {
 }
 
 
+/* ════════════════════════════════════════════════════════════════════════════
+   ██████  LOCKED LAYOUT — DO NOT CHANGE WITHOUT EXPLICIT USER APPROVAL  ██████
+   ════════════════════════════════════════════════════════════════════════════
+   Watch Live page (Desktop ≥769px) — Approved composition:
+
+   COLUMN LEFT  (1fr)
+     1. .live-fantasy-points   — Fantasy Points score card (top)
+     2. .live-my-lineup        — My Lineup player cards
+     3. .live-team-lineup      — Team Lineups / Formation pitch
+     4. .live-txline           — TxLINE Cryptographic Verification
+     [SOL Prize — mobile only, hidden on desktop]
+
+   COLUMN RIGHT (360px, flex column, gap 16px)
+     1. .live-events-wrapper   — Match Events panel (sticky)
+     2. .live-leaderboard      — Live Leaderboard
+     3. .live-point-reference  — Fantasy Points Reference
+     4. SOL Prize card         — desktop-only, shown after verification
+
+   Gap between all items: 16px (controlled by live-col-right gap + live-grid gap)
+   Left col stretches full width with 1fr to match the score-bug above.
+   ════════════════════════════════════════════════════════════════════════════ */
 /* ── Desktop Live Grid ── */
 @media (min-width: 769px) {
   .live-grid {

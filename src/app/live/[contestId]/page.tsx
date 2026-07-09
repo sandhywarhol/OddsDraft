@@ -3431,7 +3431,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
           {/* Main Grid */}
           <div className="grid-sidebar live-grid">
-            {/* LEFT: Events Timeline + User Stats */}
+            {/* ╔══════════════════════════════════════════════════════════════╗
+                ║  LOCKED LAYOUT — DO NOT REORDER OR REMOVE SECTIONS         ║
+                ║  See globals.css near .live-grid for full layout spec       ║
+                ╚══════════════════════════════════════════════════════════════╝ */}
+
+            {/* LEFT COLUMN — order: fantasy-points → my-lineup → team-lineup → txline */}
             <div className="live-col-left">
 
               <div className="desktop-only" style={{ display: 'contents' }}>
@@ -3823,7 +3828,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 );
               })()}
 
-            {/* RIGHT: Match Events + Leaderboard */}
+            {/* RIGHT COLUMN — order: match-events → leaderboard → point-reference → sol-prize */}
             <div className="live-col-right" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
               <div className="desktop-only live-events-wrapper">
