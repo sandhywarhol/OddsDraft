@@ -17,6 +17,7 @@ import FlagImage from '@/components/FlagImage';
 type FixtureScore = { home: number; away: number; completed?: boolean };
 
 export default function ContestsPage() {
+  const { connected } = useWallet();
   const { appMode, liveFixtures, allFixtures } = useTxLine();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -373,7 +374,7 @@ export default function ContestsPage() {
                 {/* 1. Live Matches Cards (Left) */}
                 <div style={{ flex: '1 1 35%', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {live.map((fixture) => (
-                    <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} firstContestType={enteredContests[fixture.fixtureId]?.[0]} />
+                    <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} firstContestType={enteredContests[fixture.fixtureId]?.[0]} walletConnected={connected} />
                   ))}
                 </div>
 
@@ -468,7 +469,7 @@ export default function ContestsPage() {
               <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 20 }}>Upcoming</h2>
               <div className="grid-contests">
                 {upcoming.map((fixture) => (
-                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} firstContestType={enteredContests[fixture.fixtureId]?.[0]} />
+                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} firstContestType={enteredContests[fixture.fixtureId]?.[0]} walletConnected={connected} />
                 ))}
               </div>
             </section>
@@ -491,6 +492,7 @@ export default function ContestsPage() {
                     hasEntered={!!(enteredContests[fixture.fixtureId]?.length)}
                     firstContestType={enteredContests[fixture.fixtureId]?.[0]}
                     enteredTypes={enteredContests[fixture.fixtureId] ?? []}
+                    walletConnected={connected}
                   />
                 ))}
               </div>
@@ -744,7 +746,7 @@ function SwitchToLiveButton() {
   );
 }
 
-function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firstContestType, enteredTypes }: {
+function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firstContestType, enteredTypes, walletConnected }: {
   fixture: DemoFixture;
   onSelect?: (f: DemoFixture) => void;
   counts?: { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number };
@@ -752,6 +754,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
   hasEntered?: boolean;
   firstContestType?: string;
   enteredTypes?: string[];
+  walletConnected?: boolean;
 }) {
   const [claimingType, setClaimingType] = useState<string | null>(null);
   const [claimedTypes, setClaimedTypes] = useState<Set<string>>(() => {
@@ -946,7 +949,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
         )}
         {isFinished && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {hasEntered && (
+            {hasEntered && walletConnected && (
               <Link
                 href={`/live/${fixture.fixtureId}${firstContestType ? `?contestType=${firstContestType}` : ''}`}
                 className="btn btn--primary btn--full"
@@ -955,7 +958,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
               </Link>
             )}
             {/* Claim pack buttons — one per entered contest type */}
-            {(enteredTypes ?? []).length > 0 && (
+            {(enteredTypes ?? []).length > 0 && walletConnected && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {(enteredTypes ?? []).map(ct => {
                   const claimed = claimedTypes.has(ct);
