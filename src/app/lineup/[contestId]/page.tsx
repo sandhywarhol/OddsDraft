@@ -10,7 +10,7 @@ import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
 import { calculateFantasyPoints } from '@/lib/fantasy-engine';
 import { getCardsForLineupPosition, getCardById, addCardToCollection, type OwnedCard } from '@/lib/card-collection';
-import { RARITY_COLOR, SKILL_CARDS } from '@/lib/skill-cards';
+import { RARITY_COLOR, SKILL_CARDS, type SkillCard } from '@/lib/skill-cards';
 import { formatDistanceToNow } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
@@ -1566,6 +1566,18 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   const targetPlayer = filledPlayers.find(p => p.id === equipModalPlayerId);
                   if (!targetPlayer) return null;
                   const availableCards = getCardsForLineupPosition(targetPlayer.position);
+                  
+                  const groups = new Map<string, { instances: OwnedCard[], card: SkillCard }>();
+                  availableCards.forEach(item => {
+                    const key = `${item.card.id}-${item.instance.upgradeCredits || 0}`;
+                    if (!groups.has(key)) {
+                      groups.set(key, { instances: [item.instance], card: item.card });
+                    } else {
+                      groups.get(key)!.instances.push(item.instance);
+                    }
+                  });
+                  const groupedAvailableCards = Array.from(groups.values());
+
                   return (
                     <div style={{
                       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -1583,40 +1595,56 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                           {targetPlayer.position} cards — select one to equip
                         </div>
 
-                        {availableCards.length === 0 ? (
+                        {groupedAvailableCards.length === 0 ? (
                           <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.35)', fontSize: 13 }}>
                             No cards yet. Earn them by playing matches!
                           </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {availableCards.map(({ instance, card }) => (
-                              <button
-                                key={instance.instanceId}
-                                onClick={() => {
-                                  setEquippedCards(prev => ({ ...prev, [equipModalPlayerId]: instance.instanceId }));
-                                  setEquipModalPlayerId(null);
-                                }}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 12,
-                                  padding: '10px 14px', textAlign: 'left',
-                                  background: `${RARITY_COLOR[card.rarity]}0d`,
-                                  border: `1px solid ${RARITY_COLOR[card.rarity]}33`,
-                                  borderRadius: 8, cursor: 'pointer', width: '100%',
-                                }}
-                              >
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 800, color: RARITY_COLOR[card.rarity] }}>{card.name}</div>
-                                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{card.effectText}</div>
-                                </div>
-                                <span style={{
-                                  fontSize: 10, fontWeight: 700,
-                                  color: RARITY_COLOR[card.rarity],
-                                  border: `1px solid ${RARITY_COLOR[card.rarity]}55`,
-                                  borderRadius: 4, padding: '2px 6px',
-                                  textTransform: 'uppercase', letterSpacing: 1,
-                                }}>{card.rarity}</span>
-                              </button>
-                            ))}
+                            {groupedAvailableCards.map(({ instances, card }) => {
+                              const instance = instances[0];
+                              const count = instances.length;
+                              return (
+                                <button
+                                  key={instance.instanceId}
+                                  onClick={() => {
+                                    setEquippedCards(prev => ({ ...prev, [equipModalPlayerId]: instance.instanceId }));
+                                    setEquipModalPlayerId(null);
+                                  }}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 12,
+                                    padding: '10px 14px', textAlign: 'left',
+                                    background: `${RARITY_COLOR[card.rarity]}0d`,
+                                    border: `1px solid ${RARITY_COLOR[card.rarity]}33`,
+                                    borderRadius: 8, cursor: 'pointer', width: '100%',
+                                    position: 'relative'
+                                  }}
+                                >
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 800, color: RARITY_COLOR[card.rarity] }}>{card.name}</div>
+                                      {count > 1 && (
+                                        <div style={{
+                                          background: '#dc2626', color: '#fff', fontSize: 10, fontWeight: 900,
+                                          padding: '2px 6px', borderRadius: 4, fontFamily: '"Impact", "Arial Black", sans-serif',
+                                          letterSpacing: 0.5, border: '1px solid #000'
+                                        }}>
+                                          x{count}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{card.effectText}</div>
+                                  </div>
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700,
+                                    color: RARITY_COLOR[card.rarity],
+                                    border: `1px solid ${RARITY_COLOR[card.rarity]}55`,
+                                    borderRadius: 4, padding: '2px 6px',
+                                    textTransform: 'uppercase', letterSpacing: 1,
+                                  }}>{card.rarity}</span>
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
 
