@@ -1553,8 +1553,8 @@ export default function CardsPage() {
             <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: 40, maxWidth: 460, margin: '0 auto 40px' }}>
               Here is a preview of the Skill Cards you can collect. Log in and participate in contests to earn them!
             </p>
-            <div className="cards-grid-mobile" style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center' }}>
-              {SKILL_CARDS.slice(0, 8).map((card) => (
+            <div className="cards-grid-mobile" style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center', marginBottom: 48 }}>
+              {SKILL_CARDS.slice(0, 12).map((card) => (
                 <div 
                   className="card-responsive-wrapper"
                   key={card.id} 
@@ -1562,6 +1562,21 @@ export default function CardsPage() {
                   style={{ position: 'relative', borderRadius: 16, width: '100%', maxWidth: 240, cursor: 'pointer' }}
                 >
                   <SkillCardDisplay card={card} width={240} selectable />
+                </div>
+              ))}
+            </div>
+
+            <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: 40, maxWidth: 460, margin: '0 auto 40px' }}>
+              Level up your lineup with Upgrade Cards to boost base stats and open new tactical possibilities.
+            </p>
+            <div className="cards-grid-mobile" style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'center' }}>
+              {UPGRADE_CARDS.slice(0, 6).map((card) => (
+                <div 
+                  className="card-responsive-wrapper"
+                  key={card.id} 
+                  style={{ position: 'relative', borderRadius: 16, width: '100%', maxWidth: 240 }}
+                >
+                  <UpgradeCardDisplay card={card} width={240} />
                 </div>
               ))}
             </div>
