@@ -3950,12 +3950,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               </div>
               {/* Leaderboard */}
-              <div className="ro-window live-leaderboard">
-                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="ro-window live-leaderboard" style={{ display: 'flex', flexDirection: 'column', maxHeight: '480px' }}>
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                   <span>🏆 Live Leaderboard</span>
                   <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>Live</span>
                 </div>
-                <div className="ro-window__body" style={{ padding: 16, maxHeight: '420px', overflowY: 'auto' }}>
+                <div className="ro-window__body" style={{ padding: 16, flex: 1, overflowY: 'auto' }}>
                   <table className="leaderboard" style={{ width: '100%' }}>
                     <thead>
                       <tr>
