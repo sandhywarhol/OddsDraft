@@ -1518,6 +1518,22 @@ export default function CardsPage() {
                   >
                     + DEMO: UPGRADE PACK
                   </button>
+                  <button 
+                    onClick={() => {
+                      if (publicKey) {
+                        localStorage.removeItem(`txodds_welcome_gift_claimed_${publicKey.toString()}`);
+                        window.location.reload();
+                      }
+                    }}
+                    style={{
+                      background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8,
+                      padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                      letterSpacing: '0.05em'
+                    }}
+                  >
+                    + DEMO: RESET GIFT
+                  </button>
                 </>
               )}
             </div>
