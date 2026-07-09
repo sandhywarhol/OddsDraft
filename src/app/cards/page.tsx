@@ -1301,6 +1301,40 @@ export default function CardsPage() {
   const [isCombineInfoExpanded, setIsCombineInfoExpanded] = useState(true);
   const [isUpgradeInfoExpanded, setIsUpgradeInfoExpanded] = useState(true);
 
+  // ── Welcome Gift State ──────────────────────────────────────────────────────
+  const { publicKey } = useWallet();
+  const [welcomeGiftState, setWelcomeGiftState] = useState<'checking' | 'available' | 'opening' | 'done'>('checking');
+  const [giftQueue, setGiftQueue] = useState<{ type: 'skill' | 'upgrade'; cardId: string }[]>([]);
+  const [giftIndex, setGiftIndex] = useState(0);
+
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      setWelcomeGiftState('checking');
+      return;
+    }
+    const claimedKey = `txodds_welcome_gift_claimed_${publicKey.toString()}`;
+    if (localStorage.getItem(claimedKey)) {
+      setWelcomeGiftState('done');
+      return;
+    }
+
+    // Generate 5 Skill Cards (max Epic) and 5 Upgrade Cards (max level 2)
+    const validSkillCards = SKILL_CARDS.filter(c => ['Common', 'Uncommon', 'Rare', 'Epic'].includes(c.rarity));
+    const validUpgradeCards = UPGRADE_CARDS.filter(c => c.level <= 2);
+
+    const generated: { type: 'skill' | 'upgrade'; cardId: string }[] = [];
+    for (let i = 0; i < 5; i++) {
+      generated.push({ type: 'skill', cardId: validSkillCards[Math.floor(Math.random() * validSkillCards.length)].id });
+      generated.push({ type: 'upgrade', cardId: validUpgradeCards[Math.floor(Math.random() * validUpgradeCards.length)].id });
+    }
+    
+    // Shuffle them so they interleave nicely
+    generated.sort(() => Math.random() - 0.5);
+
+    setGiftQueue(generated);
+    setWelcomeGiftState('available');
+  }, [connected, publicKey]);
+
   const handleCardClick = (instance: OwnedCard, card: SkillCard) => {
     setShimmerIds(prev => new Set(prev).add(instance.instanceId));
     setTimeout(() => {
