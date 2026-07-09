@@ -2270,6 +2270,10 @@ a {
     grid-template-rows: max-content max-content 1fr auto !important;
     gap: 16px !important;
     align-items: start !important;
+    /* Bleed out to match the full width of the score-bug above */
+    margin-left: calc(-1 * var(--space-6)) !important;
+    margin-right: calc(-1 * var(--space-6)) !important;
+    width: calc(100% + 2 * var(--space-6)) !important;
   }
   .live-col-left {
     display: contents !important;
