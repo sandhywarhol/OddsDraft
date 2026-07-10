@@ -1589,14 +1589,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (matched) {
           const resolvedId = matched.FixtureId || matched.fixtureId || matched.id;
           const poolName = liveFixtures?.length > 0 ? 'liveFixtures' : 'allFixtures';
-          console.log(`[LivePage] Matched fixture from ${poolName}:`, JSON.stringify(matched));
           if (resolvedId && resolvedId !== contestId) {
             console.log(`[LivePage] Fixture ID override: ${contestId} → ${resolvedId}`);
             txlineFixtureIdRef.current = resolvedId;
           }
         } else {
           console.warn('[LivePage] No match in fixture pool for', fixture.homeTeam, 'vs', fixture.awayTeam);
-          console.log('[LivePage] pool sample:', JSON.stringify(fixturePool.slice(0, 3)));
         }
       }
 
@@ -1732,8 +1730,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       if (snap && isMounted) {
         const snapRaw = Array.isArray(snap) ? snap : [snap];
         const snapUpdates = snapRaw.map(normalizeUpdate);
-        console.log('[LivePage] Snapshot raw (first 800):', JSON.stringify(snapRaw)?.slice(0, 800));
-        console.log('[LivePage] Snapshot normalized — gameState:', snapUpdates[snapUpdates.length-1]?.gameState, '| events:', snapUpdates.flatMap(u => u.events ?? []).length, '| score:', JSON.stringify(snapUpdates[snapUpdates.length-1]?.score));
+        console.log('[LivePage] Snapshot — gameState:', snapUpdates[snapUpdates.length-1]?.gameState, '| events:', snapUpdates.flatMap(u => u.events ?? []).length, '| score:', JSON.stringify(snapUpdates[snapUpdates.length-1]?.score));
 
         // Apply score from snapshot
         const latestSnap = snapUpdates[snapUpdates.length - 1];
@@ -1841,11 +1838,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           }
           setTxlineStatus('waiting');
           return;
-        }
-
-        // Log raw response ONCE so we can inspect real structure if events are missing
-        if (seenSeqsRef.current.size === 0) {
-          console.log('[LivePage] TxLINE first poll raw:', JSON.stringify(raw)?.slice(0, 1000));
         }
 
         // raw is a merged state object with _allEvents = array of individual events.
