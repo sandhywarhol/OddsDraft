@@ -1619,118 +1619,108 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
 
       // Fetch real lineup for formation visualisation — retries every 60s until data arrives
+      // Shared helper: flatten TxLINE lineup data (any shape) into FormationPlayer[]
+      const parseLineupData = (lineupData: any): { home: FormationPlayer[]; away: FormationPlayer[]; homeCoach?: string; awayCoach?: string } | null => {
+        let players: any[] = [];
+        const topArr: any[] | null = (() => {
+          if (Array.isArray(lineupData)) return lineupData;
+          const cand = lineupData?.Lineups ?? lineupData?.lineups
+                    ?? lineupData?.Data?.Lineups ?? lineupData?.Data?.lineups
+                    ?? lineupData?.players;
+          return Array.isArray(cand) ? cand : null;
+        })();
+        if (topArr && topArr.length > 0) {
+          const first = topArr[0];
+          const isTeamNested = first && (Array.isArray(first.lineups) || Array.isArray(first.Lineups) || Array.isArray(first.players));
+          if (isTeamNested) {
+            topArr.forEach((teamData: any, idx: number) => {
+              const ptcp: 1 | 2 = (teamData.Participant ?? teamData.participant ?? (idx === 0 ? 1 : 2)) === 2 ? 2 : 1;
+              const sub: any[] = teamData.lineups ?? teamData.Lineups ?? teamData.players ?? [];
+              sub.forEach((p: any) => players.push({ ...p, Participant: ptcp }));
+            });
+          } else {
+            players = topArr;
+          }
+        }
+        if (players.length === 0) return null;
+        const home: FormationPlayer[] = [];
+        const away: FormationPlayer[] = [];
+        let homeCoach: string | undefined;
+        let awayCoach: string | undefined;
+        for (const p of players) {
+          const participant: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
+          const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
+          const rawName: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
+          const name = rawName.includes(',') ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ') : rawName;
+          if (!name) continue;
+          if (rawPos === 'COACH' || (p.Role ?? p.role ?? '').toUpperCase() === 'COACH') {
+            if (participant === 1) homeCoach = name; else awayCoach = name;
+            continue;
+          }
+          const starterRaw = p.Starter ?? p.starter;
+          const fp: FormationPlayer = {
+            id: pMap[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
+            name,
+            jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
+            position: rawPos || 'MID',
+            participant,
+            starter: starterRaw !== undefined ? !!starterRaw : undefined,
+          };
+          if (participant === 1) home.push(fp); else away.push(fp);
+        }
+        if (home.length + away.length === 0) return null;
+        // Also enrich playerIdMap from lineup data
+        for (const p of players) {
+          const pid = String(p.PlayerId ?? p.playerId ?? '');
+          if (!pid || playerIdMapRef.current[pid]) continue;
+          const rawN: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
+          const n = rawN.includes(',') ? rawN.split(',').map((s: string) => s.trim()).reverse().join(' ') : rawN;
+          if (!n) continue;
+          const ptcp: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
+          const ourId = matchPlayerName(n, ptcp === 1 ? fixture.homeTeam : fixture.awayTeam);
+          if (ourId) playerIdMapRef.current[pid] = ourId;
+        }
+        return { home, away, homeCoach, awayCoach };
+      };
+
       const fetchLineup = async () => {
         if (lineupFetchedRef.current || !isMounted) return;
         try {
           const lineupRes = await fetch(`/api/txline/api/fixtures/lineups/${resolvedFixtureId}`);
-          if (!lineupRes.ok) return;
-          const lineupData: any = await lineupRes.json();
-
-          // Normalise any TxLINE lineup shape into a flat list of player objects,
-          // each tagged with Participant (1=home, 2=away).
-          // TxLINE may return:
-          //   A) Nested team format (same as SSE push):
-          //      { Lineups: [ {Participant:1, lineups:[…]}, {Participant:2, lineups:[…]} ] }
-          //   B) Flat array with Participant per player:
-          //      [ {PlayerId, PlayerName, Participant, Starter, …}, … ]
-          //   C) Wrapped flat: { lineups: […flat…] } or { Data: { Lineups: […flat…] } }
-          let players: any[] = [];
-
-          const topArr: any[] | null = (() => {
-            if (Array.isArray(lineupData)) return lineupData;
-            const cand = lineupData?.Lineups ?? lineupData?.lineups
-                      ?? lineupData?.Data?.Lineups ?? lineupData?.Data?.lineups
-                      ?? lineupData?.players;
-            return Array.isArray(cand) ? cand : null;
-          })();
-
-          if (topArr && topArr.length > 0) {
-            // Detect nested team format: first element has its own player sub-array
-            const first = topArr[0];
-            const isTeamNested = first && (
-              Array.isArray(first.lineups) || Array.isArray(first.Lineups) || Array.isArray(first.players)
-            );
-            if (isTeamNested) {
-              // Expand team objects → flat player list with injected Participant
-              topArr.forEach((teamData: any, idx: number) => {
-                const ptcp: 1 | 2 = (teamData.Participant ?? teamData.participant ?? (idx === 0 ? 1 : 2)) === 2 ? 2 : 1;
-                const sub: any[] = teamData.lineups ?? teamData.Lineups ?? teamData.players ?? [];
-                sub.forEach((p: any) => players.push({ ...p, Participant: ptcp }));
-              });
-            } else {
-              players = topArr;
-            }
+          // If dedicated lineups endpoint unavailable, fall back to score snapshot
+          let lineupData: any = null;
+          if (lineupRes.ok) {
+            lineupData = await lineupRes.json();
+          } else {
+            // Try snapshot — TxLINE often embeds lineup in the snapshot before publishing the endpoint
+            const snapFallback = await fetch(`/api/txline/api/scores/snapshot/${resolvedFixtureId}`);
+            if (!snapFallback.ok) return;
+            const snapArr: any[] = await snapFallback.json();
+            const lineupAction = (Array.isArray(snapArr) ? snapArr : [snapArr])
+              .find((u: any) => (u.Action ?? u.action ?? '').toLowerCase() === 'lineups');
+            if (!lineupAction) return;
+            // Reuse the nested team format the snapshot uses
+            lineupData = lineupAction;
           }
 
-          if (players.length === 0 || !isMounted) return;
-
-          const home: FormationPlayer[] = [];
-          const away: FormationPlayer[] = [];
-          let homeCoach: string | undefined;
-          let awayCoach: string | undefined;
-
-          for (const p of players) {
-            const participant: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
-            const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
-            const rawName: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
-            const name = rawName.includes(',')
-              ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ')
-              : rawName;
-            if (!name) continue;
-            if (rawPos === 'COACH' || (p.Role ?? p.role ?? '').toUpperCase() === 'COACH') {
-              if (participant === 1) homeCoach = name; else awayCoach = name;
-              continue;
-            }
-            // When Starter is not present in the response, leave it undefined so the
-            // formation component treats the player as a starter (starter !== false).
-            // Only set false explicitly when TxLINE says so.
-            const starterRaw = p.Starter ?? p.starter;
-            const fp: FormationPlayer = {
-              id: pMap[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
-              name,
-              jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
-              position: rawPos || 'MID',
-              participant,
-              starter: starterRaw !== undefined ? !!starterRaw : undefined,
-            };
-            if (participant === 1) home.push(fp); else away.push(fp);
-          }
-
-          if (home.length + away.length > 0) {
-            lineupFetchedRef.current = true;
-            if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
-            setRealLineup({ home, away, homeCoach, awayCoach });
-            realLineupRef.current = { home, away };
-            console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
-
-            // Update playerIdMap from lineup data so PlayerStats can resolve names.
-            // This covers the case where buildPlayerIdMap ran before lineups were published.
-            const addedToMap: string[] = [];
-            for (const p of players) {
-              const pid = String(p.PlayerId ?? p.playerId ?? '');
-              if (!pid || playerIdMapRef.current[pid]) continue;
-              const rawN: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
-              const n = rawN.includes(',') ? rawN.split(',').map((s: string) => s.trim()).reverse().join(' ') : rawN;
-              if (!n) continue;
-              const ptcp: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
-              const teamN = ptcp === 1 ? fixture.homeTeam : fixture.awayTeam;
-              const ourId = matchPlayerName(n, teamN);
-              if (ourId) { playerIdMapRef.current[pid] = ourId; addedToMap.push(n); }
-            }
-            if (addedToMap.length > 0) {
-              console.log(`[LivePage] playerIdMap updated from lineup: +${addedToMap.length} players`);
-            }
-          }
+          const parsed = parseLineupData(lineupData);
+          if (!parsed || !isMounted) return;
+          const { home, away, homeCoach, awayCoach } = parsed;
+          lineupFetchedRef.current = true;
+          if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
+          setRealLineup({ home, away, homeCoach, awayCoach });
+          realLineupRef.current = { home, away };
+          console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
         } catch (err) {
           console.warn('[LivePage] Lineup fetch failed (will retry):', err);
         }
       };
 
-      // Immediate attempt + retry every 60s until we get data
+      // Immediate attempt + retry every 15s until data arrives (lineups released ~30min before KO)
       fetchLineup();
       if (!lineupFetchedRef.current) {
         if (lineupRetryTimerRef.current) clearInterval(lineupRetryTimerRef.current);
-        lineupRetryTimerRef.current = setInterval(fetchLineup, 60_000);
+        lineupRetryTimerRef.current = setInterval(fetchLineup, 15_000);
       }
 
       // Load all events that happened before we connected via the score snapshot
