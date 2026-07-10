@@ -191,7 +191,7 @@ interface DialogData {
 }
 
 function getDialogData(event: any, step: number, fixture: any, score: { home: number, away: number } = { home: 0, away: 0 }): DialogData {
-  const player = event.player || 'Player';
+  const player = (event.player && event.player !== 'Unknown') ? event.player : 'The player';
   const team = event.team || 'Team';
   const opponent = event.team === fixture.homeTeam ? fixture.awayTeam : fixture.homeTeam;
   const minute = event.minute ?? 0;
@@ -943,42 +943,94 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // Keep ref current so poll closure always uses latest JWT without needing guestJwt in deps
   useEffect(() => { guestJwtRef.current = guestJwt; }, [guestJwt]);
 
-  // Which contests this wallet has entered for this fixture (from localStorage)
+  // Which contests this wallet has entered for this fixture
   const [enteredContests, setEnteredContests] = useState<string[]>([]);
 
   useEffect(() => {
+    // Seed from localStorage immediately for a fast first render
     try {
-      const list: string[] = JSON.parse(
+      const cached: string[] = JSON.parse(
         localStorage.getItem(`txodds_entered_contests_${contestId}`) ?? '[]'
       );
-      setEnteredContests(list);
+      if (cached.length) setEnteredContests(cached);
     } catch { /* ignore */ }
-  }, [contestId]);
+
+    // Then verify against Supabase — wallet may have entered on another device
+    const walletStr = publicKey?.toString();
+    if (!walletStr || !persistedIsLive) return;
+
+    fetch(`/api/contest/check-entry?fixtureId=${contestId}&walletAddress=${encodeURIComponent(walletStr)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.contestTypes?.length) return;
+        const types: string[] = data.contestTypes;
+        setEnteredContests(types);
+        // Refresh localStorage cache
+        try { localStorage.setItem(`txodds_entered_contests_${contestId}`, JSON.stringify(types)); } catch { /* ignore */ }
+      })
+      .catch(() => {});
+  }, [contestId, publicKey, persistedIsLive]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
-        ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        userLineupRef.current = parsed;
-        setUserLineup(parsed);
-        const defs: Record<string, SkillCard | null> = {};
-        const instances: Record<string, OwnedCard | null> = {};
-        for (const [pid, instId] of Object.entries(parsed.equippedCards ?? {})) {
-          defs[pid] = getCardDefByInstanceId(instId as string) ?? null;
-          instances[pid] = getCardInstanceById(instId as string) ?? null;
-        }
-        equippedCardDefsRef.current = defs;
-        equippedCardInstancesRef.current = instances;
-      } else {
-        userLineupRef.current = null;
-        setUserLineup(null);
+    let cancelled = false;
+    const applyLineup = (parsed: any) => {
+      if (cancelled) return;
+      userLineupRef.current = parsed;
+      setUserLineup(parsed);
+      const defs: Record<string, SkillCard | null> = {};
+      const instances: Record<string, OwnedCard | null> = {};
+      for (const [pid, instId] of Object.entries(parsed.equippedCards ?? {})) {
+        defs[pid] = getCardDefByInstanceId(instId as string) ?? null;
+        instances[pid] = getCardInstanceById(instId as string) ?? null;
       }
-    } catch (e) {
-      console.error('Failed to parse user lineup:', e);
-    }
-  }, [contestId, contestType]);
+      equippedCardDefsRef.current = defs;
+      equippedCardInstancesRef.current = instances;
+    };
+
+    (async () => {
+      try {
+        // Priority: exact category match → generic (no type suffix) → any other known category
+        const KNOWN_CONTEST_TYPES = ['top3', '5050', 'wta', 'top5'];
+        const stored = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
+          ?? localStorage.getItem(`txodds_user_lineup_${contestId}`)
+          ?? KNOWN_CONTEST_TYPES.filter(ct => ct !== contestType)
+             .reduce<string | null>((found, ct) => found ?? localStorage.getItem(`txodds_user_lineup_${contestId}_${ct}`), null);
+
+        if (stored) {
+          applyLineup(JSON.parse(stored));
+          return;
+        }
+
+        // Nothing in localStorage — try Supabase directly (covers cross-device and fresh sessions)
+        const walletStr = publicKey?.toString();
+        if (walletStr && persistedIsLive) {
+          try {
+            const res = await fetch(
+              `/api/contest/enter?fixtureId=${contestId}&walletAddress=${encodeURIComponent(walletStr)}&contestType=${contestType}`
+            );
+            if (res.ok && !cancelled) {
+              const json = await res.json();
+              if (json.lineup) {
+                // Persist to localStorage so subsequent renders are instant
+                localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(json.lineup));
+                applyLineup(json.lineup);
+                return;
+              }
+            }
+          } catch { /* non-blocking */ }
+        }
+
+        if (!cancelled) {
+          userLineupRef.current = null;
+          setUserLineup(null);
+        }
+      } catch (e) {
+        console.error('Failed to load user lineup:', e);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [contestId, contestType, publicKey, persistedIsLive]);
 
   useEffect(() => {
     leaderboardRef.current = leaderboard;
@@ -1014,6 +1066,18 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           const prize = prizeSol > 0 ? `${prizeSol.toFixed(4)} SOL` : '–';
           return { rank, username, wallet: `${w.substring(0, 4)}...${w.slice(-3)}`, avatar, points: 0, prize, isUser };
         });
+        // If the user has a lineup (entered the contest) but isn't in the server's participant
+        // list yet (e.g. Supabase sync pending, or demo entry), preserve an isUser entry so
+        // scoring updates have a row to accumulate into.
+        if (walletStr && !entries.some(e => e.isUser)) {
+          let userUsername = 'You';
+          let userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${walletStr}`;
+          try {
+            const storedProfile = localStorage.getItem(`profile_${walletStr}`);
+            if (storedProfile) { const pp = JSON.parse(storedProfile); userUsername = pp.username || userUsername; userAvatar = pp.avatar || userAvatar; }
+          } catch {}
+          entries.push({ rank: entries.length + 1, username: userUsername, wallet: `${walletStr.substring(0, 4)}...${walletStr.slice(-3)}`, avatar: userAvatar, points: 0, prize: '–', isUser: true });
+        }
         setLeaderboard(entries);
       })
       .catch(err => console.warn('[Leaderboard] fetch failed:', err));
@@ -1626,20 +1690,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       clockSeconds: u.Clock?.Seconds ?? u.Clock?.seconds ?? u.clock?.seconds,
     });
 
-    // Explicit map for cases where our placeholder contest IDs differ from TxLINE fixture IDs.
-    // These are keyed by our Supabase/URL fixture ID and resolve to the real TxLINE ID.
-    const TXLINE_ID_REMAP: Record<string, string> = {
-      '18210002': '18218149', // Spain vs Belgium QF — TxLINE assigned different ID
-      '18210003': '18213979', // Norway vs England QF
-      '18210004': '18222446', // Argentina vs Switzerland QF
-    };
-
     const bootstrap = async () => {
       if (liveInitDoneRef.current) return;
       liveInitDoneRef.current = true;
 
+      // Fetch fixture ID remap from Supabase (via API route) so new matches never need a code deploy.
+      // Falls back to contestId if the fetch fails or returns no mapping.
+      let fixtureRemap: Record<string, string> = {};
+      try {
+        const remapRes = await fetch('/api/fixture-remap');
+        if (remapRes.ok) fixtureRemap = await remapRes.json();
+      } catch { /* non-blocking — txlineFixtureIdRef falls back to contestId */ }
+
       // Apply explicit remap first — avoids allFixtures race condition entirely
-      txlineFixtureIdRef.current = TXLINE_ID_REMAP[contestId] ?? contestId;
+      txlineFixtureIdRef.current = fixtureRemap[contestId] ?? contestId;
       console.log('[LivePage] Starting bootstrap — contestId:', contestId, '→ TxLINE ID:', txlineFixtureIdRef.current, 'home:', fixture.homeTeam, 'away:', fixture.awayTeam);
       console.log('[LivePage] TxLINE liveFixtures count:', liveFixtures?.length ?? 0);
 
@@ -1808,6 +1872,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           fixture.homeTeam, fixture.awayTeam,
           fixture.homeFlag, fixture.awayFlag,
           seenSeqsRef.current,
+          txPlayerNamesRef.current
         );
 
         // ── Game state synthesis from snapshot ──────────────────────────────
@@ -2279,7 +2344,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           fixture.awayTeam,
           fixture.homeFlag,
           fixture.awayFlag,
-          seenSeqsRef.current
+          seenSeqsRef.current,
+          txPlayerNamesRef.current
         );
 
         if (newEvents.length === 0 && !latestStats) return;

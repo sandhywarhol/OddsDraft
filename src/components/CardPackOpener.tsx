@@ -179,14 +179,16 @@ export default function CardPackOpener({ contestId, upgradePackMode, title, subt
               animation: phase === 'shaking' ? 'shake 0.25s ease-in-out infinite' : undefined,
               cursor: phase === 'idle' ? 'pointer' : 'default',
             }} onClick={handleOpenPack}>
-              <img
-                src="/card/unopened%20card.svg"
-                alt="Card Pack"
-                draggable={false}
+              {/* <object> instead of <img> — the SVG contains embedded base64 images which
+                  browsers block when the SVG is loaded via <img> (sandboxed). <object> renders
+                  the SVG unsandboxed so all internal <image> elements display correctly. */}
+              <object
+                data="/card/unopened%20card.svg"
+                type="image/svg+xml"
+                aria-label="Card Pack"
                 style={{
                   width: '100%',
                   height: '100%',
-                  objectFit: 'fill',
                   display: 'block',
                   filter: phase === 'idle'
                     ? 'drop-shadow(0 0 18px rgba(255,215,0,0.5))'
@@ -194,6 +196,7 @@ export default function CardPackOpener({ contestId, upgradePackMode, title, subt
                     ? 'drop-shadow(0 0 28px rgba(255,215,0,0.8)) brightness(1.1)'
                     : 'none',
                   userSelect: 'none',
+                  pointerEvents: 'none',
                 }}
               />
               {/* Tap prompt overlay */}

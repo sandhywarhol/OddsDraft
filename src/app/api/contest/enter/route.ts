@@ -98,6 +98,27 @@ function validateLineup(
   return { ok: true };
 }
 
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const fixtureId = searchParams.get('fixtureId');
+  const walletAddress = searchParams.get('walletAddress');
+  const contestType = searchParams.get('contestType');
+
+  if (!fixtureId || !walletAddress || !contestType) {
+    return NextResponse.json({ lineup: null });
+  }
+
+  const { data } = await supabase
+    .from('contest_entries')
+    .select('lineup')
+    .eq('fixture_id', fixtureId)
+    .eq('wallet_address', walletAddress)
+    .eq('contest_type', contestType)
+    .maybeSingle();
+
+  return NextResponse.json({ lineup: data?.lineup ?? null });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

@@ -380,6 +380,8 @@ function describeEvent(type: string, player: string, team: string, minute: numbe
 
 // Convert raw TxLINE score updates into LiveEvents.
 // seenSeqs: Set of sequence numbers already processed — updated in-place to deduplicate.
+// txPlayerNames: optional TxLINE-ID → display-name map (from lineup API) used as a fallback
+//   when the player isn't in our WC2026_PLAYERS DB but TxLINE gave us their name earlier.
 export function convertTxLineUpdates(
   updates: TxLineScoreUpdate[],
   playerIdMap: Record<string, string>,
@@ -387,7 +389,8 @@ export function convertTxLineUpdates(
   awayTeam: string,
   homeFlag: string,
   awayFlag: string,
-  seenSeqs: Set<number>
+  seenSeqs: Set<number>,
+  txPlayerNames: Record<string, string> = {}
 ): LiveEvent[] {
   const result: LiveEvent[] = [];
 
@@ -456,6 +459,7 @@ export function convertTxLineUpdates(
         || displayType === 'free_kick' || displayType === 'offside';
       const player = raw.playerName
         || (playerInfo?.name ?? '')
+        || (txPlayerId ? (txPlayerNames[txPlayerId] ?? '') : '')
         || (isTeamAction ? '' : 'Unknown');
 
       // Drop nameless 0-point events that ARE expected to have a player (e.g. unattributed goals).

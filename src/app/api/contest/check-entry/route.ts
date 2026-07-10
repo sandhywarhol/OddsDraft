@@ -12,8 +12,19 @@ export async function GET(req: NextRequest) {
   const walletAddress = searchParams.get('walletAddress');
   const contestType = searchParams.get('contestType');
 
-  if (!fixtureId || !walletAddress || !contestType) {
-    return NextResponse.json({ entered: false });
+  if (!fixtureId || !walletAddress) {
+    return NextResponse.json({ entered: false, contestTypes: [] });
+  }
+
+  // No contestType → return all contestTypes this wallet entered for this fixture
+  if (!contestType) {
+    const { data } = await supabase
+      .from('contest_entries')
+      .select('contest_type')
+      .eq('fixture_id', fixtureId)
+      .eq('wallet_address', walletAddress);
+    const contestTypes = (data ?? []).map((r: { contest_type: string }) => r.contest_type);
+    return NextResponse.json({ contestTypes });
   }
 
   const { data } = await supabase
