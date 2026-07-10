@@ -22,11 +22,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    platformBgmRef.current = new Audio('/Audio/background music paltform.MP3');
+    platformBgmRef.current = new Audio('/Audio/background%20music%20paltform.MP3');
     platformBgmRef.current.loop = true;
-    platformBgmRef.current.volume = 0.25; // Low volume for BGM
+    platformBgmRef.current.volume = 0.25;
 
-    watchLiveBgmRef.current = new Audio('/Audio/background music watch live.mp3');
+    watchLiveBgmRef.current = new Audio('/Audio/background%20music%20watch%20live.mp3');
     watchLiveBgmRef.current.loop = true;
     watchLiveBgmRef.current.volume = 0.2;
 
@@ -103,8 +103,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     let path = '';
     if (sfxType === 'goal') path = '/Audio/goal.MP3';
-    else if (sfxType === 'whistle') path = '/Audio/whistle refere.mp3';
-    else if (sfxType === 'end_game') path = '/Audio/End game Whistle.MP3';
+    else if (sfxType === 'whistle') path = '/Audio/whistle%20refere.mp3';
+    else if (sfxType === 'end_game') path = '/Audio/End%20game%20Whistle.MP3';
 
     if (path) {
       const sfx = new Audio(path);

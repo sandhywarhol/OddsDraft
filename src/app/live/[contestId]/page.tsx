@@ -192,7 +192,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Referee',
           text: 'KICK OFF',
-          refereeImage: '/NPC/Referee Kick OFF.svg',
+          refereeImage: '/NPC/Referee%20Kick%20OFF.svg',
           isRefereeStyle: true,
           refereePosition: 'left'
         };
@@ -201,13 +201,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           return {
             speakerTitle: 'Alan',
             text: `"The referee blows the whistle for the second half! The score is currently ${fixture.homeTeam} ${score.home} - ${score.away} ${fixture.awayTeam}."`,
-            commentator2Image: '/NPC/Comentator 2 Calm.svg',
+            commentator2Image: '/NPC/Comentator%202%20Calm.svg',
           };
         } else {
           return {
             speakerTitle: 'Alan',
             text: `"The referee blows the whistle and we are underway! Let's hope for an exciting match today."`,
-            commentator2Image: '/NPC/Comentator 2 Calm.svg',
+            commentator2Image: '/NPC/Comentator%202%20Calm.svg',
           };
         }
       } else if (step === 3) {
@@ -215,13 +215,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           return {
             speakerTitle: 'Martin',
             text: `"Let's see if the managers' half-time instructions can make a difference in these final 45 minutes!"`,
-            commentator1Image: '/NPC/Komentator 1 calm.svg',
+            commentator1Image: '/NPC/Komentator%201%20calm.svg',
           };
         } else {
           return {
             speakerTitle: 'Martin',
             text: `"The atmosphere in the stadium is absolutely electric. I can't wait to see which team takes control of the match early on!"`,
-            commentator1Image: '/NPC/Komentator 1 calm.svg',
+            commentator1Image: '/NPC/Komentator%201%20calm.svg',
           };
         }
       } else if (step === 4) {
@@ -231,14 +231,14 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
             return {
               speakerTitle: 'Alan',
               text: `"Speaking of ${fixture.homeTeam}, did you know? ${homeFact}"`,
-              commentator2Image: '/NPC/Comentator 2 Calm.svg',
+              commentator2Image: '/NPC/Comentator%202%20Calm.svg',
             };
           }
         }
         return {
           speakerTitle: 'Alan',
           text: `"Both teams look completely focused today. We're in for a treat."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else {
         if (minute < 45) {
@@ -247,14 +247,14 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
             return {
               speakerTitle: 'Martin',
               text: `"And don't forget about ${fixture.awayTeam}. ${awayFact}"`,
-              commentator1Image: '/NPC/Komentator 1 calm.svg',
+              commentator1Image: '/NPC/Komentator%201%20calm.svg',
             };
           }
         }
         return {
           speakerTitle: 'Martin',
           text: `"Absolutely, every detail will count on the pitch today!"`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'half_time':
@@ -262,26 +262,26 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Referee',
           text: 'HALF TIME',
-          refereeImage: '/NPC/ End of Game.svg',
+          refereeImage: '/NPC/%20End%20of%20Game.svg',
           isRefereeStyle: true,
         };
       } else if (step === 2) {
         return {
           speakerTitle: 'Alan',
           text: `"And that's the whistle for the break! It's been an intense first 45 minutes. Let's take a quick look at the midway TxODDS statistics."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else if (step === 3) {
         return {
           speakerTitle: 'Martin',
           text: `"The possession is incredibly even so far, but ${fixture.homeTeam} has been much more dangerous in the final third, creating higher quality xG chances."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"Absolutely. The managers will have a lot to talk about in the dressing room. We'll see what tactical adjustments they make for the second half."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       }
     case 'full_time':
@@ -289,44 +289,44 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Referee',
           text: 'FULL TIME',
-          refereeImage: '/NPC/ End of Game.svg',
+          refereeImage: '/NPC/%20End%20of%20Game.svg',
           isRefereeStyle: true,
         };
       } else if (step === 2) {
         return {
           speakerTitle: 'Martin',
           text: `"What an incredible match! Let's dive into the post-match statistics provided by TxODDS."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       } else if (step === 3) {
         return {
           speakerTitle: 'Alan',
           text: `"Looking at the data, ${fixture.homeTeam} absolutely dominated the possession today, holding onto the ball for a staggering 62% of the game."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else if (step === 4) {
         return {
           speakerTitle: 'Martin',
           text: `"Indeed! And their passing accuracy was exceptional as well. They completed nearly 88% of their passes, constantly putting pressure on the defense."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       } else if (step === 5) {
         return {
           speakerTitle: 'Alan',
           text: `"However, the Expected Goals (xG) tells a different story. Despite the possession, ${fixture.awayTeam} had a much higher xG thanks to their lethal counter-attacks and clinical finishing!"`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else if (step === 6) {
         return {
           speakerTitle: 'Martin',
           text: `"Don't forget the incredible performance between the posts! Both goalkeepers registered crucial saves that kept the fans on the edge of their seats."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"A truly tactical masterclass and a fantastic display of football. Thank you for joining our live coverage, we'll see you at the next fixture!"`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       }
     case 'goal': {
@@ -343,26 +343,26 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           text: event.description
             ? `"${event.description}"`
             : `"GOAL! ${player} finds the back of the net in the ${minute} minute! ${goalTypeDesc} — and ${team} take the lead!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
         };
       } else {
         if (goalType === 'Head') {
           return {
             speakerTitle: 'Alan',
             text: `"What a delivery! ${player} attacked the ball with complete conviction — that's an aerial masterclass!"`,
-            commentator2Image: '/NPC/Comentator 2.svg',
+            commentator2Image: '/NPC/Comentator%202.svg',
           };
         } else if (goalType === 'Shot') {
           return {
             speakerTitle: 'Alan',
             text: `"Pure technique from ${player}! That shot had pace, precision, and the goalkeeper stood absolutely no chance!"`,
-            commentator2Image: '/NPC/Comentator 2.svg',
+            commentator2Image: '/NPC/Comentator%202.svg',
           };
         } else {
           return {
             speakerTitle: 'Alan',
             text: `"A brilliant team move from ${team} finally breaks through the ${opponent} defense and ends with a well-deserved goal!"`,
-            commentator2Image: '/NPC/Comentator 2.svg',
+            commentator2Image: '/NPC/Comentator%202.svg',
           };
         }
       }
@@ -372,14 +372,14 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: event.description ? `"${event.description}"` : `"Oh, that's a reckless challenge by ${player}! The referee steps in and shows a yellow card. He must be careful now!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
-          refereeImage: '/NPC/Referee Yellow Card.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
+          refereeImage: '/NPC/Referee%20Yellow%20Card.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"He really needs to watch his step now. One more mistake and ${team} will be down to 10 men!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
     case 'red_card':
@@ -387,14 +387,14 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: event.description ? `"${event.description}"` : `"Oh, that's a reckless challenge by ${player}! The referee has no choice but to show a straight red card, and it's a huge blow for ${team}!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
-          refereeImage: '/NPC/Referee Red Card.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
+          refereeImage: '/NPC/Referee%20Red%20Card.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"That's a game-changing moment! The manager of ${team} will have to completely rethink their strategy now."`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
     case 'own_goal':
@@ -402,14 +402,14 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"Disaster! It's an own goal by ${player}! An absolute nightmare moment for ${team}!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
-          refereeImage: '/NPC/ End of Game.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
+          refereeImage: '/NPC/%20End%20of%20Game.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"Absolutely gutting for ${team}. These are the moments that can completely change the momentum of a match!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
     case 'substitution':
@@ -417,20 +417,20 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Referee',
           text: 'SUBSTITUTION',
-          refereeImage: '/NPC/Player subtitution.svg',
+          refereeImage: '/NPC/Player%20subtitution.svg',
           isRefereeStyle: true,
         };
       } else if (step === 2) {
         return {
           speakerTitle: 'Alan',
           text: event.description ? `"${event.description}"` : `"Substitution for ${team}. Let's see if this tactical change can turn the tide of the match."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"Fresh legs on the pitch often provide that extra spark. It will be interesting to see how the opposition responds."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'penalty_won':
@@ -445,7 +445,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Alan',
           text: event.description ? `"${event.description}"` : `"PENALTY! The referee points to the spot! A massive opportunity for ${team} here!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
     case 'penalty_conceded':
@@ -453,13 +453,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"That is a disastrous challenge by ${player} in the box. He leaves the referee with absolutely no choice."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"What was he thinking? You simply cannot make a tackle like that inside the area."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       }
     case 'penalty_missed':
@@ -467,13 +467,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Alan',
           text: `"MISSED! I don't believe it! ${player} has completely fluffed his lines!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"He'll be having nightmares about that one. A golden chance wasted."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'corner_kick':
@@ -481,20 +481,20 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Referee',
           text: 'CORNER',
-          refereeImage: '/NPC/Corner Kick.svg',
+          refereeImage: '/NPC/Corner%20Kick.svg',
           isRefereeStyle: true,
         };
       } else if (step === 2) {
         return {
           speakerTitle: 'Alan',
           text: event.description ? `"${event.description}"` : `"It's out for a corner kick. A chance for ${team} to send their tall defenders forward."`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"Set pieces are crucial in tight games like this. Delivery will be everything."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'var_review':
@@ -509,13 +509,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Alan',
           text: `"Hold on, the referee is pausing play. We are having a VAR review for a potential incident."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"This is a tense moment for both teams. The technology is checking everything closely."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'danger_attack':
@@ -525,13 +525,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Alan',
           text: `"${team} is in a highly dangerous position! TxLINE data shows they are in the Danger zone right now — a goal could come at any moment!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"${opponent} needs to hold their defensive shape carefully. The pressure from ${team} is relentless and any lapse in concentration could be fatal!"`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'starting_xi':
@@ -541,7 +541,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         text: event.description
           ? `"${event.description}"`
           : `"${player} is confirmed in the starting eleven for ${team} today!"`,
-        commentator2Image: '/NPC/Comentator 2 Calm.svg',
+        commentator2Image: '/NPC/Comentator%202%20Calm.svg',
       };
     case 'sub_appearance':
       // TxLINE: dataSoccer.PlayerInId matches user's lineup
@@ -549,7 +549,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Referee',
           text: 'SUBSTITUTION',
-          refereeImage: '/NPC/Player subtitution.svg',
+          refereeImage: '/NPC/Player%20subtitution.svg',
           isRefereeStyle: true,
         };
       } else {
@@ -558,7 +558,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           text: event.description
             ? `"${event.description}"`
             : `"${player} is now on the pitch! Fresh legs that could make all the difference for ${team} in the closing stages."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       }
     case 'possession_bonus':
@@ -569,13 +569,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           text: event.description
             ? `"${event.description}"`
             : `"${team} has been absolutely dominant in possession this half! ${player} has been the engine in midfield, controlling the tempo beautifully."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"When you control the ball like that, you control the game. ${player} deserves full credit for the work rate shown today."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       }
     case 'clean_sheet':
@@ -584,13 +584,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Alan',
           text: `"CLEAN SHEET! ${team} has successfully kept the opposition off the scoreboard — ${player} has been absolutely magnificent today!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"A clean sheet is the ultimate reward for a solid defensive performance. The entire backline for ${team} deserves enormous credit today."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'assist':
@@ -601,13 +601,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           text: event.description
             ? `"${event.description}"`
             : `"What a pass from ${player}! The vision to pick out that run was exceptional — that assist was every bit as important as the goal itself!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"Creative genius from ${player}! He saw the run nobody else spotted and delivered the perfect ball. That's the mark of a truly world-class player."`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
     case 'goalkeeper_save':
@@ -618,13 +618,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           text: event.description
             ? `"${event.description}"`
             : `"INCREDIBLE SAVE from ${player}! That looked destined for the net, but he has pulled off an absolutely stunning stop!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"What a moment from ${player}! That save alone could be worth three points for ${team}. He has single-handedly kept them in this match."`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       }
     case 'penalty_save':
@@ -633,14 +633,14 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"SAVED!! ${player} guesses correctly and palms it away! The penalty taker is absolutely devastated — what a moment for the goalkeeper!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
-          refereeImage: '/NPC/ End of Game.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
+          refereeImage: '/NPC/%20End%20of%20Game.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"A defining save that could completely change the course of this match! ${player} is the hero — ${team} are absolutely ecstatic!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
     case 'extra_time':
@@ -649,7 +649,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Referee',
           text: 'EXTRA TIME',
-          refereeImage: '/NPC/Referee Kick OFF.svg',
+          refereeImage: '/NPC/Referee%20Kick%20OFF.svg',
           isRefereeStyle: true,
           refereePosition: 'left',
         };
@@ -657,13 +657,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Alan',
           text: `"We are going to extra time! Ninety minutes were not enough to separate these two sides — thirty more minutes to decide this contest!"`,
-          commentator2Image: '/NPC/Comentator 2 Calm.svg',
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"Both squads must dig deep now. Fatigue is a real factor, but so is the prize. One moment of quality could decide everything!"`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     case 'penalty_scored':
@@ -672,13 +672,13 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Martin',
           text: `"SCORED! ${player} steps up and sends the keeper the wrong way — nerves of steel from the ${team} player!"`,
-          commentator1Image: '/NPC/Comentator 1.svg',
+          commentator1Image: '/NPC/Comentator%201.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
           text: `"Ice in the veins! That is how you take a penalty under the biggest pressure possible. ${team} are one step closer!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
     case 'penalty_missed_shootout':
@@ -687,20 +687,20 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         return {
           speakerTitle: 'Alan',
           text: `"MISSED! ${player} has blazed it wide — that is an absolutely cruel moment in a penalty shootout. ${team} are on the brink!"`,
-          commentator2Image: '/NPC/Comentator 2.svg',
+          commentator2Image: '/NPC/Comentator%202.svg',
         };
       } else {
         return {
           speakerTitle: 'Martin',
           text: `"The pressure of a penalty shootout can break the best players in the world. ${player} will need enormous support from the bench and the fans right now."`,
-          commentator1Image: '/NPC/Komentator 1 calm.svg',
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       }
     default:
       return {
         speakerTitle: 'Commentator',
         text: `"${event.description}"`,
-        commentator1Image: '/NPC/Komentator 1 calm.svg',
+        commentator1Image: '/NPC/Komentator%201%20calm.svg',
       };
   }
 }

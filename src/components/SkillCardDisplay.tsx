@@ -96,7 +96,7 @@ export default function SkillCardDisplay({
         src={`/card/Skill Card/${card.name}.jpg`}
         alt={card.name}
         draggable={false}
-        onError={e => { (e.target as HTMLImageElement).src = '/Opened Card.svg'; }}
+        onError={e => { (e.target as HTMLImageElement).src = '/Opened%20Card.svg'; }}
         style={{
           position: 'absolute',
           inset: 0,

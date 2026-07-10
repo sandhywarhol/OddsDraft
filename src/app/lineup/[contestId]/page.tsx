@@ -1009,7 +1009,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             {/* NPC Character Image (Female - Left) */}
             {tutorialData?.position === 'left' && (
               <img
-                src="/NPC/NPC Guide Female.svg"
+                src="/NPC/NPC%20Guide%20Female.svg"
                 alt="Guide"
                 className="npc-commentator1-img smooth-npc-left"
                 style={{
@@ -1028,7 +1028,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             {/* NPC Character Image (Male - Right) */}
             {tutorialData?.position === 'right' && (
               <img
-                src="/NPC/NPC Guide Male.svg"
+                src="/NPC/NPC%20Guide%20Male.svg"
                 alt="Guide"
                 className="npc-commentator2-img smooth-npc-right"
                 style={{
@@ -2053,7 +2053,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"Welcome to the Lineup Builder! Here you'll draft your 5-a-side team for this match."`,
-        image: '/NPC/NPC Guide Female.svg',
+        image: '/NPC/NPC%20Guide%20Female.svg',
         position: 'left',
         targetId: 'lineup-header',
       };
@@ -2061,7 +2061,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"You need to fill 5 positions: Goalkeeper, Defender, Midfielder, Swinger (wing player LW/RW), and Forward. Each position earns points differently!"`,
-        image: '/NPC/NPC Guide Male.svg',
+        image: '/NPC/NPC%20Guide%20Male.svg',
         position: 'right',
         targetId: 'lineup-grid',
       };
@@ -2069,7 +2069,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"To recruit a player, simply click an empty slot, and the Recruitment Terminal will show you available players."`,
-        image: '/NPC/NPC Guide Female.svg',
+        image: '/NPC/NPC%20Guide%20Female.svg',
         position: 'left',
         targetId: 'recruitment-terminal',
       };
@@ -2077,7 +2077,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"Let me show you! I've automatically recruited a full demo squad for you. Notice how we also assigned a Captain (2x points)."`,
-        image: '/NPC/NPC Guide Male.svg',
+        image: '/NPC/NPC%20Guide%20Male.svg',
         position: 'right',
         targetId: 'lineup-grid',
       };
@@ -2085,7 +2085,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"We also set Confidence ratings (⭐1-5). A 5-star rating gives a huge multiplier, but also amplifies negative points for mistakes like Red Cards!"`,
-        image: '/NPC/NPC Guide Female.svg',
+        image: '/NPC/NPC%20Guide%20Female.svg',
         position: 'left',
         targetId: 'confidence-panel',
       };
@@ -2093,7 +2093,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"Once your squad is ready, lock it in by paying the 0.01 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
-        image: '/NPC/NPC Guide Male.svg',
+        image: '/NPC/NPC%20Guide%20Male.svg',
         position: 'right',
         targetId: 'submit-button',
       };
@@ -2101,7 +2101,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"Bonus tip! Equip a Skill Card to each player for extra points — I've already equipped demo cards so you can see how it looks. Earn your own cards after every match!"`,
-        image: '/NPC/NPC Guide Female.svg',
+        image: '/NPC/NPC%20Guide%20Female.svg',
         position: 'left',
         targetId: 'skill-card-section',
       };
@@ -2109,7 +2109,7 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
       return {
         speakerTitle: 'Guide',
         text: `"Visit 'My Cards' (top menu) to manage your full collection. Collect 2 copies of the same card to combine them into a higher rarity for even stronger bonuses. Legendary cards give massive point multipliers! Good luck, manager!"`,
-        image: '/NPC/NPC Guide Male.svg',
+        image: '/NPC/NPC%20Guide%20Male.svg',
         position: 'right',
         targetId: 'lineup-header',
       };

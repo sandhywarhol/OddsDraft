@@ -401,7 +401,7 @@ export default function TutorialPage() {
           )}
           {tutorialData.position === 'left' && (
             <img
-              src="/NPC/NPC Guide Female.svg"
+              src="/NPC/NPC%20Guide%20Female.svg"
               alt="Guide"
               className="npc-commentator1-img"
               style={{
@@ -414,7 +414,7 @@ export default function TutorialPage() {
           )}
           {tutorialData.position === 'right' && (
             <img
-              src="/NPC/NPC Guide Male.svg"
+              src="/NPC/NPC%20Guide%20Male.svg"
               alt="Guide"
               className="npc-commentator2-img"
               style={{
