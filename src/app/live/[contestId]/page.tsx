@@ -894,6 +894,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // Live mode refs — TxLINE fixture resolution and player mapping
   const txlineFixtureIdRef = useRef<string | null>(null);
   const playerIdMapRef = useRef<Record<string, string>>({});
+  // TxLINE player ID → raw TxLINE display name (fallback when player not in our DB)
+  const txPlayerNamesRef = useRef<Record<string, string>>({});
   const seenSeqsRef = useRef<Set<number>>(new Set());
   const liveInitDoneRef = useRef(false);
   const lastGameStateRef = useRef<string | null>(null);
@@ -1734,6 +1736,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           const ptcp: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
           const ourId = matchPlayerName(n, ptcp === 1 ? fixture.homeTeam : fixture.awayTeam);
           if (ourId) playerIdMapRef.current[pid] = ourId;
+          // Always store TxLINE name — fallback display for players not in our DB
+          if (n) txPlayerNamesRef.current[pid] = n;
         }
         return { home, away, homeCoach, awayCoach };
       };
@@ -2147,6 +2151,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const suppressDialog = isFirstTxLinePollRef.current || matchCompletedRef.current;
         isFirstTxLinePollRef.current = false;
 
+        // Tracks player-type combos scored by PlayerStats this poll — prevents convertTxLineUpdates
+        // from double-awarding points for the same event (TxLINE sends both individual events AND
+        // cumulative PlayerStats, which independently detect the same goal/card).
+        const psScored = new Set<string>();
+
         // ── PlayerStats delta: detect new goals/cards from cumulative TxLINE snapshot ──
         const latestStats = latest?.playerStats as Record<string, Record<string, number>> | undefined;
         if (latestStats) {
@@ -2158,7 +2167,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             const isHome = cur.participant === 1;
             const team = isHome ? fixture.homeTeam : fixture.awayTeam;
             const teamFlag = isHome ? fixture.homeFlag : fixture.awayFlag;
-            const playerName = playerInfo?.name ?? `Player ${txPid}`;
+            const playerName = playerInfo?.name ?? txPlayerNamesRef.current[txPid] ?? `Player ${txPid}`;
             const clkMin = Math.floor((latest?.clockSeconds ?? 0) / 60) || liveClockMinute;
 
             const mkEv = (type: string, count: number) => {
@@ -2237,6 +2246,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               });
               if (ev.type === 'goal' || ev.type === 'own_goal') playSFX('goal');
               else if (ev.type === 'yellow_card' || ev.type === 'red_card') playSFX('whistle');
+              // Prevent convertTxLineUpdates scoring loop from double-awarding this event
+              if (ev.playerId) psScored.add(`${ev.playerId}-${ev.type}`);
+              // Fire toast now — convertTxLineUpdates will skip scoring AND toast for psScored events
+              if (!notifiedEventsRef.current.has(ev.id)) {
+                notifiedEventsRef.current.add(ev.id);
+                const rd = Math.round(delta * 100) / 100;
+                setActiveToasts(prev => [{ id: `toast-ps-${ev.id}`, type: ev.type as any, title: ev.type.replace(/_/g, ' '), subtitle: ev.player || 'Event', value: rd > 0 ? `+${rd} pts` : `${rd} pts` }, ...prev]);
+              }
             }
 
             // Trigger NPC dialog for significant PlayerStats events (goal, red card, etc.).
@@ -2267,8 +2284,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
         if (newEvents.length === 0 && !latestStats) return;
 
-        // Add all events to the feed silently
-        setEvents(prev => [...newEvents.slice().reverse(), ...prev]);
+        // Add convertTxLineUpdates events to feed, replacing placeholder events:
+        // 1. PlayerStats placeholders with numeric names (e.g. "Player 533573 - goal")
+        // 2. Synthetic score-api-goal-* events added by pollScore while awaiting TxLINE confirmation
+        setEvents(prev => {
+          const superseded = new Set<string>();
+          for (const ne of newEvents) {
+            for (const e of prev) {
+              // Replace PlayerStats placeholder: same player + same type
+              if (e.id.startsWith('ps-') && e.type === ne.type && ne.playerId && e.playerId === ne.playerId)
+                superseded.add(e.id);
+              // Replace pollScore synthetic goal placeholder: same type + same team (no player yet)
+              if (e.id.startsWith('score-api-goal-') && e.type === ne.type && ne.team === e.team)
+                superseded.add(e.id);
+            }
+          }
+          const base = superseded.size > 0 ? prev.filter(e => !superseded.has(e.id)) : prev;
+          return [...newEvents.slice().reverse(), ...base];
+        });
 
         if (newEvents.length === 0) return;
 
@@ -2342,6 +2375,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 setActiveToasts(prev => [{ id: `toast-et-ne-${Date.now()}`, type: 'extra_time' as any, title: 'Extra Time Bonus', subtitle: 'All players +2 pts', value: `+${Math.round(etBonus * 100) / 100} pts` }, ...prev]);
               }
             }
+            continue;
+          }
+
+          // Skip scoring if PlayerStats already scored this player+event combo this poll.
+          // Normalize penalty_scored → goal since PlayerStats tracks all goals as 'goals'.
+          const _psType = ev.type === 'penalty_scored' ? 'goal' : ev.type;
+          if (ev.playerId && psScored.has(`${ev.playerId}-${_psType}`)) {
+            notifiedEventsRef.current.add(ev.id); // prevent duplicate toast later
             continue;
           }
 
@@ -2458,22 +2499,45 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     if (!fixture.homeTeam) return;
 
     let isMounted = true;
+    let isFirstScorePoll = true; // skip dialog trigger on initial load (scores are pre-existing)
     const pollScore = async () => {
       try {
+        const prevHome = scoreRef.current.home;
+        const prevAway = scoreRef.current.away;
         const res = await fetch('/api/scores/wc2026');
         if (!res.ok || !isMounted) return;
         const data: Record<string, { home: number; away: number; completed?: boolean }> = await res.json();
         const entry = data[contestId];
         if (entry && isMounted) {
+          const newHome = Math.max(prevHome, entry.home);
+          const newAway = Math.max(prevAway, entry.away);
           // Only apply if TxLINE hasn't already given us a higher score (from goal events)
           setScore(prev => ({
             home: Math.max(prev.home, entry.home),
             away: Math.max(prev.away, entry.away),
           }));
-          scoreRef.current = {
-            home: Math.max(scoreRef.current.home, entry.home),
-            away: Math.max(scoreRef.current.away, entry.away),
-          };
+          scoreRef.current = { home: newHome, away: newAway };
+
+          // When score increases, fire NPC dialog and SFX immediately — don't wait for
+          // TxLINE to confirm the individual event (which can lag 1 poll cycle / ~60s)
+          if (!isFirstScorePoll && !matchCompletedRef.current) {
+            const homeGoal = newHome > prevHome;
+            const awayGoal = newAway > prevAway;
+            if ((homeGoal || awayGoal) && !showPopupRef.current) {
+              const scoringTeam = homeGoal ? fixture.homeTeam : fixture.awayTeam;
+              const scoringFlag = (homeGoal ? fixture.homeFlag : fixture.awayFlag) ?? '';
+              const synthId = `score-api-goal-${Date.now()}`;
+              const synthEv = { id: synthId, minute: liveClockMinute || 0, team: scoringTeam, teamFlag: scoringFlag, player: '', playerId: '', type: 'goal' as const, points: 0, description: `GOAL! ${scoringTeam} score!` };
+              // Add placeholder event card immediately; TxLINE's confirmed event (with player name)
+              // will supersede it when it arrives (feed dedup removes placeholder by type+team match)
+              setEvents(prev => prev.some(e => e.id === synthId) ? prev : [synthEv, ...prev]);
+              playSFX('goal');
+              setLatestEvent(synthEv);
+              setDialogStep(1);
+              setShowPopup(true);
+            }
+          }
+          isFirstScorePoll = false;
 
           // If the authoritative scores API says the match is completed,
           // synthesize a full-time event so the card pack and prize flow unlock.
