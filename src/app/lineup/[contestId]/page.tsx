@@ -232,7 +232,15 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   }, [publicKey, isDemo]);
   const [airdropping, setAirdropping] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [equippedCards, setEquippedCards] = useState<Record<string, string>>({});
+  const [equippedCards, setEquippedCards] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
+        ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
+      if (saved) return JSON.parse(saved).equippedCards ?? {};
+    } catch { /* ignore */ }
+    return {};
+  });
   const [equipModalPlayerId, setEquipModalPlayerId] = useState<string | null>(null);
 
   // Fetch wallet SOL balance in live mode
