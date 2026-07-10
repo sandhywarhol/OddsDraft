@@ -14,13 +14,17 @@ import UpgradeCardDisplay from './UpgradeCardDisplay';
 interface CardPackOpenerProps {
   contestId?: string;
   upgradePackMode?: boolean;
+  title?: string;
+  subtitle?: string;
+  subtitleIdle?: string;
+  primaryButtonText?: string;
   onOpen: () => { instance?: OwnedCard; card?: SkillCard; upgradeInstance?: OwnedUpgradeCard; upgradeCard?: UpgradeCard };
   onClose: () => void;
 }
 
 type Phase = 'idle' | 'shaking' | 'flip-out' | 'flip-in' | 'done';
 
-export default function CardPackOpener({ contestId, upgradePackMode, onOpen, onClose }: CardPackOpenerProps) {
+export default function CardPackOpener({ contestId, upgradePackMode, title, subtitle, subtitleIdle, primaryButtonText, onOpen, onClose }: CardPackOpenerProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [revealedCard, setRevealedCard] = useState<SkillCard | null>(null);
   const [revealedUpgradeCard, setRevealedUpgradeCard] = useState<UpgradeCard | null>(null);
@@ -106,10 +110,10 @@ export default function CardPackOpener({ contestId, upgradePackMode, onOpen, onC
           fontSize: 11, fontWeight: 700, color: '#ffd700',
           letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8,
         }}>
-          🎴 Match Reward
+          {title || '🎴 Match Reward'}
         </div>
         <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', textShadow: '0 0 24px rgba(255,215,0,0.5)' }}>
-          {phase === 'done' && (revealedCard || revealedUpgradeCard) ? `${revealedCard?.name || revealedUpgradeCard?.name} Obtained!` : 'You Earned a Card Pack!'}
+          {phase === 'done' && (revealedCard || revealedUpgradeCard) ? `${revealedCard?.name || revealedUpgradeCard?.name} Obtained!` : (subtitle || 'You Earned a Card Pack!')}
         </div>
         {phase === 'done' && (revealedCard || revealedUpgradeCard) && (
           <div style={{
@@ -117,13 +121,13 @@ export default function CardPackOpener({ contestId, upgradePackMode, onOpen, onC
             color: rarityColor, textShadow: `0 0 10px ${rarityColor}`,
             letterSpacing: 2, textTransform: 'uppercase',
           }}>
-            {revealedCard && `${RARITY_STARS[revealedCard.rarity as keyof typeof RARITY_STARS]} ${revealedCard.rarity}`}
-            {revealedUpgradeCard && `${RARITY_STARS[revealedUpgradeCard.rarity as keyof typeof RARITY_STARS] || '⭐'} ${revealedUpgradeCard.rarity}`}
+            {revealedCard && revealedCard.rarity}
+            {revealedUpgradeCard && revealedUpgradeCard.rarity}
           </div>
         )}
         {phase === 'idle' && (
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
-            A reward for participating in this match
+            {subtitleIdle || 'A reward for participating in this match'}
           </div>
         )}
       </div>
@@ -287,39 +291,60 @@ export default function CardPackOpener({ contestId, upgradePackMode, onOpen, onC
           gap: 16,
           animation: 'fadeInUp 0.4s ease 0.1s both',
         }}>
-          <div style={{ display: 'flex', gap: 12 }}>
+          {primaryButtonText ? (
             <button
               onClick={() => onClose()}
               style={{
-                padding: '12px 24px',
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.25)',
-                borderRadius: 10,
-                color: 'rgba(255,255,255,0.6)',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Close
-            </button>
-            <button
-              onClick={() => { window.location.href = '/cards'; }}
-              style={{
-                padding: '12px 24px',
-                background: rarityColor,
+                padding: '16px 48px',
+                background: 'linear-gradient(135deg, #2196F3, #1976D2)',
                 border: 'none',
-                borderRadius: 10,
-                color: '#000',
-                fontSize: 13,
+                borderRadius: 12,
+                color: '#fff',
+                fontSize: 15,
                 fontWeight: 900,
                 cursor: 'pointer',
+                boxShadow: `0 4px 12px rgba(33, 150, 243, 0.4)`,
                 letterSpacing: 0.5,
+                textTransform: 'uppercase',
               }}
             >
-              View My Collection →
+              {primaryButtonText}
             </button>
-          </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => onClose()}
+                style={{
+                  padding: '12px 24px',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: 10,
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+              <button
+                onClick={() => { window.location.href = '/cards'; }}
+                style={{
+                  padding: '12px 24px',
+                  background: rarityColor,
+                  border: 'none',
+                  borderRadius: 10,
+                  color: '#000',
+                  fontSize: 13,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  letterSpacing: 0.5,
+                }}
+              >
+                View My Collection →
+              </button>
+            </div>
+          )}
         </div>
       )}
 

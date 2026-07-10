@@ -165,7 +165,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     };
 
     fetchFixtures();
-    const pollRate = appMode === 'live' ? 30000 : 60000;
+    const pollRate = appMode === 'live' ? 10000 : 60000;
     const interval = setInterval(fetchFixtures, pollRate);
 
     return () => {

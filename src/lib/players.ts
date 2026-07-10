@@ -721,6 +721,8 @@ export interface DemoFixture {
   status: 'upcoming' | 'live' | 'finished';
   homeScore?: number;
   awayScore?: number;
+  penaltyHome?: number;
+  penaltyAway?: number;
   isNonDemo?: boolean;
 }
 

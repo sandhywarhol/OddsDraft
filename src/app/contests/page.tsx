@@ -4,6 +4,7 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { type DemoFixture } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
+import type { WCFixture } from '@/lib/wc2026-fixtures';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -14,7 +15,7 @@ import { hasOpenedPack, openCardPack } from '@/lib/card-collection';
 import CardPackOpener from '@/components/CardPackOpener';
 import FlagImage from '@/components/FlagImage';
 
-type FixtureScore = { home: number; away: number; completed?: boolean };
+type FixtureScore = { home: number; away: number; completed?: boolean; penaltyHome?: number; penaltyAway?: number };
 
 export default function ContestsPage() {
   const { connected } = useWallet();
@@ -24,20 +25,22 @@ export default function ContestsPage() {
 
   const isDemo = appMode === 'demo';
 
-  const handleReplayTutorial = useCallback(() => {
-    // Force tutorial using the Argentina vs Germany demo match so it's always upcoming and not locked
-    const targetId = isDemo ? 'special-arg-ger' : (WC2026_FIXTURES.find(f => f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now())?.fixtureId ?? WC2026_FIXTURES[0]?.fixtureId);
-    if (targetId) router.push(`/lineup/${targetId}?replay=1`);
-  }, [isDemo, router]);
+  const [scheduleFixtures, setScheduleFixtures] = useState<WCFixture[]>(WC2026_FIXTURES);
   const [enteredContests, setEnteredContests] = useState<Record<string, string[]>>({});
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);
   const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number }>>({});
+
+  const handleReplayTutorial = useCallback(() => {
+    // Force tutorial using the Argentina vs Germany demo match so it's always upcoming and not locked
+    const targetId = isDemo ? 'special-arg-ger' : (scheduleFixtures.find(f => f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now())?.fixtureId ?? scheduleFixtures[0]?.fixtureId);
+    if (targetId) router.push(`/lineup/${targetId}?replay=1`);
+  }, [isDemo, router, scheduleFixtures]);
   const [finishedScores, setFinishedScores] = useState<Record<string, FixtureScore>>({});
   const [matchResult, setMatchResult] = useState<{ fixture: DemoFixture; data: MatchResult | null; loading: boolean } | null>(null);
 
   const openMatchResult = (fixture: DemoFixture) => {
     setMatchResult({ fixture, data: null, loading: true });
-    fetch(`/api/match/result?fixtureId=${fixture.fixtureId}`)
+    fetch(`/api/match/result?fixtureId=${fixture.fixtureId}&homeTeam=${encodeURIComponent(fixture.homeTeam)}&awayTeam=${encodeURIComponent(fixture.awayTeam)}`)
       .then(r => r.json())
       .then((data: MatchResult) => setMatchResult({ fixture, data, loading: false }))
       .catch(() => setMatchResult({ fixture, data: null, loading: false }));
@@ -75,7 +78,7 @@ export default function ContestsPage() {
   // Fetch real participant counts from Supabase for visible fixtures
   useEffect(() => {
     if (isDemo) return;
-    const ids = WC2026_FIXTURES.map(f => f.fixtureId).join(',');
+    const ids = scheduleFixtures.map(f => f.fixtureId).join(',');
     fetch(`/api/contest/counts?fixtures=${ids}`)
       .then(r => r.json())
       .then(data => setContestCounts(data))
@@ -107,9 +110,17 @@ export default function ContestsPage() {
       .catch(() => {});
   }, [isDemo]);
 
+  // Fetch live schedule from ESPN (corrects knockout team names / times)
+  useEffect(() => {
+    fetch('/api/schedule/wc2026')
+      .then(r => r.json())
+      .then((data: WCFixture[]) => { if (Array.isArray(data) && data.length > 0) setScheduleFixtures(data); })
+      .catch(() => {});
+  }, []);
+
   // Always show real WC2026 fixture schedule (demo mode = simulated gameplay, live mode = real data)
   // Status computed from current time; live scores overlaid from TxLINE API when available
-  const mappedFixtures: DemoFixture[] = WC2026_FIXTURES.map(f => {
+  const mappedFixtures: DemoFixture[] = scheduleFixtures.map(f => {
     // Check if this fixture is currently live from TxLINE API
     // TxLINE uses different field names depending on endpoint — try all known variants
     const fid = String(f.fixtureId);
@@ -147,10 +158,14 @@ export default function ContestsPage() {
     // Scores: TxLINE devnet returns Score:{} (empty) so we supplement with match data API.
     let homeScore: number | undefined;
     let awayScore: number | undefined;
+    let penaltyHome: number | undefined;
+    let penaltyAway: number | undefined;
     if (!isDemo && finishedScores[f.fixtureId]) {
-      // Authoritative scores — covers regular time, ET, and penalty shootout goals
-      homeScore = finishedScores[f.fixtureId].home;
-      awayScore = finishedScores[f.fixtureId].away;
+      const fs = finishedScores[f.fixtureId];
+      homeScore = fs.home;
+      awayScore = fs.away;
+      penaltyHome = fs.penaltyHome;
+      penaltyAway = fs.penaltyAway;
     } else if (!isDemo && apiLiveMatch) {
       // Fallback: TxLINE live data (empty on devnet but correct on prod)
       homeScore = apiLiveMatch.score?.home ?? apiLiveMatch.Score?.Home ?? apiLiveMatch.HomeScore;
@@ -167,6 +182,8 @@ export default function ContestsPage() {
       status,
       homeScore,
       awayScore,
+      penaltyHome,
+      penaltyAway,
     };
   });
 
@@ -488,7 +505,7 @@ export default function ContestsPage() {
                     fixture={fixture}
                     onSelect={setSelectedFixture}
                     counts={contestCounts[fixture.fixtureId]}
-                    onViewResult={finishedScores[fixture.fixtureId] ? openMatchResult : undefined}
+                    onViewResult={openMatchResult}
                     hasEntered={!!(enteredContests[fixture.fixtureId]?.length)}
                     firstContestType={enteredContests[fixture.fixtureId]?.[0]}
                     enteredTypes={enteredContests[fixture.fixtureId] ?? []}
@@ -843,13 +860,21 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
             {isLive ? (
               <div style={{ color: 'var(--color-danger)', fontWeight: 700, fontSize: '0.8rem' }}>VS</div>
             ) : isFinished ? (
-              <div style={{
-                fontFamily: 'Bebas Neue, cursive',
-                fontSize: '1.8rem',
-                color: 'var(--text-secondary)',
-                letterSpacing: '0.08em',
-              }}>
-                {fixture.homeScore ?? '?'} — {fixture.awayScore ?? '?'}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                <div style={{
+                  fontFamily: 'Bebas Neue, cursive',
+                  fontSize: '1.8rem',
+                  color: 'var(--text-secondary)',
+                  letterSpacing: '0.08em',
+                  lineHeight: 1,
+                }}>
+                  {fixture.homeScore ?? '?'} — {fixture.awayScore ?? '?'}
+                </div>
+                {fixture.penaltyHome !== undefined && fixture.penaltyAway !== undefined && (
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.04em' }}>
+                    ({fixture.penaltyHome}–{fixture.penaltyAway} pens)
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', color: 'var(--text-muted)' }}>
@@ -991,7 +1016,7 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
             {onViewResult && (
               <button
                 onClick={() => onViewResult(fixture)}
-                className={`btn btn--full ${hasEntered ? 'btn--ghost' : 'btn--secondary'}`}
+                className="btn btn--full btn--secondary"
               >
                 📊 Match Details
               </button>

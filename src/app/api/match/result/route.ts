@@ -83,12 +83,21 @@ async function fetchEventDetail(internalRef: string, isLive: boolean): Promise<a
 // Data is sourced and normalised server-side; no third-party service is
 // referenced in the public request or response.
 export async function GET(req: NextRequest) {
-  const fixtureId = new URL(req.url).searchParams.get('fixtureId');
+  const url = new URL(req.url);
+  const fixtureId = url.searchParams.get('fixtureId');
   if (!fixtureId) return NextResponse.json({ error: 'Missing fixtureId' }, { status: 400 });
 
   // Look up fixture from our own schedule
-  const fixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
-  if (!fixture) return NextResponse.json({ events: [] });
+  const staticFixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
+  if (!staticFixture) return NextResponse.json({ events: [] });
+
+  // Caller may pass correct team names (e.g. from ESPN schedule API) to override
+  // the static names which can be wrong for knockout matches (pre-tournament predictions).
+  const fixture = {
+    ...staticFixture,
+    homeTeam: url.searchParams.get('homeTeam') ?? staticFixture.homeTeam,
+    awayTeam: url.searchParams.get('awayTeam') ?? staticFixture.awayTeam,
+  };
 
   // Search ±1 day around kickoff — ESPN indexes matches by local kickoff date which
   // can differ from UTC date when the match falls near midnight in either direction.

@@ -1280,6 +1280,75 @@ function UpgradeModal({
   );
 }
 
+function WelcomeGiftModal({
+  queue,
+  publicKey,
+  onComplete
+}: {
+  queue: { type: 'skill' | 'upgrade'; cardId: string }[];
+  publicKey: string;
+  onComplete: () => void;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Add all cards to collection once when the modal opens
+  useEffect(() => {
+    if (localStorage.getItem(`txodds_welcome_gift_claimed_${publicKey}`)) return;
+
+    queue.forEach((q, idx) => {
+      if (q.type === 'skill') {
+        addCardToCollection({
+          instanceId: `wg-skill-${Date.now()}-${idx}`,
+          cardId: q.cardId,
+          obtainedAt: new Date().toISOString(),
+          upgradeCredits: 0
+        });
+      } else {
+        addUpgradeCardToCollection(q.cardId);
+      }
+    });
+    localStorage.setItem(`txodds_welcome_gift_claimed_${publicKey}`, 'true');
+  }, [queue, publicKey]);
+
+  const currentItem = queue[currentIndex];
+  
+  if (!currentItem) {
+    onComplete();
+    return null;
+  }
+
+  const handleOpen = () => {
+    if (currentItem.type === 'skill') {
+      const card = SKILL_CARDS.find(c => c.id === currentItem.cardId);
+      return { card };
+    } else {
+      const upgradeCard = UPGRADE_CARDS.find(c => c.id === currentItem.cardId);
+      return { upgradeCard };
+    }
+  };
+
+  const handleClose = () => {
+    if (currentIndex < queue.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      onComplete();
+    }
+  };
+
+  return (
+    <CardPackOpener
+      key={currentIndex}
+      upgradePackMode={currentItem.type === 'upgrade'}
+      title="🎁 Welcome to OddsDraft!"
+      subtitle={`Opening Starter Pack (${currentIndex + 1}/${queue.length})`}
+      subtitleIdle="Contains 5 Skill Cards and 5 Upgrade Cards"
+      primaryButtonText={currentIndex < queue.length - 1 ? 'Open More' : 'Finish & Go to My Cards'}
+      onOpen={handleOpen}
+      onClose={handleClose}
+    />
+  );
+}
+
 export default function CardsPage() {
   const { connected } = useWallet();
   const { appMode } = useTxLine();
@@ -2216,6 +2285,18 @@ export default function CardsPage() {
           }}
           onClose={() => {
             setShowDemoUpgradeOpener(false);
+            reload();
+          }}
+        />
+      )}
+
+      {/* Welcome Gift Flow */}
+      {(welcomeGiftState === 'available' || welcomeGiftState === 'opening') && giftQueue.length > 0 && publicKey && (
+        <WelcomeGiftModal
+          queue={giftQueue}
+          publicKey={publicKey.toString()}
+          onComplete={() => {
+            setWelcomeGiftState('done');
             reload();
           }}
         />

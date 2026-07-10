@@ -1659,6 +1659,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             setRealLineup({ home, away, homeCoach, awayCoach });
             realLineupRef.current = { home, away };
             console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
+
+            // Also update playerIdMap from lineup data so PlayerStats can resolve names.
+            // This covers the case where buildPlayerIdMap ran before lineups were published.
+            const addedToMap: string[] = [];
+            for (const p of players) {
+              const pid = String(p.PlayerId ?? p.playerId ?? '');
+              if (!pid || playerIdMapRef.current[pid]) continue;
+              const rawN: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
+              const n = rawN.includes(',') ? rawN.split(',').map((s: string) => s.trim()).reverse().join(' ') : rawN;
+              if (!n) continue;
+              const ptcp: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
+              const teamN = ptcp === 1 ? fixture.homeTeam : fixture.awayTeam;
+              const ourId = matchPlayerName(n, teamN);
+              if (ourId) { playerIdMapRef.current[pid] = ourId; addedToMap.push(n); }
+            }
+            if (addedToMap.length > 0) {
+              console.log(`[LivePage] playerIdMap updated from lineup: +${addedToMap.length} players`);
+            }
           }
         } catch (err) {
           console.warn('[LivePage] Lineup fetch failed (will retry):', err);
