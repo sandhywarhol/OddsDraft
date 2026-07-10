@@ -14,6 +14,7 @@ import { RARITY_COLOR, SKILL_CARDS, type SkillCard, getUpgradedEffectText } from
 import { formatDistanceToNow } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import FlagImage from '@/components/FlagImage';
@@ -843,6 +844,27 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               Back to Contests
             </Link>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Wallet gate — non-demo users must connect wallet before building a lineup
+  if (!isDemo && !publicKey) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'transparent' }}>
+        <Navbar />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', gap: 20, padding: '0 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem' }}>🔒</div>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, margin: 0 }}>Connect Wallet to Play</h1>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 380, margin: 0 }}>
+            You need a Solana wallet to build a lineup and enter this contest. Entry fee is <strong>0.01 SOL</strong>.
+          </p>
+          <WalletMultiButton style={{ borderRadius: 8, fontWeight: 700, fontSize: '1rem', padding: '12px 28px' }} />
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>— or —</div>
+          <Link href={`/lineup/${fixture.fixtureId}?mode=demo&contestType=${contestType}`} className="btn btn--secondary">
+            Try Demo Mode (no wallet needed)
+          </Link>
         </div>
       </div>
     );
