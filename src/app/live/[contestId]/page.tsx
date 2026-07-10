@@ -1455,13 +1455,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   if (participant === 1) sseHomeCoach = name; else sseAwayCoach = name;
                   continue;
                 }
+                const sseStarterRaw = p.Starter ?? p.starter;
                 const fp: FormationPlayer = {
                   id: playerIdMapRef.current[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
                   name,
                   jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
                   position: rawPos || 'MID',
                   participant,
-                  starter: !!(p.Starter ?? p.starter ?? false),
+                  starter: sseStarterRaw !== undefined ? !!sseStarterRaw : undefined,
                 };
                 if (participant === 1) homeFp.push(fp); else awayFp.push(fp);
               }
@@ -1615,22 +1616,50 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           const lineupRes = await fetch(`/api/txline/api/fixtures/lineups/${resolvedFixtureId}`);
           if (!lineupRes.ok) return;
           const lineupData: any = await lineupRes.json();
-          // Handle both flat array and nested {lineups:[]} / {Data:{Lineups:[]}} shapes
+
+          // Normalise any TxLINE lineup shape into a flat list of player objects,
+          // each tagged with Participant (1=home, 2=away).
+          // TxLINE may return:
+          //   A) Nested team format (same as SSE push):
+          //      { Lineups: [ {Participant:1, lineups:[…]}, {Participant:2, lineups:[…]} ] }
+          //   B) Flat array with Participant per player:
+          //      [ {PlayerId, PlayerName, Participant, Starter, …}, … ]
+          //   C) Wrapped flat: { lineups: […flat…] } or { Data: { Lineups: […flat…] } }
           let players: any[] = [];
-          if (Array.isArray(lineupData)) {
-            players = lineupData;
-          } else if (Array.isArray(lineupData?.lineups ?? lineupData?.Lineups)) {
-            players = lineupData.lineups ?? lineupData.Lineups;
-          } else if (Array.isArray(lineupData?.Data?.Lineups ?? lineupData?.Data?.lineups)) {
-            players = lineupData.Data.Lineups ?? lineupData.Data.lineups;
-          } else if (Array.isArray(lineupData?.players)) {
-            players = lineupData.players;
+
+          const topArr: any[] | null = (() => {
+            if (Array.isArray(lineupData)) return lineupData;
+            const cand = lineupData?.Lineups ?? lineupData?.lineups
+                      ?? lineupData?.Data?.Lineups ?? lineupData?.Data?.lineups
+                      ?? lineupData?.players;
+            return Array.isArray(cand) ? cand : null;
+          })();
+
+          if (topArr && topArr.length > 0) {
+            // Detect nested team format: first element has its own player sub-array
+            const first = topArr[0];
+            const isTeamNested = first && (
+              Array.isArray(first.lineups) || Array.isArray(first.Lineups) || Array.isArray(first.players)
+            );
+            if (isTeamNested) {
+              // Expand team objects → flat player list with injected Participant
+              topArr.forEach((teamData: any, idx: number) => {
+                const ptcp: 1 | 2 = (teamData.Participant ?? teamData.participant ?? (idx === 0 ? 1 : 2)) === 2 ? 2 : 1;
+                const sub: any[] = teamData.lineups ?? teamData.Lineups ?? teamData.players ?? [];
+                sub.forEach((p: any) => players.push({ ...p, Participant: ptcp }));
+              });
+            } else {
+              players = topArr;
+            }
           }
+
           if (players.length === 0 || !isMounted) return;
+
           const home: FormationPlayer[] = [];
           const away: FormationPlayer[] = [];
           let homeCoach: string | undefined;
           let awayCoach: string | undefined;
+
           for (const p of players) {
             const participant: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
             const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
@@ -1643,16 +1672,21 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               if (participant === 1) homeCoach = name; else awayCoach = name;
               continue;
             }
+            // When Starter is not present in the response, leave it undefined so the
+            // formation component treats the player as a starter (starter !== false).
+            // Only set false explicitly when TxLINE says so.
+            const starterRaw = p.Starter ?? p.starter;
             const fp: FormationPlayer = {
               id: pMap[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
               name,
               jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
               position: rawPos || 'MID',
               participant,
-              starter: !!(p.Starter ?? p.starter ?? false),
+              starter: starterRaw !== undefined ? !!starterRaw : undefined,
             };
             if (participant === 1) home.push(fp); else away.push(fp);
           }
+
           if (home.length + away.length > 0) {
             lineupFetchedRef.current = true;
             if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
@@ -1660,7 +1694,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             realLineupRef.current = { home, away };
             console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
 
-            // Also update playerIdMap from lineup data so PlayerStats can resolve names.
+            // Update playerIdMap from lineup data so PlayerStats can resolve names.
             // This covers the case where buildPlayerIdMap ran before lineups were published.
             const addedToMap: string[] = [];
             for (const p of players) {
