@@ -230,7 +230,6 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       .catch(() => { /* non-blocking — localStorage is the fallback */ });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicKey, isDemo]);
-  const [airdropping, setAirdropping] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [equippedCards, setEquippedCards] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {};
@@ -259,22 +258,6 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playersLoading]);
 
-  const handleAirdrop = async () => {
-    if (!publicKey) return;
-    setAirdropping(true);
-    try {
-      const sig = await connection.requestAirdrop(publicKey, 2 * LAMPORTS_PER_SOL);
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-      const lamports = await connection.getBalance(publicKey);
-      setWalletBalance(lamports / LAMPORTS_PER_SOL);
-    } catch (e) {
-      console.error('[Airdrop] failed:', e);
-      alert('Airdrop failed. Try again or visit https://faucet.solana.com');
-    } finally {
-      setAirdropping(false);
-    }
-  };
 
   const [tutorialStep, setTutorialStep] = useState(0);
   const [zoomedElementId, setZoomedElementId] = useState<string | null>(null);
@@ -1142,10 +1125,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       </div>
                     </div>
                     {walletBalance !== null && walletBalance < 0.015 && (
-                      <a href="https://faucet.solana.com" target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: '0.7rem', color: '#ffaa00', fontWeight: 700, textDecoration: 'underline', marginLeft: 4 }}>
-                        Get SOL
-                      </a>
+                      <span style={{ fontSize: '0.7rem', color: '#ffaa00', fontWeight: 700, marginLeft: 4 }}>
+                        Low
+                      </span>
                     )}
                   </div>
                 )}
@@ -1889,23 +1871,15 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   </div>
                 )}
 
-                {/* Devnet balance warning */}
+                {/* Low balance warning */}
                 {!isDemo && publicKey && walletBalance !== null && walletBalance < 0.015 && (
                   <div className="card" style={{ padding: 16, background: 'rgba(255, 60, 60, 0.08)', border: '1px solid rgba(255,60,60,0.35)', borderRadius: 0 }}>
-                    <div style={{ fontSize: '0.85rem', color: '#ff6b6b', marginBottom: 10, fontWeight: 700 }}>
-                      Insufficient balance: {walletBalance.toFixed(4)} SOL
+                    <div style={{ fontSize: '0.85rem', color: '#ff6b6b', marginBottom: 6, fontWeight: 700 }}>
+                      Insufficient SOL — {walletBalance.toFixed(4)} SOL
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
-                      You need at least 0.015 SOL (0.01 entry fee + network fees).
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      You need at least 0.015 SOL (0.01 entry + network fees). Top up your wallet via Phantom or buy SOL from an exchange.
                     </div>
-                    <button
-                      className="btn btn--secondary"
-                      onClick={handleAirdrop}
-                      disabled={airdropping}
-                      style={{ width: '100%' }}
-                    >
-                      {airdropping ? '⏳ Airdropping...' : '⛽ Get 2 Devnet SOL (Free)'}
-                    </button>
                   </div>
                 )}
 
