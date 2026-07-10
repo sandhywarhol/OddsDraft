@@ -541,14 +541,14 @@ function HowItWorksSection() {
     {
       step: '05',
       title: 'Watch Live & Earn Points',
-      desc: 'Goals +10, Assists +6, Shot on Target +2, Saves +1, Cards -2, Own Goal -4. Watch your points update live!',
+      desc: 'Goals vary by position (GK +20 → FWD +10), Assists +6, GK Saves +1, Yellow -2, Red -5, Own Goal -6. Points update in real time!',
       icon: '📊',
       color: '#ff4d6d',
     },
     {
       step: '06',
       title: 'Win SOL Prizes',
-      desc: 'Compete in 3 lobbies (Free, Degens, Whales). Prizes distributed on-chain.',
+      desc: 'Prizes distributed on-chain: Top 3 Classic (50/30/20%), Double Up 50/50, or Winner Takes All — ranked by total fantasy points.',
       icon: '🏆',
       color: '#ff8a00',
     },

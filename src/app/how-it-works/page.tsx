@@ -82,10 +82,10 @@ export default function HowItWorksPage() {
                 </p>
                 <ul style={{ color: '#94a3b8', paddingLeft: 0, marginBottom: 0, lineHeight: 2, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>GK:</strong> Goalkeeper</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>DEF:</strong> Defender</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>MID:</strong> Midfielder</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>MID:</strong> Midfielder</li>
-                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>ATT:</strong> Attacker</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>DEF:</strong> Defender (CB / LB / RB)</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>MID:</strong> Midfielder (CMF / AMF)</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>SWG:</strong> Swinger — wing player (LW / RW)</li>
+                  <li style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}><strong>FWD:</strong> Forward (CF / SS)</li>
                 </ul>
               </div>
             </div>
@@ -111,7 +111,7 @@ export default function HowItWorksPage() {
                   </div>
                   <div style={{ background: 'rgba(0,0,0,0.3)', padding: 20, borderRadius: 8, border: '1px solid rgba(255,77,109,0.2)' }}>
                     <strong style={{ color: '#ff4d6d', display: 'block', marginBottom: 8, fontSize: '1.1rem' }}>Skill Card Equipment</strong>
-                    <span style={{ color: '#94a3b8' }}>Equip a Skill Card to a player for an extra flat bonus on specific events (e.g. +10 pts for goals, +5 pts for clean sheets). This is applied before captain and confidence multipliers.</span>
+                    <span style={{ color: '#94a3b8' }}>Equip a Skill Card to boost a specific event type for that player — e.g. a Legendary Striker card adds +1.5 pts per goal on top of the base score. Upgrade cards increase this bonus further (up to +30%). Applied before captain and confidence multipliers.</span>
                   </div>
                 </div>
               </div>
@@ -211,7 +211,7 @@ export default function HowItWorksPage() {
                   </div>
                   <div style={{ background: 'rgba(0,232,122,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(0,232,122,0.15)' }}>
                     <strong style={{ color: '#00e87a', display: 'block', marginBottom: 6 }}>Solana — Settlement Layer</strong>
-                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Entry fees are held on Solana Devnet. Final rankings and prize outcomes are computed on-chain so results are transparent and verifiable by any participant.</span>
+                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Entry fees are held on Solana. Final rankings and prize outcomes are computed on-chain so results are transparent and verifiable by any participant.</span>
                   </div>
                 </div>
               </div>
