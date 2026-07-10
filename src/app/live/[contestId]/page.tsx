@@ -1147,6 +1147,31 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     matchCompletedRef.current = matchCompleted;
   }, [matchCompleted]);
 
+  // ── Late fixture ID resolution ────────────────────────────────────────────
+  // bootstrap() may run before TxLineContext.fetchFixtures() resolves, leaving
+  // txlineFixtureIdRef pointing to the URL contestId instead of the real TxLINE
+  // fixture ID. This effect re-runs whenever allFixtures arrives and corrects it.
+  useEffect(() => {
+    if (!allFixtures?.length || appMode !== 'live') return;
+    const normStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' ').trim();
+    const normHome = normStr(fixture.homeTeam);
+    const normAway = normStr(fixture.awayTeam);
+    const matched = allFixtures.find((f: any) => {
+      const p1 = normStr(f.Participant1 || '');
+      const p2 = normStr(f.Participant2 || '');
+      return (p1.includes(normHome.split(' ')[0]) || normHome.includes(p1.split(' ')[0]))
+          && (p2.includes(normAway.split(' ')[0]) || normAway.includes(p2.split(' ')[0]));
+    });
+    if (matched) {
+      const resolvedId = matched.FixtureId || matched.fixtureId || matched.id;
+      if (resolvedId && String(resolvedId) !== String(txlineFixtureIdRef.current)) {
+        console.log(`[LivePage] Late fixture ID resolution: ${txlineFixtureIdRef.current} → ${resolvedId}`);
+        txlineFixtureIdRef.current = resolvedId;
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFixtures, appMode]);
+
   // ── Kickoff countdown + live clock fallback ───────────────────────────────
   // minutesToKickoff: positive = pre-match; null = match in progress or finished
   // When in live mode and events haven't arrived yet, we derive the match minute
@@ -1591,17 +1616,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       clockSeconds: u.Clock?.Seconds ?? u.Clock?.seconds ?? u.clock?.seconds,
     });
 
+    // Explicit map for cases where our placeholder contest IDs differ from TxLINE fixture IDs.
+    // These are keyed by our Supabase/URL fixture ID and resolve to the real TxLINE ID.
+    const TXLINE_ID_REMAP: Record<string, string> = {
+      '18210002': '18218149', // Spain vs Belgium QF — TxLINE assigned different ID
+      '18210003': '18213979', // Norway vs England QF
+      '18210004': '18222446', // Argentina vs Switzerland QF
+    };
+
     const bootstrap = async () => {
       if (liveInitDoneRef.current) return;
       liveInitDoneRef.current = true;
 
-      // Default: our WC2026 fixture ID matches TxLINE fixture ID
-      txlineFixtureIdRef.current = contestId;
-      console.log('[LivePage] Starting bootstrap — contestId:', contestId, 'home:', fixture.homeTeam, 'away:', fixture.awayTeam);
+      // Apply explicit remap first — avoids allFixtures race condition entirely
+      txlineFixtureIdRef.current = TXLINE_ID_REMAP[contestId] ?? contestId;
+      console.log('[LivePage] Starting bootstrap — contestId:', contestId, '→ TxLINE ID:', txlineFixtureIdRef.current, 'home:', fixture.homeTeam, 'away:', fixture.awayTeam);
       console.log('[LivePage] TxLINE liveFixtures count:', liveFixtures?.length ?? 0);
 
-      // Try to match a better fixture ID from liveFixtures or allFixtures (in case devnet uses different IDs).
-      // allFixtures covers pre-match fixtures not yet in liveFixtures.
+      // Also try team-name matching from allFixtures as a secondary override (catches future renames)
       const fixturePool = liveFixtures?.length > 0 ? liveFixtures : allFixtures;
       if (fixturePool?.length > 0) {
         const normStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' ').trim();
@@ -1615,9 +1647,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         });
         if (matched) {
           const resolvedId = matched.FixtureId || matched.fixtureId || matched.id;
-          const poolName = liveFixtures?.length > 0 ? 'liveFixtures' : 'allFixtures';
-          if (resolvedId && resolvedId !== contestId) {
-            console.log(`[LivePage] Fixture ID override: ${contestId} → ${resolvedId}`);
+          if (resolvedId && String(resolvedId) !== String(contestId)) {
+            console.log(`[LivePage] Fixture ID override (allFixtures): ${txlineFixtureIdRef.current} → ${resolvedId}`);
             txlineFixtureIdRef.current = resolvedId;
           }
         } else {
@@ -1701,15 +1732,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
       const fetchLineup = async () => {
         if (lineupFetchedRef.current || !isMounted) return;
+        // Always read the ref so retries pick up any late fixture ID correction
+        const lineupFixtureId = txlineFixtureIdRef.current ?? resolvedFixtureId;
         try {
-          const lineupRes = await fetch(`/api/txline/api/fixtures/lineups/${resolvedFixtureId}`);
+          const lineupRes = await fetch(`/api/txline/api/fixtures/lineups/${lineupFixtureId}`);
           // If dedicated lineups endpoint unavailable, fall back to score snapshot
           let lineupData: any = null;
           if (lineupRes.ok) {
             lineupData = await lineupRes.json();
           } else {
             // Try snapshot — TxLINE often embeds lineup in the snapshot before publishing the endpoint
-            const snapFallback = await fetch(`/api/txline/api/scores/snapshot/${resolvedFixtureId}`);
+            const snapFallback = await fetch(`/api/txline/api/scores/snapshot/${lineupFixtureId}`);
             if (!snapFallback.ok) return;
             const snapArr: any[] = await snapFallback.json();
             const lineupAction = (Array.isArray(snapArr) ? snapArr : [snapArr])

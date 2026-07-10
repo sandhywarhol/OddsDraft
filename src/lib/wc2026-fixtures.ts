@@ -195,9 +195,9 @@ export const WC2026_FIXTURES: WCFixture[] = [
 
   // ── Quarter-finals ───────────────────────────────────────────────────────────
   qf('18210001', 'France',       'Morocco',           2026, 7,  9, 20),   // France 2-0 Morocco
-  qf('18210002', 'Spain',        'Belgium',           2026, 7, 10, 19),   // July 10 tonight
-  qf('18210003', 'Norway',       'England',           2026, 7, 11, 21),
-  qf('18210004', 'Argentina',    'Switzerland',       2026, 7, 12,  1),
+  qf('18210002', 'Spain',        'Belgium',           2026, 7, 10, 19),   // TxLINE: 18218149
+  qf('18213979', 'Norway',       'England',           2026, 7, 11, 21),   // TxLINE fixture 18213979
+  qf('18222446', 'Argentina',    'Switzerland',       2026, 7, 12,  1),   // TxLINE fixture 18222446
 
   // ── Semi-finals ──────────────────────────────────────────────────────────────
   sf('18220001', 'France',       'Brazil',            2026, 7, 14, 20),

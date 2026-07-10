@@ -42,7 +42,12 @@ async function proxy(req: NextRequest, path: string[]) {
   const serverJwt = (!isAuthPath && SERVER_TOKEN) ? await getServerJwt() : null;
   const auth = isAuthPath ? browserAuth : (browserAuth ?? (serverJwt ? `Bearer ${serverJwt}` : null));
 
+  const isStream = path.some(p => p === 'stream' || p === 'updates');
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (isStream) {
+    headers['Accept'] = 'text/event-stream';
+    headers['Cache-Control'] = 'no-cache';
+  }
   if (auth) headers['Authorization'] = auth;
   if (apiToken) headers['X-Api-Token'] = apiToken;
 
