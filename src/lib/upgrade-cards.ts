@@ -77,7 +77,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for GK. Slightly increases saving instincts — each save grants slightly higher points than before.',
     flavorText: 'Instinct cannot be taught — only sharpened.',
-    imageUrl: '/Upgrade Pack/Goal Keeper Upgrade  1.jpg',
+    imageUrl: '/Upgrade%20Pack/Goal%20Keeper%20Upgrade%20%201.jpg',
   },
   {
     id: 'upg-gk-2',
@@ -89,7 +89,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for GK. Goalkeeper\'s grip becomes stronger — bonuses from every save and clean sheet increase significantly.',
     flavorText: 'A ball in his hands never goes anywhere else.',
-    imageUrl: '/Upgrade Pack/Goal Keeper Upgrade  2.jpg',
+    imageUrl: '/Upgrade%20Pack/Goal%20Keeper%20Upgrade%20%202.jpg',
   },
   {
     id: 'upg-gk-3',
@@ -101,7 +101,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Ultimate position upgrade for GK. This goalkeeper has reached absolute potential — GK skill card stats increase to maximum level.',
     flavorText: 'This goal is not just a box — it\'s a fortress that never falls.',
-    imageUrl: '/Upgrade Pack/Goal Keeper Upgrade 3.jpg',
+    imageUrl: '/Upgrade%20Pack/Goal%20Keeper%20Upgrade%203.jpg',
   },
 
   // ─── DEFENDER ─────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for DEF. Defender\'s positioning is slightly improved — every defensive contribution provides a more noticeable point impact.',
     flavorText: 'A defensive wall begins with a single solid stone.',
-    imageUrl: '/Upgrade Pack/Defender Upgrade 1.jpg',
+    imageUrl: '/Upgrade%20Pack/Defender%20Upgrade%201.jpg',
   },
   {
     id: 'upg-def-2',
@@ -127,7 +127,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for DEF. Defense becomes much harder to penetrate — bonuses from clean sheets, tackles, and defender contributions increase drastically.',
     flavorText: 'Every failed attack is a victory in itself.',
-    imageUrl: '/Upgrade Pack/Defender Upgrade 2.jpg',
+    imageUrl: '/Upgrade%20Pack/Defender%20Upgrade%202.jpg',
   },
   {
     id: 'upg-def-3',
@@ -139,7 +139,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Ultimate position upgrade for DEF. The defender has transformed into a colossus — DEF skill card stats rise to maximum level.',
     flavorText: 'He is not an ordinary defender. He is the reason the defense exists.',
-    imageUrl: '/Upgrade Pack/Defender Upgrade 3.jpg',
+    imageUrl: '/Upgrade%20Pack/Defender%20Upgrade%203.jpg',
   },
 
   // ─── MIDFIELDER ───────────────────────────────────────────────────────────
@@ -153,7 +153,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for MID. Midfielder\'s rhythm slightly increases — every key pass and MID contribution becomes more valuable.',
     flavorText: 'The midfield beats faster when he plays.',
-    imageUrl: '/Upgrade Pack/Midfield Upgrade 1.jpg',
+    imageUrl: '/Upgrade%20Pack/Midfield%20Upgrade%201.jpg',
   },
   {
     id: 'upg-mid-2',
@@ -165,7 +165,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for MID. The midfielder\'s engine runs at full capacity — bonuses for assists, possession, and goals from the MID position surge significantly.',
     flavorText: 'A good engine never stops — it only gets faster.',
-    imageUrl: '/Upgrade Pack/Midfield Upgrade 2.jpg',
+    imageUrl: '/Upgrade%20Pack/Midfield%20Upgrade%202.jpg',
   },
   {
     id: 'upg-mid-3',
@@ -177,7 +177,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Ultimate position upgrade for MID. This midfielder controls the entire pitch — MID skill card stats reach absolute potential.',
     flavorText: 'He doesn\'t just play on the pitch — he conducts it.',
-    imageUrl: '/Upgrade Pack/Midfield Upgrade 3.jpg',
+    imageUrl: '/Upgrade%20Pack/Midfield%20Upgrade%203.jpg',
   },
 
   // ─── WINGER ───────────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for WIN. Winger\'s speed is slightly sharpened — every sprint, cross, and goal from the winger position is more rewarding.',
     flavorText: 'The spark on the flank that ignites the fire of victory.',
-    imageUrl: '/Upgrade Pack/Winger Upgrade 1.jpg',
+    imageUrl: '/Upgrade%20Pack/Winger%20Upgrade%201.jpg',
   },
   {
     id: 'upg-win-2',
@@ -203,7 +203,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for WIN. The winger accelerates to the max — assist and goal contributions from the flanks increase drastically.',
     flavorText: 'When the turbo ignites, no defender can keep up.',
-    imageUrl: '/Upgrade Pack/Winger Upgrade 2.jpg',
+    imageUrl: '/Upgrade%20Pack/Winger%20Upgrade%202.jpg',
   },
   {
     id: 'upg-win-3',
@@ -215,7 +215,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Ultimate position upgrade for WIN. This winger moves as fast as lightning — WIN skill card stats increase to the most extreme level.',
     flavorText: 'No longer just a winger — he is a phenomenon.',
-    imageUrl: '/Upgrade Pack/winger upgrade 3.jpg',
+    imageUrl: '/Upgrade%20Pack/winger%20upgrade%203.jpg',
   },
 
   // ─── STRIKER ──────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for STR. Striker\'s instinct is slightly sharpened — every goal opportunity provides greater points than usual.',
     flavorText: 'A true predator is always one step ahead of its prey.',
-    imageUrl: '/Upgrade Pack/striker upgrade 1.jpg',
+    imageUrl: '/Upgrade%20Pack/striker%20upgrade%201.jpg',
   },
   {
     id: 'upg-str-2',
@@ -241,7 +241,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Position upgrade for STR. Striker\'s efficiency increases rapidly — every goal and penalty provides a much larger point impact.',
     flavorText: 'Clinical is not just about technique — it\'s a mentality.',
-    imageUrl: '/Upgrade Pack/striker upgrade 2.jpg',
+    imageUrl: '/Upgrade%20Pack/striker%20upgrade%202.jpg',
   },
   {
     id: 'upg-str-3',
@@ -253,7 +253,7 @@ export const UPGRADE_CARDS: UpgradeCard[] = [
     maxMultiplier: 0.3,
     description: 'Ultimate position upgrade for STR. This striker can no longer be stopped — STR skill card stats increase to the absolute highest level.',
     flavorText: 'At this level, scoring goals is not a goal — it has become destiny.',
-    imageUrl: '/Upgrade Pack/striker upgrade 3.jpg',
+    imageUrl: '/Upgrade%20Pack/striker%20upgrade%203.jpg',
   },
 ];
 

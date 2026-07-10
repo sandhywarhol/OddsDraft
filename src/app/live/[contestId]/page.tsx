@@ -1253,6 +1253,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (basePts === 0) continue;
 
         let pts = basePts;
+        const equippedCardIdStat = ((userLineupRef.current as any)?.equippedCards ?? {})[p.id];
+        if (equippedCardIdStat) {
+          const cardDefStat = getCardDefByInstanceId(equippedCardIdStat);
+          const cardInstStat = getCardInstanceById(equippedCardIdStat);
+          if (cardDefStat) pts += getCardBonusForEvent(cardDefStat, bonus.eventType, cardInstStat?.upgradeCredits || 0);
+        }
         if (!appearedPlayersRef.current.has(p.id) && pts > 0) {
           pts += 2; // implicit appearance
           appearedPlayersRef.current.add(p.id);

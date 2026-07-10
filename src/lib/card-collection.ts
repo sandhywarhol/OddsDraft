@@ -12,7 +12,6 @@ import {
 } from './skill-cards';
 
 import {
-  UPGRADE_CARDS,
   UPGRADE_PACK_DROP_CHANCE,
   rollUpgradeCard,
   getUpgradeCardById,
@@ -347,7 +346,7 @@ export function getCardBonusForEvent(card: SkillCard, eventType: string, upgrade
     case 'goal_conceded_reduction': baseValue = eventType === 'goal_conceded'     ? card.modifierValue : 0; break;
     case 'clean_sheet_bonus':       baseValue = eventType === 'clean_sheet'       ? card.modifierValue : 0; break;
     case 'yellow_card_reduction':   baseValue = eventType === 'yellow_card'       ? card.modifierValue : 0; break;
-    case 'possession_bonus_extra':  baseValue = eventType === 'possession_bonus'  ? card.modifierValue : 0; break;
+    case 'possession_bonus_extra':  baseValue = (eventType === 'possession_bonus' || eventType === 'possession_dominant' || eventType === 'possession_slight') ? card.modifierValue : 0; break;
     case 'penalty_save_bonus':      baseValue = eventType === 'penalty_save'      ? card.modifierValue : 0; break;
     case 'penalty_scored_bonus':    baseValue = eventType === 'penalty_scored'    ? card.modifierValue : 0; break;
     case 'appearance_bonus':        baseValue = (eventType === 'starting_xi' || eventType === 'sub_appearance') ? card.modifierValue : 0; break;
@@ -399,7 +398,7 @@ export function applySkillModifier(
       case 'goal_conceded_reduction':  if (ev.type === 'goal_conceded') bonus += effectiveValue; break;
       case 'clean_sheet_bonus':        if (ev.type === 'clean_sheet') bonus += effectiveValue; break;
       case 'yellow_card_reduction':    if (ev.type === 'yellow_card') bonus += effectiveValue; break;
-      case 'possession_bonus_extra':   if (ev.type === 'possession_bonus') bonus += effectiveValue; break;
+      case 'possession_bonus_extra':   if (ev.type === 'possession_bonus' || ev.type === 'possession_dominant' || ev.type === 'possession_slight') bonus += effectiveValue; break;
       case 'penalty_save_bonus':       if (ev.type === 'penalty_save') bonus += effectiveValue; break;
       case 'appearance_bonus':         if (ev.type === 'starting_xi' || ev.type === 'sub_appearance') bonus += effectiveValue; break;
       case 'penalty_scored_bonus':     if (ev.type === 'penalty_scored') bonus += effectiveValue; break;
