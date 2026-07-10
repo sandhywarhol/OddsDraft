@@ -771,7 +771,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     setSubmitting(false);
 
     setTimeout(() => {
-      router.push(`/live/${contestId}?contestType=${contestType}`);
+      const demoParam = isDemo ? '&mode=demo' : '';
+      router.push(`/live/${contestId}?contestType=${contestType}${demoParam}`);
     }, 1500);
   };
 
@@ -837,7 +838,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <Link href={`/live/${fixture.fixtureId}?contestType=${contestType}`} className="btn btn--primary btn--lg">
+            <Link href={`/live/${fixture.fixtureId}?contestType=${contestType}${isDemo ? '&mode=demo' : ''}`} className="btn btn--primary btn--lg">
               🔴 Watch Live
             </Link>
             <Link href="/contests" className="btn btn--secondary btn--lg">

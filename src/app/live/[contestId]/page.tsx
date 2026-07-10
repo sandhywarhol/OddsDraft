@@ -710,6 +710,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const { contestId } = use(params);
   const searchParamsObj = use(searchParams);
   const contestType = (searchParamsObj.contestType as string) || 'top3';
+  // ?mode=demo forces full demo simulation regardless of live API state
+  const forceDemoMode = searchParamsObj.mode === 'demo';
   const { publicKey, signMessage } = useWallet();
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt, liveFixtures, allFixtures } = useTxLine();
@@ -717,7 +719,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // Read persisted mode directly from localStorage for useState initializers.
   // TxLineContext's useEffect hasn't run yet on the first render, so appMode
   // is still 'demo' even after a page refresh in live mode.
-  const persistedIsLive = typeof window !== 'undefined'
+  // forceDemoMode (?mode=demo in URL) always overrides live state.
+  const persistedIsLive = !forceDemoMode
+    && typeof window !== 'undefined'
     && localStorage.getItem('txline_app_mode') === 'live'
     && !!localStorage.getItem('txline_api_token');
 
@@ -839,7 +843,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [latestEvent, setLatestEvent] = useState<(typeof matchEvents)[0] | null>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [isFastForward, setIsFastForward] = useState(false);
+  const [demoSpeed, setDemoSpeed] = useState<1 | 30 | 90>(1);
   const eventRef = useRef<HTMLDivElement>(null);
   const triggeredEventsRef = useRef<Set<string>>(initialState.triggered);
   const [mobileToast, setMobileToast] = useState<{ text: string; type: string } | null>(null);
@@ -2611,9 +2615,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // ── DEMO MODE: Simulate live events via minute ticker ──────────────────────
   // Simulate live events
   useEffect(() => {
-    if (appMode === 'live' || persistedIsLive || !isPlaying || showPopup) return;
+    if ((appMode === 'live' && !forceDemoMode) || persistedIsLive || !isPlaying || showPopup) return;
 
-    const tickRate = isFastForward ? 2000 : 60000;
+    const tickRate = Math.floor(60000 / demoSpeed);
 
     const interval = setInterval(() => {
       setMinute((m) => Math.min(m + 1, 90));
@@ -2626,11 +2630,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     return () => clearInterval(interval);
   // appMode must be in deps so the timer stops immediately when switching to live
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, isPlaying, showPopup, isFastForward]);
+  }, [appMode, isPlaying, showPopup, demoSpeed, forceDemoMode]);
 
     // Trigger events based on minute (demo mode only)
     useEffect(() => {
-      if (appMode === 'live' || persistedIsLive) return;
+      if ((appMode === 'live' && !forceDemoMode) || persistedIsLive) return;
       if (showPopup) return;
       const event = matchEvents[currentEventIdx];
       if (!event || minute < event.minute) return;
@@ -3431,7 +3435,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           )}
 
           {/* Controls — demo mode only */}
-          {appMode !== 'live' && (
+          {(appMode !== 'live' || forceDemoMode) && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 className={`btn btn--sm ${isPlaying ? 'btn--danger' : 'btn--primary'}`}
@@ -3441,10 +3445,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 {isPlaying ? '⏸ Pause' : '▶ Resume'}
               </button>
               <button
-                className={`btn btn--sm ${isFastForward ? 'btn--primary' : 'btn--ghost'}`}
-                onClick={() => setIsFastForward(!isFastForward)}
+                className={`btn btn--sm ${demoSpeed > 1 ? 'btn--primary' : 'btn--ghost'}`}
+                onClick={() => setDemoSpeed(s => s === 1 ? 30 : s === 30 ? 90 : 1)}
               >
-                {isFastForward ? '⏩ Fast Forward On' : '⏩ Fast Forward Off'}
+                {demoSpeed === 1 ? '⏱ 1× Speed' : demoSpeed === 30 ? '⏩ 30× Speed' : '⚡ 90× Speed'}
               </button>
               <button
                 className="btn btn--ghost btn--sm"

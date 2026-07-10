@@ -579,7 +579,7 @@ export default function ContestsPage() {
                       </div>
                       <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                         {joined ? (
-                          <Link href={`/live/${selectedFixture.fixtureId}?contestType=${ct.id}`} className="btn btn--sm btn--primary" onClick={e => e.stopPropagation()} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>
+                          <Link href={`/live/${selectedFixture.fixtureId}?contestType=${ct.id}${isDemo ? '&mode=demo' : ''}`} className="btn btn--sm btn--primary" onClick={e => e.stopPropagation()} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>
                             Watch Live →
                           </Link>
                         ) : (
@@ -605,7 +605,7 @@ export default function ContestsPage() {
                   );
                   return joined
                     ? <div key={ct.id}>{card}</div>
-                    : <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}`} key={ct.id} style={{ textDecoration: 'none' }}>{card}</Link>;
+                    : <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}${isDemo ? '&mode=demo' : ''}`} key={ct.id} style={{ textDecoration: 'none' }}>{card}</Link>;
                 })}
               </div>
             </div>
