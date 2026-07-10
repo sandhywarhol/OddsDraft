@@ -166,9 +166,20 @@ export function matchPlayerName(txlineName: string, teamName: string): string | 
   let hit = candidates.find(p => norm(p.name) === normTx);
   if (hit) return hit.id;
 
+  const txParts = normTx.split(' ');
+
+  // 1b. Compound surname trim: "Fabian Ruiz Pena" → try "Fabian Ruiz"
+  // TxLINE names include maternal surname; our DB often stores just given + paternal.
+  if (txParts.length > 2) {
+    for (let len = txParts.length - 1; len >= 2; len--) {
+      const shorter = txParts.slice(0, len).join(' ');
+      const shortHit = candidates.find(p => norm(p.name) === shorter);
+      if (shortHit) return shortHit.id;
+    }
+  }
+
   // 2. Last name match (>3 chars to avoid false positives)
   // When multiple players share a last name, try first-initial to disambiguate.
-  const txParts = normTx.split(' ');
   const txLast = txParts[txParts.length - 1] ?? normTx;
   const txFirstInitial = txParts[0]?.replace(/\./g, '') ?? '';
   if (txLast.length > 3) {

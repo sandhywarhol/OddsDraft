@@ -1899,14 +1899,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
 
         // raw is a merged state object with _allEvents = array of individual events.
-        // Use merged state for score/clock/gameState; individual events for the feed.
-        // TxLINE delivers each event twice: Confirmed=false (tentative) then Confirmed=true
-        // (confirmed). Filter unconfirmed events to prevent duplicates and avoid showing
-        // VAR-reversed events that haven't been confirmed yet.
-        const allIndividualEvents: any[] = (Array.isArray((raw as any)?._allEvents)
+        // TxLINE sends up to 3 events per logical action, all sharing the same Id:
+        //   1. Confirmed=false (tentative, empty Data)
+        //   2. Confirmed=true  (partial data, e.g. no PlayerId yet)
+        //   3. Confirmed=true  (full data, PlayerId present)
+        // Strategy: drop Confirmed=false, then deduplicate by Id keeping the LAST
+        // (highest Seq) entry so we always get the most complete confirmed data.
+        const rawAll = (Array.isArray((raw as any)?._allEvents)
           ? (raw as any)._allEvents
           : (Array.isArray(raw) ? raw : [raw]))
           .filter((e: any) => e.Confirmed !== false);
+        const idToEvent = new Map<number | string, any>();
+        for (const e of rawAll) {
+          const key = e.Id ?? e.id ?? e.Seq ?? e.seq;
+          idToEvent.set(key, e); // later (higher Seq) entry overwrites earlier for same Id
+        }
+        const allIndividualEvents: any[] = Array.from(idToEvent.values());
         const updates = allIndividualEvents.map(normalizeUpdate);
         if (updates.length === 0) { setTxlineStatus('waiting'); return; }
         setTxlineStatus('live');

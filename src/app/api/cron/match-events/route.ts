@@ -12,6 +12,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Our placeholder IDs differ from TxLINE's actual assigned fixture IDs.
+// Apply remapping before any TxLINE API call; DB operations still use our IDs.
+const TXLINE_ID_REMAP: Record<string, string> = {
+  '18210002': '18218149', // Spain vs Belgium QF
+  '18210003': '18213979', // Norway vs England QF
+  '18210004': '18222446', // Argentina vs Switzerland QF
+};
+
 const SIGNIFICANT = new Set([
   'goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save',
   'half_time', 'full_time',
@@ -67,10 +75,14 @@ export async function GET(req: NextRequest) {
 
   for (const fixture of liveFixtures) {
     try {
+      // Remap our placeholder fixture IDs to the ones TxLINE actually uses.
+      // DB operations (notified_events, contest_entries) keep using fixture.fixtureId.
+      const txlineFixtureId = TXLINE_ID_REMAP[fixture.fixtureId] ?? fixture.fixtureId;
+
       // Use server-side proxy — injects auth, no client token needed.
       // Path matches live page: /api/txline/api/scores/updates/{id}
       // Proxy returns a raw SSE array; mergeEvents() merges it into a state object with _allEvents.
-      const scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${fixture.fixtureId}`, { cache: 'no-store' });
+      const scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
       if (!scoreRes.ok) continue;
       const scoreArr = await scoreRes.json();
       const raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
@@ -136,7 +148,7 @@ export async function GET(req: NextRequest) {
       // Build TxLINE PlayerId → internal player ID map for name resolution
       const apiToken = process.env.TXODDS_API_TOKEN ?? process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
       const playerIdMap: Record<string, string> = apiToken
-        ? await buildPlayerIdMap(apiToken, fixture.fixtureId, fixture.homeTeam, fixture.awayTeam)
+        ? await buildPlayerIdMap(apiToken, txlineFixtureId, fixture.homeTeam, fixture.awayTeam)
         : {};
 
       // Fetch subscribers for this match
