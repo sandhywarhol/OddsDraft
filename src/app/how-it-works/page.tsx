@@ -211,7 +211,7 @@ export default function HowItWorksPage() {
                   </div>
                   <div style={{ background: 'rgba(0,232,122,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(0,232,122,0.15)' }}>
                     <strong style={{ color: '#00e87a', display: 'block', marginBottom: 6 }}>Solana — Settlement Layer</strong>
-                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Entry fees are held on Solana. Final rankings and prize outcomes are computed on-chain so results are transparent and verifiable by any participant.</span>
+                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Entry fees are sent to a Solana treasury wallet. Final rankings are computed server-side from live TxLINE event data, then prize SOL is distributed on-chain — verifiable on Solana Explorer by any participant.</span>
                   </div>
                 </div>
               </div>

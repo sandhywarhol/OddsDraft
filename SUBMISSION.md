@@ -21,7 +21,7 @@
 
 ### Core Idea
 
-OddsDraft is a **real-time fantasy football game** on Solana for the FIFA World Cup 2026. Managers build a 5-a-side squad, pay 0.01 SOL on-chain, and earn fantasy points as TxLINE streams live match events. The top manager wins SOL from the prize pool — all transparent, all on-chain.
+OddsDraft is a **real-time fantasy football game** on Solana for the FIFA World Cup 2026. Managers build a 5-a-side squad, pay 0.01 SOL via Solana, and earn fantasy points as TxLINE streams live match events. The top manager wins SOL from the prize pool — results are computed server-side from live TxLINE data and paid out via a Solana treasury. A full on-chain escrow program (Anchor) is already written and is the next integration milestone.
 
 The key differentiator is the **Skill Card system**: after every match, players earn a random collectible card (8 rarity tiers, RNG-based) that boosts their fantasy scores. Two identical cards can be fused into a rarer version. Cards will become NFT-tradeable in the next milestone — making OddsDraft both a game and a collectible economy.
 
@@ -40,7 +40,7 @@ The key differentiator is the **Skill Card system**: after every match, players 
 | Dual detection | SSE events + `PlayerStats` cumulative snapshot — goals never missed |
 | NPC commentary | JRPG-style dialog system, 8 NPCs, event-priority trigger logic |
 | On-chain entry | Native SOL transfer via `@solana/web3.js`, validated server-side |
-| Prize distribution | Automatic leaderboard → prize calculation → on-chain claim flow |
+| Prize distribution | Server-side leaderboard computation from TxLINE events → Solana treasury payout, wallet-signature verified |
 | Skill Cards | 8-tier RNG system, `localStorage` collection, card combining engine |
 | Edge proxy | TxLINE tokens never exposed to browser; Vercel Edge Function proxy |
 | Telegram bot | Live event alerts, `/points` command, match notifications |

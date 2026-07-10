@@ -548,7 +548,7 @@ function HowItWorksSection() {
     {
       step: '06',
       title: 'Win SOL Prizes',
-      desc: 'Prizes distributed on-chain: Top 3 Classic (50/30/20%), Double Up 50/50, or Winner Takes All — ranked by total fantasy points.',
+      desc: 'Prizes distributed on Solana: Top 3 Classic (50/30/20%), Double Up 50/50, or Winner Takes All — ranked by total fantasy points.',
       icon: '🏆',
       color: '#ff8a00',
     },
@@ -711,7 +711,7 @@ function FeaturesSection() {
             Why OddsDraft?
           </h2>
           <p style={{ color: '#ffffff', maxWidth: 500, margin: '0 auto', fontSize: '1.05rem', fontWeight: 600, textShadow: '0 1px 6px rgba(0,0,0,0.9)' }}>
-            The only fantasy platform built on live football data + on-chain rewards
+            The only fantasy platform built on live football data + Solana-powered rewards
           </p>
         </div>
       </div>

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
+import { ENTRY_FEE_SOL } from '@/lib/fantasy-engine';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 const REQUIRED_POSITIONS = ['GK', 'DEF', 'MID', 'SWG', 'ATT'] as const;
@@ -118,6 +120,60 @@ export async function POST(req: NextRequest) {
     const validation = validateLineup(lineup, fixtureId);
     if (!validation.ok) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    // ── On-chain entry payment verification ──────────────────────────────
+    // When a real tx sig is provided, verify the transfer happened on-chain.
+    // Null sig is allowed for demo mode (wallet not connected).
+    if (entryTxSig) {
+      const treasuryWallet = process.env.NEXT_PUBLIC_TREASURY_WALLET;
+      if (!treasuryWallet) {
+        return NextResponse.json({ error: 'Server configuration error: treasury not set' }, { status: 500 });
+      }
+
+      // Nonce check — reject reused signatures
+      const { data: existingSig } = await supabase
+        .from('contest_entries')
+        .select('id')
+        .eq('entry_tx_sig', entryTxSig)
+        .maybeSingle();
+      if (existingSig) {
+        return NextResponse.json({ error: 'Transaction signature already used' }, { status: 409 });
+      }
+
+      try {
+        const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com';
+        const connection = new Connection(rpc, 'confirmed');
+        const txInfo = await connection.getParsedTransaction(entryTxSig, {
+          commitment: 'confirmed',
+          maxSupportedTransactionVersion: 0,
+        });
+
+        if (!txInfo) {
+          return NextResponse.json({ error: 'Transaction not found or not yet confirmed' }, { status: 400 });
+        }
+
+        const ENTRY_FEE_LAMPORTS = Math.floor(ENTRY_FEE_SOL * LAMPORTS_PER_SOL);
+        const instructions = txInfo.transaction?.message?.instructions ?? [];
+        const verified = instructions.some((ix: any) => {
+          if (ix.parsed?.type !== 'transfer') return false;
+          const info = ix.parsed.info;
+          return (
+            info.destination === treasuryWallet &&
+            info.source === walletAddress &&
+            Number(info.lamports) >= ENTRY_FEE_LAMPORTS
+          );
+        });
+
+        if (!verified) {
+          return NextResponse.json(
+            { error: 'Entry payment not verified: expected SOL transfer from your wallet to treasury' },
+            { status: 400 }
+          );
+        }
+      } catch (err: any) {
+        return NextResponse.json({ error: `Transaction verification failed: ${err.message}` }, { status: 400 });
+      }
     }
 
     // ── Save to Supabase ─────────────────────────────────────────────────

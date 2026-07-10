@@ -18,6 +18,7 @@ import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
 import { mergeEvents } from '@/lib/txline';
+import bs58 from 'bs58';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import FlagImage from '@/components/FlagImage';
 import LiveLineupFormation, { type FormationPlayer } from '@/components/LiveLineupFormation';
@@ -709,7 +710,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const { contestId } = use(params);
   const searchParamsObj = use(searchParams);
   const contestType = (searchParamsObj.contestType as string) || 'top3';
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt, liveFixtures, allFixtures } = useTxLine();
 
@@ -1021,24 +1022,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     const realParticipants = board.filter(e => e.wallet !== 'YOUR WALLET');
     const n = realParticipants.length || board.length;
 
-    // Submit final leaderboard to persist results server-side
+    // Trigger server-side score computation and leaderboard finalization.
+    // The server queries contest_entries + live_match_events from DB and ignores
+    // any client-sent scores — results are computed server-authoritative.
     try {
       await fetch('/api/prize/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fixtureId: contestId,
-          contestType,
-          participantCount: n,
-          leaderboard: board
-            .filter(e => e.wallet && e.wallet !== 'YOUR WALLET')
-            .map(e => ({
-              // Use full public key for user entry — leaderboard stores truncated display string
-              walletAddress: e.isUser ? walletAddr : e.wallet,
-              rank: e.rank,
-              points: e.points,
-            })),
-        }),
+        body: JSON.stringify({ fixtureId: contestId, contestType }),
       });
     } catch {
       // Non-fatal — still check prize status
@@ -1068,10 +1059,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     setClaimStatus('claiming');
     setClaimError(null);
     try {
+      // Require wallet to sign a message proving ownership before SOL is sent
+      if (!signMessage) {
+        setClaimStatus('error');
+        setClaimError('Your wallet does not support message signing. Please use Phantom.');
+        return;
+      }
+      const authMessage = `OddsDraft claim: fixture=${contestId} contest=${contestType} wallet=${walletAddr}`;
+      const signatureBytes = await signMessage(new TextEncoder().encode(authMessage));
+      const authSignature = bs58.encode(signatureBytes);
+
       const res = await fetch('/api/prize/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fixtureId: contestId, contestType, walletAddress: walletAddr }),
+        body: JSON.stringify({ fixtureId: contestId, contestType, walletAddress: walletAddr, authSignature, authMessage }),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -10,6 +10,7 @@ import {
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
+import nacl from 'tweetnacl';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,10 +29,25 @@ function loadTreasuryKeypair(): Keypair {
 
 export async function POST(req: NextRequest) {
   try {
-    const { fixtureId, contestType, walletAddress } = await req.json();
+    const { fixtureId, contestType, walletAddress, authSignature, authMessage } = await req.json();
 
     if (!fixtureId || !contestType || !walletAddress) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    }
+
+    // Verify caller owns the wallet — requires signing a message client-side
+    if (!authSignature || !authMessage) {
+      return NextResponse.json({ error: 'Wallet signature required to claim prize' }, { status: 401 });
+    }
+    try {
+      const msgBytes = new TextEncoder().encode(authMessage as string);
+      const sigBytes = bs58.decode(authSignature as string);
+      const pubKeyBytes = new PublicKey(walletAddress).toBytes();
+      if (!nacl.sign.detached.verify(msgBytes, sigBytes, pubKeyBytes)) {
+        return NextResponse.json({ error: 'Wallet signature is invalid' }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Signature verification failed' }, { status: 400 });
     }
 
     // Validate treasury keypair is configured
