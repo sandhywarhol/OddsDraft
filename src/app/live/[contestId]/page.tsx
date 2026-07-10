@@ -17,6 +17,7 @@ import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEve
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
 import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
+import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { mergeEvents } from '@/lib/txline';
 import bs58 from 'bs58';
 import PlayerAvatar from '@/components/PlayerAvatar';
@@ -704,6 +705,21 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
         commentator1Image: '/NPC/Komentator%201%20calm.svg',
       };
   }
+}
+
+// Build a predicted starting XI from official FIFA squad data (jerseys 1–11).
+// Used when TxLINE hasn't published official lineups yet.
+function buildPredictedXI(team: string, participant: 1 | 2): FormationPlayer[] {
+  return WC2026_PLAYERS
+    .filter(p => p.team === team && p.jerseyNumber <= 11)
+    .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      jerseyNumber: p.jerseyNumber,
+      position: p.position === 'SWG' ? 'ATT' : p.position,
+      participant,
+    }));
 }
 
 export default function LivePage({ params, searchParams }: { params: Promise<{ contestId: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
@@ -3844,32 +3860,50 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               {(() => {
                 let homeFp: FormationPlayer[] = [];
                 let awayFp: FormationPlayer[] = [];
+                let isPredicted = false;
+
                 if (realLineup) {
                   homeFp = realLineup.home;
                   awayFp = realLineup.away;
-                } else if (appMode !== 'live') {
+                } else if (appMode !== 'live' || forceDemoMode) {
                   const demoPlayers = events.filter(e => e.type === 'starting_xi');
                   for (const ev of demoPlayers) {
                     const isHome = ev.team === fixture.homeTeam;
                     const fp: FormationPlayer = { id: ev.playerId, name: ev.player, position: 'MID', participant: isHome ? 1 : 2 };
                     if (isHome) homeFp.push(fp); else awayFp.push(fp);
                   }
+                } else {
+                  // Live mode: TxLINE hasn't published official lineups yet.
+                  // Fall back to predicted XI from official FIFA squad data (jersey 1–11).
+                  homeFp = buildPredictedXI(fixture.homeTeam, 1);
+                  awayFp = buildPredictedXI(fixture.awayTeam, 2);
+                  isPredicted = homeFp.length > 0 || awayFp.length > 0;
                 }
+
                 const userIds: string[] = (userLineup?.players as any[] ?? [])
                   .map((p: any) => p?.id).filter(Boolean);
                 return (
-                  <LiveLineupFormation
-                    homePlayers={homeFp}
-                    awayPlayers={awayFp}
-                    homeTeam={fixture.homeTeam}
-                    awayTeam={fixture.awayTeam}
-                    homeFlag={fixture.homeFlag}
-                    awayFlag={fixture.awayFlag}
-                    homeCoach={realLineup?.homeCoach}
-                    awayCoach={realLineup?.awayCoach}
-                    playerPoints={playerPoints}
-                    userLineupIds={userIds}
-                  />
+                  <>
+                    {isPredicted && (
+                      <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#ffaa00', background: 'rgba(255,170,0,0.12)', border: '1px solid rgba(255,170,0,0.3)', borderRadius: 4, padding: '2px 8px', letterSpacing: '0.05em' }}>
+                          ⏳ PREDICTED XI — Official lineup pending
+                        </span>
+                      </div>
+                    )}
+                    <LiveLineupFormation
+                      homePlayers={homeFp}
+                      awayPlayers={awayFp}
+                      homeTeam={fixture.homeTeam}
+                      awayTeam={fixture.awayTeam}
+                      homeFlag={fixture.homeFlag}
+                      awayFlag={fixture.awayFlag}
+                      homeCoach={realLineup?.homeCoach}
+                      awayCoach={realLineup?.awayCoach}
+                      playerPoints={playerPoints}
+                      userLineupIds={userIds}
+                    />
+                  </>
                 );
               })()}
 
