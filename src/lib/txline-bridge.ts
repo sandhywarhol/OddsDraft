@@ -102,6 +102,8 @@ const BASE_POINTS: Record<string, number> = {
   sub_appearance: 1, starting_xi: 2, extra_time: 2,
   goal_conceded: -2, substitution: 0, corner_kick: 0,
   var_review: 0, danger_attack: 0, possession_bonus: 1,
+  // Stat events — currently 0 pts, visible in feed; can be given weight in future scoring revision
+  shot: 0, shot_on_target: 0, free_kick: 0, offside: 0,
 };
 
 // ── 1. Fixture resolution ────────────────────────────────────────────────────
@@ -357,6 +359,10 @@ function describeEvent(type: string, player: string, team: string, minute: numbe
     case 'half_time':               return `${m} Half time!`;
     case 'full_time':               return `${m} Full time!`;
     case 'starting_xi':             return `${player} starts for ${team}`;
+    case 'shot':                    return player ? `${m} Shot by ${player} (${team})` : `${m} Shot — ${team}`;
+    case 'shot_on_target':          return player ? `${m} Shot on target — ${player} (${team})` : `${m} Shot on target — ${team}`;
+    case 'free_kick':               return player ? `${m} Free kick — ${player} (${team})` : `${m} Free kick — ${team}`;
+    case 'offside':                 return player ? `${m} Offside — ${player} (${team})` : `${m} Offside — ${team}`;
     default:                        return `${m} ${player} — ${type} (${team})`;
   }
 }
@@ -411,7 +417,10 @@ export function convertTxLineUpdates(
         gameState
       );
 
-      if (!fantasyType) continue;
+      // Use mapped fantasy type if available; fall back to raw event type for stat events
+      // (shot, free_kick, offside etc.) that are display-visible but not yet in the scoring map.
+      const displayType = fantasyType ?? raw.type;
+      if (!displayType) continue;
 
       const txPlayerId = String(raw.playerId ?? '');
       const ourPlayerId = playerIdMap[txPlayerId] ?? '';
@@ -430,16 +439,17 @@ export function convertTxLineUpdates(
       const teamFlag = isHome ? homeFlag : awayFlag;
 
       // Events that don't need an individual player name — show empty string not 'Unknown'
-      const isTeamAction = fantasyType === 'corner_kick' || fantasyType === 'var_review'
-        || fantasyType === 'kick_off' || fantasyType === 'half_time' || fantasyType === 'full_time'
-        || fantasyType === 'substitution' || fantasyType === 'sub_appearance';
+      const isTeamAction = displayType === 'corner_kick' || displayType === 'var_review'
+        || displayType === 'kick_off' || displayType === 'half_time' || displayType === 'full_time'
+        || displayType === 'substitution' || displayType === 'sub_appearance'
+        || displayType === 'free_kick' || displayType === 'offside';
       const player = raw.playerName
         || (playerInfo?.name ?? '')
         || (isTeamAction ? '' : 'Unknown');
 
       // Drop nameless 0-point events that ARE expected to have a player (e.g. unattributed goals).
-      // Substitutions, corner kicks, and var reviews are valid even without a player name.
-      const basePoints = BASE_POINTS[fantasyType] ?? 0;
+      // Substitutions, corner kicks, free kicks, and var reviews are valid even without a player name.
+      const basePoints = BASE_POINTS[displayType] ?? 0;
       const isPlayerExpected = !isTeamAction;
       if (player === 'Unknown' && basePoints === 0 && isPlayerExpected) continue;
 
@@ -450,9 +460,9 @@ export function convertTxLineUpdates(
         teamFlag,
         player,
         playerId: ourPlayerId,
-        type: fantasyType,
-        points: BASE_POINTS[fantasyType] ?? 0,
-        description: describeEvent(fantasyType, player, team, raw.minute),
+        type: displayType,
+        points: basePoints,
+        description: describeEvent(displayType, player, team, raw.minute),
       };
 
       if (raw.goalType) event.goalType = raw.goalType;
@@ -460,7 +470,7 @@ export function convertTxLineUpdates(
 
       // Synthesize a separate assist event when goal has assistPlayerId
       if (
-        (fantasyType === 'goal' || fantasyType === 'penalty_scored') &&
+        (displayType === 'goal' || displayType === 'penalty_scored') &&
         raw.assistPlayerId
       ) {
         const aTxId = String(raw.assistPlayerId);
@@ -483,7 +493,7 @@ export function convertTxLineUpdates(
       }
 
       // Synthesize goal_conceded for the opposing goalkeeper
-      if (fantasyType === 'goal') {
+      if (displayType === 'goal') {
         const oppTeam = isHome ? awayTeam : homeTeam;
         const oppFlag = isHome ? awayFlag : homeFlag;
         result.push({

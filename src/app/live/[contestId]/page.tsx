@@ -142,6 +142,10 @@ const EVENT_COLORS: Record<string, string> = {
   sub_appearance:          '#00acc1',
   possession_bonus:        '#00acc1',
   clean_sheet:             '#2e7d32',
+  shot:                    '#546e7a',
+  shot_on_target:          '#37474f',
+  free_kick:               '#607d8b',
+  offside:                 '#78909c',
 };
 
 const EVENT_ICONS: Record<string, string> = {
@@ -170,6 +174,10 @@ const EVENT_ICONS: Record<string, string> = {
   sub_appearance:          '🔄',
   possession_bonus:        '🎮',
   clean_sheet:             '🛡️',
+  shot:                    '🎯',
+  shot_on_target:          '🎯',
+  free_kick:               '🦶',
+  offside:                 '🚩',
 };
 
 interface DialogData {

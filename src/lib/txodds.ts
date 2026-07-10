@@ -216,6 +216,11 @@ export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: stri
     penalty_miss:   'penalty_missed',
     corner:         'corner_kick',
     corner_kick:    'corner_kick',
+    // Non-fantasy-scoring events — shown in feed with 0 pts, usable for future stat-based scoring
+    shot:           'shot',
+    shot_on_target: 'shot_on_target',
+    free_kick:      'free_kick',
+    offside:        'offside',
     // Match flow events — synthesized from GameState but also handle if TxLINE sends them explicitly
     kickoff:           'kick_off',
     kick_off:          'kick_off',
