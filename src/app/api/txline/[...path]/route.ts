@@ -12,11 +12,8 @@ const TXLINE_ORIGIN = useProdTxLine
   ? 'https://txline.txodds.com'
   : 'https://txline-dev.txodds.com';
 
-// Server-side token — never exposed to browser. Falls back to public token.
-const SERVER_TOKEN =
-  process.env.TXODDS_API_TOKEN ??
-  process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ??
-  '';
+// Server-side only — never exposed to browser.
+const SERVER_TOKEN = process.env.TXODDS_API_TOKEN ?? '';
 
 // Cache guest JWT in module scope (edge instance lifetime, typically minutes)
 let _cachedJwt: string | null = null;

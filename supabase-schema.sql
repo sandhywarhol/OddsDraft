@@ -1,5 +1,4 @@
 -- Run this in Supabase SQL Editor
--- https://supabase.com/dashboard/project/dujogvasvyvayhekyrdr/sql
 
 -- ── contest_entries ────────────────────────────────────────────────────────────
 create table if not exists contest_entries (
@@ -9,7 +8,7 @@ create table if not exists contest_entries (
   contest_type    text not null           -- 'top3' | '5050' | 'wta'
                   check (contest_type in ('top3', '5050', 'wta')),
   lineup          jsonb not null,         -- { players: [...], captain: '...', confidence: {...} }
-  entry_tx_sig    text,                   -- Solana tx sig of 0.1 SOL payment (null = demo)
+  entry_tx_sig    text,                   -- Solana tx sig of 0.01 SOL payment (null = demo)
   total_points    numeric default 0,      -- updated live as match progresses
   final_rank      int,                    -- set after match ends
   prize_earned    numeric default 0,      -- SOL earned

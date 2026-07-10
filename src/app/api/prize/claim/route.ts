@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check treasury balance
-    const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+    const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com';
     const connection = new Connection(rpc, 'confirmed');
 
     const treasuryBalance = await connection.getBalance(treasury.publicKey);
