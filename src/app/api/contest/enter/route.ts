@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com';
+        const rpc = process.env.SERVER_SOLANA_RPC || process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
         const connection = new Connection(rpc, 'confirmed');
         const txInfo = await connection.getParsedTransaction(entryTxSig, {
           commitment: 'confirmed',

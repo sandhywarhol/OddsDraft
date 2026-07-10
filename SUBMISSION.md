@@ -10,7 +10,7 @@
 **How to test (no wallet needed):**
 - Visit any match on the **Match Schedule** page
 - Click **Demo Mode** to play through the full game loop without a wallet
-- Or connect a **Phantom Wallet** (Solana devnet) to enter with real on-chain transactions
+- Or connect a **Phantom Wallet** (Solana mainnet) to enter with 0.01 SOL
 - Use **Replay Tutorial** on the Match Schedule page for a guided walkthrough
 
 **GitHub:** https://github.com/sandhywarhol/OddsDraft
