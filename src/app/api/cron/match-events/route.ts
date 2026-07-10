@@ -19,6 +19,11 @@ const SIGNIFICANT = new Set([
   'penalty_won', 'penalty_missed', 'kick_off',
 ]);
 
+// These events are stored in live_match_events and marked as notified,
+// but NOT sent as individual Telegram messages — the live page sends a
+// richer stats block via /api/telegram/stats instead.
+const STATS_ONLY = new Set(['half_time', 'full_time']);
+
 const ACTION_MAP: Record<string, string> = {
   goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
   own_goal: 'own_goal', owngoal: 'own_goal',
@@ -187,6 +192,11 @@ export async function GET(req: NextRequest) {
         const ev = newEvents[i];
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const eventType = ACTION_MAP[rawType] ?? rawType;
+
+        // HT/FT: already stored in live_match_events above; rich stats are sent
+        // by the live page via /api/telegram/stats — skip the plain-text duplicate.
+        if (STATS_ONLY.has(eventType)) continue;
+
         const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
         const evData = ev.Data?.New ?? ev.Data ?? {};
 

@@ -316,7 +316,25 @@ export async function POST(req: NextRequest) {
       const chatId: number = cq.message.chat.id;
       const data: string = cq.data ?? '';
 
-      if (data.startsWith('sub_')) {
+      if (data === 'sub_all') {
+        const nowMs = Date.now();
+        const allUpcoming = WC2026_FIXTURES.filter(f => {
+          const ko = f.kickoffAt ? new Date(f.kickoffAt).getTime() : 0;
+          return ko > nowMs - 3 * 3600 * 1000;
+        });
+        await supabase.from('telegram_subscriptions').upsert(
+          allUpcoming.map(f => ({ chat_id: chatId, contest_id: f.fixtureId }))
+        );
+        await answerCallbackQuery(cq.id, `✅ Subscribed to all ${allUpcoming.length} matches!`);
+        await sendMessage(chatId,
+          `✅ You're now subscribed to all *${allUpcoming.length}* upcoming & live matches!\n\nYou'll receive live notifications for goals, cards, and match events.\n\nUse /matches to manage individual subscriptions.`,
+          { parse_mode: 'Markdown' }
+        );
+      } else if (data === 'unsub_all') {
+        await supabase.from('telegram_subscriptions').delete().eq('chat_id', chatId);
+        await answerCallbackQuery(cq.id, '🔕 Unsubscribed from all matches');
+        await sendMessage(chatId, '🔕 Unsubscribed from all matches.', { parse_mode: 'Markdown' });
+      } else if (data.startsWith('sub_')) {
         const contestId = data.replace('sub_', '');
         const fixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
         await supabase.from('telegram_subscriptions').upsert({ chat_id: chatId, contest_id: contestId });
@@ -499,13 +517,21 @@ export async function POST(req: NextRequest) {
           return `${f.homeFlag} *${f.homeTeam} vs ${f.awayTeam}* ${f.awayFlag}${status}\n  🕐 ${ko}`;
         });
 
-        const inlineKeyboard = upcoming.map(f => {
-          const isSubscribed = subscribedIds.has(f.fixtureId);
-          return [{
-            text: isSubscribed ? `🔕 Unsubscribe — ${f.homeTeam} vs ${f.awayTeam}` : `🔔 Subscribe — ${f.homeTeam} vs ${f.awayTeam}`,
-            callback_data: isSubscribed ? `unsub_${f.fixtureId}` : `sub_${f.fixtureId}`,
-          }];
-        });
+        const allSubscribed = upcoming.every(f => subscribedIds.has(f.fixtureId));
+        const bulkRow = allSubscribed
+          ? [{ text: '🔕 Unsubscribe All Matches', callback_data: 'unsub_all' }]
+          : [{ text: '🔔 Subscribe All Upcoming Matches', callback_data: 'sub_all' }];
+
+        const inlineKeyboard = [
+          bulkRow,
+          ...upcoming.map(f => {
+            const isSubscribed = subscribedIds.has(f.fixtureId);
+            return [{
+              text: isSubscribed ? `🔕 Unsubscribe — ${f.homeTeam} vs ${f.awayTeam}` : `🔔 Subscribe — ${f.homeTeam} vs ${f.awayTeam}`,
+              callback_data: isSubscribed ? `unsub_${f.fixtureId}` : `sub_${f.fixtureId}`,
+            }];
+          }),
+        ];
 
         await sendMessage(
           chatId,
