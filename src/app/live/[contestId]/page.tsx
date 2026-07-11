@@ -2658,58 +2658,37 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
 
-  // ── LIVE MODE: Score from internal scoreboard (server-side) ──────────────────
-  // TxLINE devnet returns Score:{} (empty) so we always poll our own /api/scores/wc2026
-  // endpoint as the source of truth for the score display, regardless of txlineStatus.
-  // TxLINE events (goals) can still increment score on top of this baseline.
+  // ── LIVE MODE: Score fallback from ESPN scoreboard ───────────────────────────
+  // TxLINE is now the primary source for both score and events (score comes in with
+  // every goal event). ESPN is kept as a fallback: it silently updates the score
+  // display if TxLINE hasn't sent the goal yet, but does NOT fire the commentator
+  // dialog — that only fires from real TxLINE events so player names are always present.
+  // ESPN is also used for match-completed detection (entry.completed).
   useEffect(() => {
     if (appMode !== 'live') return;
     if (!fixture.homeTeam) return;
 
     let isMounted = true;
-    let isFirstScorePoll = true; // skip dialog trigger on initial load (scores are pre-existing)
     const pollScore = async () => {
       try {
-        const prevHome = scoreRef.current.home;
-        const prevAway = scoreRef.current.away;
         const res = await fetch('/api/scores/wc2026');
         if (!res.ok || !isMounted) return;
         const data: Record<string, { home: number; away: number; completed?: boolean }> = await res.json();
         const entry = data[contestId];
         if (entry && isMounted) {
-          const newHome = Math.max(prevHome, entry.home);
-          const newAway = Math.max(prevAway, entry.away);
-          // Only apply if TxLINE hasn't already given us a higher score (from goal events)
+          // Update score silently — TxLINE goal events are the authoritative trigger
+          // for commentator dialog and SFX. ESPN only fills the gap if TxLINE is slow.
           setScore(prev => ({
             home: Math.max(prev.home, entry.home),
             away: Math.max(prev.away, entry.away),
           }));
-          scoreRef.current = { home: newHome, away: newAway };
-
-          // When score increases, fire NPC dialog and SFX immediately — don't wait for
-          // TxLINE to confirm the individual event (which can lag 1 poll cycle / ~60s)
-          if (!isFirstScorePoll && !matchCompletedRef.current) {
-            const homeGoal = newHome > prevHome;
-            const awayGoal = newAway > prevAway;
-            if ((homeGoal || awayGoal) && !showPopupRef.current) {
-              const scoringTeam = homeGoal ? fixture.homeTeam : fixture.awayTeam;
-              const scoringFlag = (homeGoal ? fixture.homeFlag : fixture.awayFlag) ?? '';
-              const synthId = `score-api-goal-${Date.now()}`;
-              const synthEv = { id: synthId, minute: liveClockMinute || 0, team: scoringTeam, teamFlag: scoringFlag, player: '', playerId: '', type: 'goal' as const, points: 0, description: `GOAL! ${scoringTeam} score!` };
-              // Add placeholder event card immediately; TxLINE's confirmed event (with player name)
-              // will supersede it when it arrives (feed dedup removes placeholder by type+team match)
-              setEvents(prev => prev.some(e => e.id === synthId) ? prev : [synthEv, ...prev]);
-              playSFX('goal');
-              setLatestEvent(synthEv);
-              setDialogStep(1);
-              setShowPopup(true);
-            }
-          }
-          isFirstScorePoll = false;
+          scoreRef.current = {
+            home: Math.max(scoreRef.current.home, entry.home),
+            away: Math.max(scoreRef.current.away, entry.away),
+          };
 
           // If the authoritative scores API says the match is completed,
           // synthesize a full-time event so the card pack and prize flow unlock.
-          // This handles TxLINE devnet always reporting Clock.Running=true.
           if (entry.completed && isMounted && lastGameStateRef.current !== 'FullTime') {
             lastGameStateRef.current = 'FullTime';
             const ftMin = Math.max(90, Math.floor((lastClockSecondsRef.current ?? 90 * 60) / 60));
