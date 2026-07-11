@@ -12,14 +12,14 @@ import SupabaseSyncProvider from '@/components/SupabaseSyncProvider';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 export default function ClientWalletProvider({ children }: { children: React.ReactNode }) {
-  // Use mainnet-beta since txLINE program is on mainnet
-  // Use internal API route to proxy RPC requests and bypass browser CORS/403 blocks
+  const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
+
   const endpoint = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}/api/rpc`;
-    }
-    return 'http://localhost:3000/api/rpc';
-  }, []);
+    if (typeof window !== 'undefined') return `${window.location.origin}/api/rpc`;
+    return isDevnet ? 'https://api.devnet.solana.com' : 'https://solana-rpc.publicnode.com';
+  }, [isDevnet]);
+
+  const wsEndpoint = isDevnet ? 'wss://api.devnet.solana.com' : 'wss://solana-rpc.publicnode.com';
 
   const wallets = useMemo(
     () => [
@@ -29,7 +29,7 @@ export default function ClientWalletProvider({ children }: { children: React.Rea
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint} config={{ wsEndpoint: 'wss://solana-rpc.publicnode.com' }}>
+    <ConnectionProvider endpoint={endpoint} config={{ wsEndpoint }}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <TxLineProvider>
