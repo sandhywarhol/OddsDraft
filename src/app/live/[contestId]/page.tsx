@@ -1391,8 +1391,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // time-based fallback (which requires lastGameStateRef to be set by TxLINE first).
   useEffect(() => {
     if (appMode !== 'live') return;
+    const kickoffMs = wcFixture?.kickoffAt ? new Date(wcFixture.kickoffAt).getTime() : 0;
     // Don't mark completion for matches that haven't kicked off yet
-    if (wcFixture?.kickoffAt && new Date(wcFixture.kickoffAt).getTime() > Date.now()) return;
+    if (kickoffMs && kickoffMs > Date.now()) return;
     const fixtureIdStr = contestId;
 
     const markCompleted = (homeScore?: number, awayScore?: number) => {
@@ -1408,21 +1409,30 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
     };
 
+    // A full_time event is only valid if at least 85 minutes have elapsed since kickoff.
+    // This prevents stale simulate-match test data from immediately completing a match
+    // the moment kickoff arrives.
+    const minMatchElapsedMs = 85 * 60 * 1000;
+    const matchOldEnoughForFullTime = !kickoffMs || (Date.now() - kickoffMs) >= minMatchElapsedMs;
+
     // Primary: check live_match_events for full_time event
     fetch(`/api/live/events?fixtureId=${fixtureIdStr}`)
       .then(r => r.ok ? r.json() : [])
       .then((rows: { event_type?: string; type?: string; home_score?: number; away_score?: number }[]) => {
         if (!rows.length) return;
         const hasFullTime = rows.some(r => (r.event_type ?? r.type) === 'full_time');
-        if (hasFullTime) {
+        // Guard: ignore full_time events if the match hasn't been running long enough
+        if (hasFullTime && matchOldEnoughForFullTime) {
           const lastWithScore = [...rows].reverse().find(r => r.home_score !== undefined);
           markCompleted(lastWithScore?.home_score, lastWithScore?.away_score);
         }
       })
       .catch(() => {});
 
-    // Fallback: if contest_results exist for this wallet, match is over
-    // (covers cases where live_match_events write is blocked by RLS, e.g. local dev)
+    // Fallback: if contest_results exist for this wallet, match is over.
+    // Only check this after the match has been running long enough to avoid
+    // leftover test results from simulate-match triggering immediate completion.
+    if (!matchOldEnoughForFullTime) return;
     const walletAddr = publicKey?.toBase58() ?? '';
     if (!walletAddr) return;
     fetch(`/api/prize/status?fixtureId=${fixtureIdStr}&contestType=${contestType}&wallet=${encodeURIComponent(walletAddr)}`)
@@ -2002,7 +2012,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           } else if (snapGs === 'SecondHalf') {
             synthBootEvents.push({ id: 'synth-ko-boot', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' });
           } else if (snapGs === 'FullTime') {
-            synthBootEvents.push({ id: 'synth-ft-boot', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' });
+            // Guard: only synthesize full_time if match has been running long enough.
+            // Stale TxODDS snapshot data from a previous fixture or test can report
+            // FullTime immediately at kickoff — this prevents that from triggering packs.
+            const koMs = wcFixture?.kickoffAt ? new Date(wcFixture.kickoffAt).getTime() : 0;
+            if (!koMs || (Date.now() - koMs) >= 85 * 60 * 1000) {
+              synthBootEvents.push({ id: 'synth-ft-boot', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' });
+            }
           }
           console.log(`[LivePage] Snapshot GameState: ${snapGs} — synthesized ${synthBootEvents.length} flow events`);
         }
