@@ -93,7 +93,7 @@ export default function SkillCardDisplay({
 
       {/* The skill card image — one unique JPG per card */}
       <img
-        src={`/card/Skill Card/${card.name}.jpg`}
+        src={`/card/Skill Card/${card.name}.webp`}
         alt={card.name}
         draggable={false}
         onError={e => { (e.target as HTMLImageElement).src = '/Opened%20Card.svg'; }}
