@@ -6,7 +6,7 @@ import { mergeEvents } from '@/lib/txline';
 import { calculateEventPoints } from '@/lib/fantasy-engine';
 import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
-import { getFixtureIdRemap } from '@/lib/fixture-remap';
+import { getFixtureIdRemap, discoverAndSync } from '@/lib/fixture-remap';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,16 +73,32 @@ export async function GET(req: NextRequest) {
     try {
       // Remap our placeholder fixture IDs to the ones TxLINE actually uses.
       // DB operations (notified_events, contest_entries) keep using fixture.fixtureId.
-      const txlineFixtureId = fixtureRemap[fixture.fixtureId] ?? fixture.fixtureId;
+      let txlineFixtureId = fixtureRemap[fixture.fixtureId] ?? fixture.fixtureId;
 
       // Use server-side proxy — injects auth, no client token needed.
       // Path matches live page: /api/txline/api/scores/updates/{id}
       // Proxy returns a raw SSE array; mergeEvents() merges it into a state object with _allEvents.
-      const scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
+      let scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
       if (!scoreRes.ok) continue;
-      const scoreArr = await scoreRes.json();
-      const raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
-      const allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
+      let scoreArr = await scoreRes.json();
+      let raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
+      let allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
+
+      // If TxLINE returned nothing, our fixture ID may be a placeholder.
+      // Attempt auto-discovery by kickoff time and retry once with the real ID.
+      if (allEvents.length === 0 && fixture.kickoffAt) {
+        const discovered = await discoverAndSync(fixture.fixtureId, fixture.kickoffAt, appUrl);
+        if (discovered && discovered !== txlineFixtureId) {
+          txlineFixtureId = discovered;
+          scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
+          if (scoreRes.ok) {
+            scoreArr = await scoreRes.json();
+            raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
+            allEvents = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
+          }
+        }
+      }
+
       if (allEvents.length === 0) continue;
 
       // Score from authoritative TxLINE source

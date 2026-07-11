@@ -1274,6 +1274,21 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         console.log(`[LivePage] Late fixture ID resolution: ${txlineFixtureIdRef.current} → ${resolvedId}`);
         txlineFixtureIdRef.current = resolvedId;
       }
+    } else {
+      // Team-name match failed — try kickoff time as last resort (covers SF/Final with unknown teams)
+      const kickoffMs = new Date(fixture.kickoffAt).getTime();
+      const TIME_WINDOW = 40 * 60 * 1000;
+      const timeMatched = allFixtures.find((f: any) => {
+        const startMs = new Date(f.StartTime ?? '').getTime();
+        return startMs > 0 && Math.abs(startMs - kickoffMs) < TIME_WINDOW;
+      });
+      if (timeMatched) {
+        const resolvedId = timeMatched.FixtureId || timeMatched.fixtureId || timeMatched.id;
+        if (resolvedId && String(resolvedId) !== String(txlineFixtureIdRef.current)) {
+          console.log(`[LivePage] Late resolution by kickoff time: ${txlineFixtureIdRef.current} → ${resolvedId} (${timeMatched.Participant1} vs ${timeMatched.Participant2})`);
+          txlineFixtureIdRef.current = resolvedId;
+        }
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allFixtures, appMode]);
@@ -1851,7 +1866,23 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             txlineFixtureIdRef.current = resolvedId;
           }
         } else {
-          console.warn('[LivePage] No match in fixture pool for', fixture.homeTeam, 'vs', fixture.awayTeam);
+          // Team-name match failed (e.g. SF/Final with unknown teams) — fall back to kickoff time.
+          // Any TxLINE fixture whose StartTime is within ±40 min of our fixture's kickoff is the same match.
+          const kickoffMs = new Date(fixture.kickoffAt).getTime();
+          const TIME_WINDOW = 40 * 60 * 1000;
+          const timeMatched = fixturePool.find((f: any) => {
+            const startMs = new Date(f.StartTime ?? f.startTime ?? '').getTime();
+            return startMs > 0 && Math.abs(startMs - kickoffMs) < TIME_WINDOW;
+          });
+          if (timeMatched) {
+            const resolvedId = timeMatched.FixtureId || timeMatched.fixtureId || timeMatched.id;
+            if (resolvedId) {
+              console.log(`[LivePage] Fixture ID resolved by kickoff time: ${txlineFixtureIdRef.current} → ${resolvedId} (${timeMatched.Participant1} vs ${timeMatched.Participant2})`);
+              txlineFixtureIdRef.current = resolvedId;
+            }
+          } else {
+            console.warn('[LivePage] No match in fixture pool for', fixture.homeTeam, 'vs', fixture.awayTeam, '— using remap ID:', txlineFixtureIdRef.current);
+          }
         }
       }
 
