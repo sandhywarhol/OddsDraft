@@ -20,6 +20,13 @@ import {
   type UpgradeCard,
 } from './upgrade-cards';
 
+// Produces a compact 16-char hex ID safe for Solana PDA seeds (well under 32 bytes)
+export function makeInstanceId(): string {
+  const arr = new Uint8Array(8);
+  (typeof crypto !== 'undefined' ? crypto : require('crypto')).getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ── Combine system ────────────────────────────────────────────────────────────
 // 2 copies of the same card (same cardId) → 1 card of the next rarity,
 // same position, randomly selected from that position's pool.
@@ -66,7 +73,7 @@ export function combineCards(cardId: string): CombineResult {
     : SKILL_CARDS.filter(c => c.rarity === nextRarity)[0]; // fallback: any card of next rarity
 
   const resultInstance: OwnedCard = {
-    instanceId: `combine-${cardId}-${Date.now()}`,
+    instanceId: makeInstanceId(),
     cardId: resultCard.id,
     obtainedAt: new Date().toISOString(),
   };
@@ -140,7 +147,7 @@ function saveUpgradeCollection(col: UpgradeCardCollection): void {
 export function addUpgradeCardToCollection(upgradeCardId: string): OwnedUpgradeCard {
   const col = getUpgradeCollection();
   const instance: OwnedUpgradeCard = {
-    instanceId: `upg-${upgradeCardId}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    instanceId: makeInstanceId(),
     upgradeCardId,
     obtainedAt: new Date().toISOString(),
   };
@@ -222,7 +229,7 @@ export function openCardPack(contestId: string): {
 } {
   const card = rollRandomCard();
   const instance: OwnedCard = {
-    instanceId: `${contestId}-${Date.now()}`,
+    instanceId: makeInstanceId(),
     cardId: card.id,
     obtainedAt: new Date().toISOString(),
   };

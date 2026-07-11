@@ -13,7 +13,7 @@ import SponsorsMarquee from '@/components/SponsorsMarquee';
 
 export default function Navbar() {
   const { appMode, toggleAppMode, isAdmin } = useTxLine();
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, disconnect } = useWallet();
   const { connection } = useConnection();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -148,11 +148,11 @@ export default function Navbar() {
           position: 'fixed',
           top: 72,
           right: 24,
-          width: 320,
+          width: 280,
           background: '#090f1a',
           borderLeft: `5px solid ${walletToast.balance < 0.105 ? '#ffaa00' : '#00e87a'}`,
           borderRadius: 8,
-          padding: '14px 16px',
+          padding: '12px 14px',
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           zIndex: 99999,
           display: 'flex',
@@ -174,6 +174,11 @@ export default function Navbar() {
                 </span>
               </div>
             </div>
+            <button
+              onClick={() => { setToastExiting(true); setTimeout(() => setWalletToast(null), 350); }}
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: '0 2px', alignSelf: 'flex-start', marginTop: -2 }}
+              aria-label="Dismiss"
+            >✕</button>
           </div>
           {walletToast.balance < 0.105 && (
             <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', paddingLeft: 2 }}>
@@ -231,14 +236,40 @@ export default function Navbar() {
             </button>
           )}
 
-          {/* Wallet button */}
-          <div style={{ marginTop: 4 }}>
-            {mounted && <WalletMultiButton style={{
-              width: '100%', height: '40px', borderRadius: '8px',
-              fontSize: '0.85rem', fontWeight: 700,
-              background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)',
-              color: '#1a1a1a', border: 'none', fontFamily: 'inherit',
-            }} />}
+          {/* Wallet + Audio buttons */}
+          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {mounted && !connected && (
+              <WalletMultiButton style={{
+                width: '100%', height: '40px', borderRadius: '8px',
+                fontSize: '0.85rem', fontWeight: 700,
+                background: 'linear-gradient(135deg, #ffd700 0%, #d4af37 100%)',
+                color: '#1a1a1a', border: 'none', fontFamily: 'inherit',
+              }} />
+            )}
+            {mounted && connected && (
+              <button
+                onClick={() => { disconnect(); setMobileOpen(false); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.3)',
+                  borderRadius: 8, padding: '10px 14px', cursor: 'pointer', color: '#ff6b6b', textAlign: 'left', width: '100%',
+                }}
+              >
+                <LogOut size={16} />
+                <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Disconnect Wallet</span>
+              </button>
+            )}
+            <button
+              onClick={() => { toggleMute(); setMobileOpen(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: 8, padding: '10px 14px', cursor: 'pointer', color: '#fff', textAlign: 'left', width: '100%',
+              }}
+            >
+              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{isMuted ? 'Unmute Audio' : 'Mute Audio'}</span>
+            </button>
           </div>
         </div>
       )}

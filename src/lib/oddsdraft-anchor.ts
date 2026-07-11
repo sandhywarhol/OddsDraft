@@ -30,6 +30,13 @@ export const ENTRY_FEE_LAMPORTS = BigInt(Math.round(ENTRY_FEE_SOL * LAMPORTS_PER
 const DISC_INIT_CONTEST    = Uint8Array.from([8, 124, 233, 229, 42, 156, 92, 3]);
 const DISC_JOIN_CONTEST    = Uint8Array.from([247, 243, 77, 111, 247, 254, 100, 133]);
 const DISC_RESOLVE_CONTEST = Uint8Array.from([250, 181, 233, 153, 74, 161, 231, 115]);
+const DISC_LIST_CARD       = Uint8Array.from([113, 226, 80, 193, 197, 19, 75, 161]);
+const DISC_BUY_CARD        = Uint8Array.from([113, 142, 149, 246, 22, 115, 156, 154]);
+const DISC_CANCEL_LISTING  = Uint8Array.from([41, 183, 50, 232, 230, 233, 157, 70]);
+
+export const TREASURY_PUBKEY = new PublicKey(
+  process.env.NEXT_PUBLIC_TREASURY_WALLET ?? '71qSknUx1ZRTcAiVJtwFPdGkuXFaHjNMpRyrt7EFvErd'
+);
 
 // ── PDA derivation ─────────────────────────────────────────────────────────────
 
@@ -68,8 +75,8 @@ function borshString(s: string): Uint8Array {
 }
 
 function borshU64(n: bigint): Uint8Array {
-  const b = Buffer.allocUnsafe(8);
-  b.writeBigUInt64LE(n, 0);
+  const b = new Uint8Array(8);
+  new DataView(b.buffer).setBigUint64(0, n, true); // little-endian
   return b;
 }
 
@@ -132,6 +139,120 @@ export function buildJoinContestIx(
       { pubkey: SystemProgram.programId,  isSigner: false, isWritable: false },
     ],
     data: Buffer.from(DISC_JOIN_CONTEST),
+  });
+}
+
+// ── Marketplace PDA ────────────────────────────────────────────────────────────
+
+/**
+ * Derives the listing PDA for a seller + card combination.
+ * Mirrors: seeds = [b"listing", seller.key().as_ref(), card_id.as_bytes()]
+ *
+ * UUID instanceIds have dashes stripped before use as a seed because Solana
+ * limits each individual seed to 32 bytes — a UUID with dashes is 36 bytes.
+ * Without dashes it is exactly 32 hex chars = 32 bytes.
+ */
+export function pdaSeedKey(cardId: string): string {
+  const stripped = cardId.replace(/-/g, '');
+  // Solana limits each PDA seed to 32 bytes. instanceIds can be longer than 32
+  // chars (e.g. "combine-clean_sheet_shield-1720000000000"). Keep the LAST 32
+  // chars so the timestamp/random suffix — the most unique part — is preserved.
+  return stripped.length > 32 ? stripped.slice(-32) : stripped;
+}
+
+export function deriveListingPDA(seller: PublicKey, cardId: string): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('listing'), seller.toBuffer(), Buffer.from(pdaSeedKey(cardId))],
+    ODDSDRAFT_PROGRAM_ID
+  );
+}
+
+// ── Marketplace instruction builders ──────────────────────────────────────────
+
+/**
+ * list_card — seller creates an on-chain listing PDA.
+ * cardType must be "skill" or "upgrade".
+ */
+export function buildListCardIx(
+  seller: PublicKey,
+  cardId: string,
+  cardType: string,
+  priceLamports: bigint
+): TransactionInstruction {
+  const key = pdaSeedKey(cardId); // strip UUID dashes — Rust uses this for PDA seed
+  const [listingPDA] = deriveListingPDA(seller, key);
+
+  const data = Buffer.concat([
+    DISC_LIST_CARD,
+    borshString(key),
+    borshString(cardType),
+    borshU64(priceLamports),
+  ]);
+
+  return new TransactionInstruction({
+    programId: ODDSDRAFT_PROGRAM_ID,
+    keys: [
+      { pubkey: listingPDA,               isSigner: false, isWritable: true  },
+      { pubkey: seller,                   isSigner: true,  isWritable: true  },
+      { pubkey: SystemProgram.programId,  isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
+/**
+ * buy_card — buyer pays seller (95%) + treasury (5%), listing PDA closes.
+ * seller pubkey must match the listing's stored seller.
+ */
+export function buildBuyCardIx(
+  buyer: PublicKey,
+  seller: PublicKey,
+  cardId: string
+): TransactionInstruction {
+  const key = pdaSeedKey(cardId);
+  const [listingPDA] = deriveListingPDA(seller, key);
+
+  const data = Buffer.concat([
+    DISC_BUY_CARD,
+    borshString(key),
+  ]);
+
+  return new TransactionInstruction({
+    programId: ODDSDRAFT_PROGRAM_ID,
+    keys: [
+      { pubkey: listingPDA,               isSigner: false, isWritable: true  },
+      { pubkey: seller,                   isSigner: false, isWritable: true  },
+      { pubkey: buyer,                    isSigner: true,  isWritable: true  },
+      { pubkey: TREASURY_PUBKEY,          isSigner: false, isWritable: true  },
+      { pubkey: SystemProgram.programId,  isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
+/**
+ * cancel_listing — seller closes their own listing PDA and reclaims rent.
+ */
+export function buildCancelListingIx(
+  seller: PublicKey,
+  cardId: string
+): TransactionInstruction {
+  const key = pdaSeedKey(cardId);
+  const [listingPDA] = deriveListingPDA(seller, key);
+
+  const data = Buffer.concat([
+    DISC_CANCEL_LISTING,
+    borshString(key),
+  ]);
+
+  return new TransactionInstruction({
+    programId: ODDSDRAFT_PROGRAM_ID,
+    keys: [
+      { pubkey: listingPDA,               isSigner: false, isWritable: true  },
+      { pubkey: seller,                   isSigner: true,  isWritable: true  },
+      { pubkey: SystemProgram.programId,  isSigner: false, isWritable: false },
+    ],
+    data,
   });
 }
 

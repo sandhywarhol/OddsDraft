@@ -103,7 +103,7 @@ function HeroSection() {
           margin: '0 auto 40px',
           lineHeight: 1.7,
         }}>
-          Build your lineup. Pick your captain. Assign confidence ratings. Win SOL based on real World Cup player performances — powered by live TxODDS data.
+          Collect Skill Cards. Equip upgrades. Build your lineup, pick your captain, and win SOL — the more you play, the stronger your squad gets.
         </p>
 
         {/* CTA Buttons */}
@@ -294,13 +294,33 @@ function LiveTicker() {
               })}
             </div>
           </div>
-        ) : (
-          <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
-            <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
-              • LIVE txLINE: No matches currently in progress.
-            </span>
-          </div>
-        )}
+        ) : (() => {
+          const upcoming = WC2026_FIXTURES
+            .filter(f => getFixtureStatus(f) === 'upcoming')
+            .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime())
+            .slice(0, 3);
+          return (
+            <div style={{ background: 'rgba(10,16,30,0.7)', padding: '5px 0', borderBottom: '1px solid rgba(0,180,255,0.1)', textAlign: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Upcoming</span>
+                {upcoming.length > 0 ? upcoming.map((f, i) => (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600, color: '#cbd5e1' }}>
+                    <FlagImage flag={f.homeFlag} size={14} />
+                    {f.homeTeam}
+                    <span style={{ color: '#64748b', fontSize: '0.7rem', margin: '0 2px' }}>vs</span>
+                    {f.awayTeam}
+                    <FlagImage flag={f.awayFlag} size={14} />
+                    <span style={{ color: '#60a5fa', fontSize: '0.68rem', marginLeft: 4 }}>
+                      {new Date(f.kickoffAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} {new Date(f.kickoffAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false })} UTC
+                    </span>
+                  </span>
+                )) : (
+                  <span style={{ color: '#64748b', fontSize: '0.78rem' }}>No upcoming matches scheduled</span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {displayFinished.length > 0 && (
           <div id="live-ticker-section" style={{ 
