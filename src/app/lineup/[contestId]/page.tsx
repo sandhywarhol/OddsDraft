@@ -142,6 +142,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const router = useRouter();
 
   const isDemo = appMode === 'demo';
+  const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
 
   // Always prefer WC2026 real fixture; fall back to demo fixtures, then placeholder
   const wcMatch = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
@@ -181,6 +182,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
   const [dynamicPlayers, setDynamicPlayers] = useState<import('@/lib/players').Player[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
+
+  type MatchOdds = { home: number | null; draw: number | null; away: number | null; ts?: number };
+  const [matchOdds, setMatchOdds] = useState<MatchOdds | null>(null);
 
   const getPlayers = (team: string): import('@/lib/players').Player[] => {
     const fromApi = dynamicPlayers.filter(p => p.team === team);
@@ -260,6 +264,49 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playersLoading]);
 
+  // Poll TxODDS for live match odds every 60s
+  useEffect(() => {
+    if (!fixture.fixtureId || isDemo) return;
+    let cancelled = false;
+
+    const parseOdds = (data: any[]): MatchOdds | null => {
+      if (!Array.isArray(data) || data.length === 0) return null;
+      // Try structure: array of market objects each with Selections[]
+      for (const market of data) {
+        const sels: any[] = market?.Selections ?? market?.selections ?? [];
+        if (sels.length >= 3) {
+          const byId = (id: number) => sels.find((s: any) => (s.SelectionId ?? s.selectionId) === id);
+          const byName = (n: string) => sels.find((s: any) => (s.Name ?? s.name ?? '').toLowerCase() === n.toLowerCase());
+          const h = byId(1) ?? byName('1') ?? byName('home') ?? sels[0];
+          const d = byId(2) ?? byName('x') ?? byName('draw') ?? sels[1];
+          const a = byId(3) ?? byName('2') ?? byName('away') ?? sels[2];
+          const val = (o: any) => o?.Odds ?? o?.odds ?? o?.Price ?? o?.price ?? null;
+          if (val(h) !== null) return { home: val(h), draw: val(d), away: val(a), ts: data[0]?.Ts ?? data[0]?.ts };
+        }
+        // Flat object with Odds1/OddsX/Odds2
+        if (market?.Odds1 != null) return { home: market.Odds1, draw: market.OddsX ?? market.OddsDraw, away: market.Odds2, ts: market.Ts };
+      }
+      // Single flat object in array
+      const f = data[0];
+      if (f?.Odds1 != null) return { home: f.Odds1, draw: f.OddsX ?? f.OddsDraw, away: f.Odds2, ts: f.Ts };
+      return null;
+    };
+
+    const fetchOdds = async () => {
+      try {
+        const res = await fetch(`/api/txline/odds/snapshot/${fixture.fixtureId}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const odds = parseOdds(Array.isArray(data) ? data : [data]);
+        if (!cancelled) setMatchOdds(odds);
+      } catch { /* silent — odds are optional */ }
+    };
+
+    fetchOdds();
+    const id = setInterval(fetchOdds, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixture.fixtureId, isDemo]);
 
   const [tutorialStep, setTutorialStep] = useState(0);
   const [zoomedElementId, setZoomedElementId] = useState<string | null>(null);
@@ -971,6 +1018,14 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             You need a Solana wallet to build a lineup and enter this contest. Entry fee is <strong>0.01 SOL</strong>.
           </p>
           <WalletMultiButton style={{ borderRadius: 8, fontWeight: 700, fontSize: '1rem', padding: '12px 28px' }} />
+          {isDevnet && (
+            <div style={{ background: 'rgba(255, 170, 0, 0.08)', border: '1px solid rgba(255,170,0,0.35)', borderRadius: 8, padding: '10px 16px', maxWidth: 400, textAlign: 'left' }}>
+              <div style={{ fontSize: '0.8rem', color: '#ffaa00', fontWeight: 700, marginBottom: 4 }}>Devnet Mode — Switch Your Wallet</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                This app runs on <strong>Solana Devnet</strong>. In Phantom, go to <strong>Settings → Developer Settings → Change Network → Devnet</strong> before connecting.
+              </div>
+            </div>
+          )}
           <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>— or —</div>
           <Link href={`/lineup/${fixture.fixtureId}?mode=demo&contestType=${contestType}`} className="btn btn--secondary">
             Try Demo Mode (no wallet needed)
@@ -1267,6 +1322,42 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               <p style={{ color: 'var(--text-secondary)', marginTop: 8 }}>
                 Pick your 5-a-side lineup (GK, DEF, MID, SWG, FWD) • Select a captain (2× pts) • Set confidence
               </p>
+
+              {/* Live odds strip — only shown when TxODDS returns data */}
+              {matchOdds && (matchOdds.home !== null || matchOdds.draw !== null || matchOdds.away !== null) && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0,
+                  marginTop: 10,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  fontSize: '0.78rem',
+                }}>
+                  <div style={{ padding: '5px 10px', color: 'rgba(255,255,255,0.35)', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
+                    Live Odds
+                  </div>
+                  {[
+                    { label: fixture.homeTeam.split(' ').pop()!, value: matchOdds.home, color: '#60a5fa' },
+                    { label: 'Draw', value: matchOdds.draw, color: 'rgba(255,255,255,0.5)' },
+                    { label: fixture.awayTeam.split(' ').pop()!, value: matchOdds.away, color: '#f87171' },
+                  ].map((item, i) => (
+                    <div key={i} style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '5px 14px',
+                      borderRight: i < 2 ? '1px solid rgba(255,255,255,0.08)' : 'none',
+                    }}>
+                      <span style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.label}</span>
+                      <span style={{ fontWeight: 800, color: item.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
+                        {item.value != null ? item.value.toFixed(2) : '—'}
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{ padding: '5px 8px', color: 'rgba(255,255,255,0.18)', fontSize: '0.6rem', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
+                    TxODDS
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -1999,6 +2090,16 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       <div style={{ fontSize: '0.78rem', color: 'rgba(255,215,0,0.7)', lineHeight: 1.5 }}>
                         Tap a selected player card to make them your Captain. The Captain gets a <strong style={{ color: '#ffd700' }}>2× multiplier</strong> — all points from that player are doubled. Pick the player you trust most to perform!
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Devnet network reminder */}
+                {!isDemo && publicKey && isDevnet && (
+                  <div style={{ background: 'rgba(255,170,0,0.06)', border: '1px solid rgba(255,170,0,0.25)', borderRadius: 0, padding: '10px 14px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#ffaa00', fontWeight: 700, marginBottom: 3 }}>Devnet Mode</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                      Make sure your Phantom is on <strong>Devnet</strong> (Settings → Developer Settings → Change Network). Mainnet SOL won't work here.
                     </div>
                   </div>
                 )}
