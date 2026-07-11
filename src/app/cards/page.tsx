@@ -19,6 +19,8 @@ import {
   getUpgradeCollection,
   addUpgradeCardToCollection,
   upgradeSkillCard,
+  getCardById,
+  makeInstanceId,
   type OwnedCard,
   type OwnedUpgradeCard,
 } from '@/lib/card-collection';
@@ -32,11 +34,14 @@ import {
   type UpgradeCard,
   type UpgradePosition,
 } from '@/lib/upgrade-cards';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useTxLine } from '@/context/TxLineContext';
+import { Transaction, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { buildListCardIx, buildCancelListingIx, buildBuyCardIx } from '@/lib/oddsdraft-anchor';
 import {
   RARITY_ORDER,
   RARITY_COLOR,
+  RARITY_BG,
   RARITY_STARS,
   SKILL_CARDS,
   getUpgradedEffectText,
@@ -64,11 +69,17 @@ function CardDetailModal({
   instance,
   onClose,
   onEquip,
+  isListed,
+  onList,
+  onDelist,
 }: {
   card: SkillCard;
   instance?: OwnedCard;
   onClose: () => void;
   onEquip?: () => void;
+  isListed?: boolean;
+  onList?: () => void;
+  onDelist?: () => void;
 }) {
   const rarityColor = RARITY_COLOR[card.rarity];
   const rarityLabel = RARITY_STARS[card.rarity];
@@ -212,35 +223,54 @@ function CardDetailModal({
           )}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            {onEquip && instance && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {onEquip && instance && (
+                <button
+                  onClick={onEquip}
+                  style={{
+                    flex: 1, padding: '12px 0',
+                    background: `linear-gradient(135deg, ${rarityColor}cc, ${rarityColor}88)`,
+                    border: `1px solid ${rarityColor}`,
+                    borderRadius: 8,
+                    color: '#fff', fontWeight: 800, fontSize: 13,
+                    cursor: 'pointer', letterSpacing: '0.06em',
+                  }}
+                >
+                  SET AS DEFAULT
+                </button>
+              )}
               <button
-                onClick={onEquip}
+                onClick={onClose}
                 style={{
-                  flex: 1, padding: '12px 0',
-                  background: `linear-gradient(135deg, ${rarityColor}cc, ${rarityColor}88)`,
-                  border: `1px solid ${rarityColor}`,
+                  padding: '12px 16px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.15)',
                   borderRadius: 8,
-                  color: '#fff', fontWeight: 800, fontSize: 13,
-                  cursor: 'pointer', letterSpacing: '0.06em',
+                  color: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 13,
+                  cursor: 'pointer',
                 }}
               >
-                SET AS DEFAULT
+                ✕
               </button>
+            </div>
+            {instance && (
+              isListed ? (
+                <button
+                  onClick={onDelist}
+                  style={{ width: '100%', padding: '10px 0', background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.35)', borderRadius: 8, color: '#ff6b6b', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                >
+                  Cancel Listing
+                </button>
+              ) : (
+                <button
+                  onClick={onList}
+                  style={{ width: '100%', padding: '10px 0', background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.35)', borderRadius: 8, color: '#ffd700', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                >
+                  List on Marketplace
+                </button>
+              )
             )}
-            <button
-              onClick={onClose}
-              style={{
-                padding: '12px 16px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 8,
-                color: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              ✕
-            </button>
           </div>
         </div>
       </div>
@@ -251,10 +281,16 @@ function CardDetailModal({
 function UpgradeCardDetailModal({
   card,
   instance,
+  isListed,
+  onList,
+  onDelist,
   onClose,
 }: {
   card: UpgradeCard;
   instance?: OwnedUpgradeCard;
+  isListed?: boolean;
+  onList?: () => void;
+  onDelist?: () => void;
   onClose: () => void;
 }) {
   const rarityColor = UPGRADE_RARITY_COLOR[card.rarity];
@@ -370,17 +406,26 @@ function UpgradeCardDetailModal({
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {instance && onList && !isListed && (
+              <button
+                onClick={onList}
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #ffd700, #d4af37)', color: '#111', fontWeight: 800, fontSize: 13, border: 'none', cursor: 'pointer' }}
+              >
+                List on Marketplace
+              </button>
+            )}
+            {instance && onDelist && isListed && (
+              <button
+                onClick={onDelist}
+                style={{ flex: 1, padding: '12px 16px', borderRadius: 8, background: 'rgba(255,60,60,0.12)', border: '1px solid rgba(255,60,60,0.35)', color: '#ff6b6b', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+              >
+                Cancel Listing
+              </button>
+            )}
             <button
               onClick={onClose}
-              style={{
-                padding: '12px 16px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 8,
-                color: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 13,
-                cursor: 'pointer',
-              }}
+              style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: 'rgba(255,255,255,0.5)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
             >
               ✕ CLOSE
             </button>
@@ -1295,10 +1340,10 @@ function WelcomeGiftModal({
   useEffect(() => {
     if (localStorage.getItem(`txodds_welcome_gift_claimed_${publicKey}`)) return;
 
-    queue.forEach((q, idx) => {
+    queue.forEach((q) => {
       if (q.type === 'skill') {
         addCardToCollection({
-          instanceId: `wg-skill-${Date.now()}-${idx}`,
+          instanceId: makeInstanceId(),
           cardId: q.cardId,
           obtainedAt: new Date().toISOString(),
           upgradeCredits: 0
@@ -1355,8 +1400,434 @@ function WelcomeGiftModal({
   );
 }
 
+// ── Solana confirmation helper ────────────────────────────────────────────────
+// Polls every 2s instead of relying on confirmTransaction which can hang on devnet.
+async function confirmWithTimeout(
+  connection: any,
+  sig: string,
+  timeoutMs = 45_000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const { value } = await connection.getSignatureStatus(sig, { searchTransactionHistory: true });
+    if (value?.err) throw new Error('Transaction failed: ' + JSON.stringify(value.err));
+    if (value?.confirmationStatus === 'confirmed' || value?.confirmationStatus === 'finalized') return;
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  throw new Error(`Confirmation timeout (45s). Check explorer for: ${sig}`);
+}
+
+// ── Marketplace Modal ─────────────────────────────────────────────────────────
+
+interface MarketplaceListing {
+  id: string;
+  listing_pda: string;
+  seller_wallet: string;
+  card_id: string;
+  instance_id: string;
+  card_type: 'skill' | 'upgrade';
+  price_sol: number;
+  upgrade_credits: number;
+  status: string;
+  created_at: string;
+}
+
+function MarketplaceModal({
+  walletPublicKey,
+  connection,
+  sendTransaction,
+  onClose,
+  onListingSold,
+}: {
+  walletPublicKey: string | null;
+  connection: any;
+  sendTransaction: any;
+  onClose: () => void;
+  onListingSold: (cardId: string) => void;
+}) {
+  const [listings, setListings] = useState<MarketplaceListing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  // Filters
+  const [filterType, setFilterType] = useState<'all' | 'skill' | 'upgrade'>('all');
+  const [filterRarity, setFilterRarity] = useState<'all' | Rarity>('all');
+  const [filterPosition, setFilterPosition] = useState<'all' | CardPosition>('all');
+  const [sortPrice, setSortPrice] = useState<'none' | 'asc' | 'desc'>('none');
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/marketplace/listings')
+      .then(r => r.ok ? r.json() : { listings: [] })
+      .then(d => setListings(d.listings ?? []))
+      .catch(() => setListings([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const showToast = (msg: string, ok: boolean) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleBuy = async (listing: MarketplaceListing) => {
+    if (!walletPublicKey) return showToast('Connect wallet first', false);
+    if (listing.seller_wallet === walletPublicKey) return showToast('Cannot buy your own listing', false);
+    setBuyingId(listing.id);
+    try {
+      const seller = new PublicKey(listing.seller_wallet);
+      const buyer = new PublicKey(walletPublicKey);
+      // PDA was created with instance_id as key
+      const pdaKey = listing.instance_id ?? listing.card_id;
+      const ix = buildBuyCardIx(buyer, seller, pdaKey);
+      const { blockhash } = await connection.getLatestBlockhash();
+      const tx = new Transaction({ feePayer: buyer, recentBlockhash: blockhash }).add(ix);
+      const sig = await sendTransaction(tx, connection, { skipPreflight: true });
+      await confirmWithTimeout(connection, sig);
+
+      const res = await fetch('/api/marketplace/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txSignature: sig, buyerWallet: walletPublicKey, sellerWallet: listing.seller_wallet, instanceId: listing.instance_id, cardId: listing.card_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Purchase failed');
+
+      // Add to buyer's local collection immediately so it appears in inventory
+      if (listing.card_type === 'skill') {
+        addCardToCollection({
+          instanceId: makeInstanceId(),
+          cardId: listing.card_id,
+          obtainedAt: new Date().toISOString(),
+          upgradeCredits: listing.upgrade_credits ?? 0,
+        });
+      } else {
+        addUpgradeCardToCollection(listing.card_id);
+      }
+
+      setListings(prev => prev.filter(l => l.id !== listing.id));
+      onListingSold(listing.instance_id ?? listing.card_id);
+      showToast('Card purchased! Check your collection.', true);
+    } catch (err: any) {
+      showToast(err.message ?? 'Transaction failed', false);
+    } finally {
+      setBuyingId(null);
+    }
+  };
+
+  const positions: CardPosition[] = ['Goalkeeper', 'Defender', 'Midfielder', 'Winger', 'Striker'];
+
+  const displayed = listings.filter(l => {
+    if (filterType !== 'all' && l.card_type !== filterType) return false;
+    if (filterRarity !== 'all') {
+      const def = getCardById(l.card_id);
+      if (!def || def.rarity !== filterRarity) return false;
+    }
+    if (filterPosition !== 'all') {
+      const def = getCardById(l.card_id);
+      if (!def || def.position !== filterPosition) return false;
+    }
+    return true;
+  }).sort((a, b) => {
+    if (sortPrice === 'asc') return a.price_sol - b.price_sol;
+    if (sortPrice === 'desc') return b.price_sol - a.price_sol;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(12px)', zIndex: 9100, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ margin: 'auto', width: '100%', maxWidth: 1000, padding: '32px 24px 80px' }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 'clamp(1.4rem, 3vw, 2rem)', fontWeight: 900, fontFamily: 'var(--font-bebas), cursive', letterSpacing: '0.05em', color: '#fff' }}>
+              Card Marketplace
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.45)' }}>
+              Buy skill &amp; upgrade cards — all transactions on-chain via Solana Devnet
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: 'rgba(255,255,255,0.5)', padding: '8px 14px', fontSize: '1rem', cursor: 'pointer', fontWeight: 700 }}>✕</button>
+        </div>
+
+        {/* Filters */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 24, padding: '14px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
+          {/* Card type */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 700, textTransform: 'uppercase', marginRight: 2 }}>Type</span>
+            {(['all', 'skill', 'upgrade'] as const).map(t => (
+              <button key={t} onClick={() => setFilterType(t)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: filterType === t ? '#ffd700' : 'rgba(255,255,255,0.08)', color: filterType === t ? '#111' : 'rgba(255,255,255,0.6)', transition: 'all 0.15s' }}>
+                {t === 'all' ? 'All' : t === 'skill' ? 'Skill' : 'Upgrade'}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', margin: '0 2px' }} />
+
+          {/* Rarity */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 700, textTransform: 'uppercase', marginRight: 2 }}>Rarity</span>
+            {(['all', ...RARITY_ORDER.slice(0, 6)] as ('all' | Rarity)[]).map(r => (
+              <button key={r} onClick={() => setFilterRarity(r)} style={{ padding: '5px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: `1px solid ${r === 'all' ? 'transparent' : (RARITY_COLOR[r as Rarity] ?? '#888') + '66'}`, background: filterRarity === r ? (r === 'all' ? '#ffd700' : RARITY_COLOR[r as Rarity] + '33') : 'rgba(255,255,255,0.05)', color: filterRarity === r ? (r === 'all' ? '#111' : RARITY_COLOR[r as Rarity]) : 'rgba(255,255,255,0.5)', transition: 'all 0.15s' }}>
+                {r === 'all' ? 'All' : r}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', margin: '0 2px' }} />
+
+          {/* Position */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 700, textTransform: 'uppercase', marginRight: 2 }}>Pos</span>
+            {(['all', ...positions] as ('all' | CardPosition)[]).map(p => (
+              <button key={p} onClick={() => setFilterPosition(p)} style={{ padding: '5px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: filterPosition === p ? 'rgba(0,229,122,0.25)' : 'rgba(255,255,255,0.06)', color: filterPosition === p ? '#00e87a' : 'rgba(255,255,255,0.5)', transition: 'all 0.15s' }}>
+                {p === 'all' ? 'All' : p.slice(0, 3)}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', margin: '0 2px' }} />
+
+          {/* Price sort */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', fontWeight: 700, textTransform: 'uppercase', marginRight: 2 }}>Price</span>
+            {([['none', 'Latest'], ['asc', '↑ Low'], ['desc', '↓ High']] as const).map(([val, label]) => (
+              <button key={val} onClick={() => setSortPrice(val)} style={{ padding: '5px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', border: 'none', background: sortPrice === val ? 'rgba(96,165,250,0.25)' : 'rgba(255,255,255,0.06)', color: sortPrice === val ? '#60a5fa' : 'rgba(255,255,255,0.5)', transition: 'all 0.15s' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Count */}
+        <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.3)', marginBottom: 16 }}>
+          {loading ? 'Loading...' : `${displayed.length} listing${displayed.length !== 1 ? 's' : ''} found`}
+        </div>
+
+        {/* Listings */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'rgba(255,255,255,0.3)' }}>Loading listings...</div>
+        ) : displayed.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>🏪</div>
+            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.9rem' }}>No listings match your filters</div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden' }}>
+            {/* Header row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr 100px 90px 100px 90px', alignItems: 'center', padding: '8px 16px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <span />
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Card</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Position</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Upgrade</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Price</span>
+              <span />
+            </div>
+
+            {displayed.map((listing, idx) => {
+              const skillDef = listing.card_type === 'skill' ? getCardById(listing.card_id) : null;
+              const upgDef = listing.card_type === 'upgrade' ? getUpgradeCardById(listing.card_id) : null;
+              const rarity: Rarity = (skillDef?.rarity ?? (upgDef ? (upgDef.level === 1 ? 'Uncommon' : upgDef.level === 2 ? 'Rare' : 'Epic') : 'Common')) as Rarity;
+              const rc = RARITY_COLOR[rarity] ?? '#888';
+              const rb = RARITY_BG[rarity] ?? 'rgba(100,100,100,0.1)';
+              const isOwn = listing.seller_wallet === walletPublicKey;
+              const isBuying = buyingId === listing.id;
+              const shortSeller = `${listing.seller_wallet.slice(0, 4)}…${listing.seller_wallet.slice(-4)}`;
+              const credits = listing.upgrade_credits ?? 0;
+              const upgradeLabel = listing.card_type === 'upgrade'
+                ? `Lv. ${upgDef?.level ?? '?'}`
+                : credits > 0 ? `+${credits}%` : 'Base';
+              const upgradeColor = listing.card_type === 'upgrade'
+                ? rc
+                : credits > 0 ? '#ffd700' : 'rgba(255,255,255,0.25)';
+
+              return (
+                <div
+                  key={listing.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '64px 1fr 100px 90px 100px 90px',
+                    alignItems: 'center',
+                    padding: '8px 16px',
+                    borderBottom: idx < displayed.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                    background: 'rgba(255,255,255,0.02)',
+                    transition: 'background 0.15s',
+                    gap: 0,
+                    minHeight: 64,
+                  }}
+                  onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
+                  onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)'; }}
+                >
+                  {/* Thumbnail */}
+                  <div style={{ width: 48, height: 60, borderRadius: 6, overflow: 'hidden', background: rb, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {skillDef ? (
+                      <SkillCardDisplay card={skillDef} width={48} />
+                    ) : upgDef ? (
+                      <UpgradeCardDisplay card={upgDef} width={48} />
+                    ) : (
+                      <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)' }}>?</div>
+                    )}
+                  </div>
+
+                  {/* Card info */}
+                  <div style={{ paddingLeft: 12, paddingRight: 8, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 2 }}>
+                      <span style={{ fontSize: '0.6rem', fontWeight: 700, color: rc, background: rb, padding: '1px 6px', borderRadius: 8, flexShrink: 0 }}>{rarity}</span>
+                      <span style={{ fontSize: '0.58rem', color: 'rgba(255,255,255,0.25)', textTransform: 'capitalize', flexShrink: 0 }}>{listing.card_type}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff', marginBottom: 2, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {skillDef?.name ?? upgDef?.name ?? listing.card_id}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.45)', lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                      {skillDef ? getUpgradedEffectText(skillDef, credits) : upgDef?.description ?? ''}
+                    </div>
+                    <div style={{ fontSize: '0.58rem', color: 'rgba(255,255,255,0.18)', marginTop: 3 }}>by {shortSeller}</div>
+                  </div>
+
+                  {/* Position */}
+                  <div style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+                    {skillDef?.position ?? upgDef?.position ?? '—'}
+                  </div>
+
+                  {/* Upgrade status */}
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: upgradeColor }}>
+                    {upgradeLabel}
+                  </div>
+
+                  {/* Price */}
+                  <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#00e87a' }}>
+                    {listing.price_sol} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'rgba(0,232,122,0.6)' }}>SOL</span>
+                  </div>
+
+                  {/* Buy button */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    {isOwn ? (
+                      <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.2)', fontWeight: 600, padding: '7px 14px' }}>Yours</span>
+                    ) : (
+                      <button
+                        onClick={() => handleBuy(listing)}
+                        disabled={isBuying || !walletPublicKey}
+                        style={{
+                          padding: '7px 18px',
+                          borderRadius: 8,
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: isBuying || !walletPublicKey ? 'not-allowed' : 'pointer',
+                          background: isBuying ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #00e87a, #00b85e)',
+                          color: isBuying ? 'rgba(255,255,255,0.3)' : '#111',
+                          border: 'none',
+                          opacity: !walletPublicKey ? 0.4 : 1,
+                          transition: 'opacity 0.15s',
+                        }}
+                      >
+                        {isBuying ? '…' : 'Buy'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Toast */}
+        {toast && (
+          <div style={{ position: 'fixed', bottom: 24, right: 24, background: toast.ok ? 'rgba(0,232,122,0.15)' : 'rgba(255,60,60,0.15)', border: `1px solid ${toast.ok ? 'rgba(0,232,122,0.5)' : 'rgba(255,60,60,0.5)'}`, borderRadius: 10, padding: '12px 20px', color: toast.ok ? '#00e87a' : '#ff6b6b', fontSize: '0.85rem', fontWeight: 700, zIndex: 9200, maxWidth: 300 }}>
+            {toast.msg}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ListCardModal({
+  cardName,
+  cardSubtitle,
+  statusText,
+  onClose,
+  onConfirm,
+}: {
+  cardName: string;
+  cardSubtitle: string;
+  statusText: string;
+  onClose: () => void;
+  onConfirm: (priceSol: number) => void;
+}) {
+  const [price, setPrice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const parsed = parseFloat(price);
+  const valid = !isNaN(parsed) && parsed >= 0.001 && parsed <= 100;
+
+  const handleSubmit = async () => {
+    if (!valid) return;
+    setSubmitting(true);
+    await onConfirm(parsed);
+    setSubmitting(false);
+  };
+
+  return (
+    <div onClick={!submitting ? onClose : undefined} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 9500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-medium)', borderRadius: 16, padding: 28, maxWidth: 360, width: '100%' }}>
+        <div style={{ fontSize: '1.1rem', fontWeight: 900, marginBottom: 4 }}>List on Marketplace</div>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 20 }}>
+          <strong style={{ color: 'var(--text-primary)' }}>{cardName}</strong> · {cardSubtitle}
+        </div>
+
+        <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+          Price (SOL)
+        </label>
+        <input
+          type="number"
+          step="0.001"
+          min="0.001"
+          max="100"
+          placeholder="e.g. 0.05"
+          value={price}
+          onChange={e => setPrice(e.target.value)}
+          disabled={submitting}
+          autoFocus
+          style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-medium)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '1rem', fontWeight: 700, boxSizing: 'border-box', outline: 'none', opacity: submitting ? 0.5 : 1 }}
+        />
+        {parsed > 0 && !submitting && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
+            You receive ~{(parsed * 0.95).toFixed(4)} SOL after 5% platform fee.
+          </div>
+        )}
+        {submitting && statusText && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: '0.78rem', color: '#60a5fa' }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '2px solid #60a5fa', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+            {statusText}
+          </div>
+        )}
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          <button
+            onClick={handleSubmit}
+            disabled={!valid || submitting}
+            style={{ flex: 1, padding: '11px 0', borderRadius: 8, background: valid && !submitting ? 'linear-gradient(135deg, #ffd700, #d4af37)' : 'var(--bg-elevated)', color: valid && !submitting ? '#111' : 'var(--text-muted)', fontWeight: 800, fontSize: '0.9rem', border: 'none', cursor: valid && !submitting ? 'pointer' : 'not-allowed' }}
+          >
+            {submitting ? 'Processing...' : 'Confirm & List'}
+          </button>
+          <button onClick={onClose} style={{ padding: '11px 16px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CardsPage() {
-  const { connected } = useWallet();
+  const { connected, sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const { appMode } = useTxLine();
   const [allCards, setAllCards] = useState<{ instance: OwnedCard; card: SkillCard }[]>([]);
   const [upgradeCards, setUpgradeCards] = useState<{ instance: OwnedUpgradeCard; card: UpgradeCard }[]>([]);
@@ -1375,6 +1846,15 @@ export default function CardsPage() {
   const [shimmerIds, setShimmerIds] = useState<Set<string>>(new Set());
   const [isCombineInfoExpanded, setIsCombineInfoExpanded] = useState(true);
   const [isUpgradeInfoExpanded, setIsUpgradeInfoExpanded] = useState(true);
+
+  // ── Marketplace state ───────────────────────────────────────────────────────
+  const [showMarketplace, setShowMarketplace] = useState(false);
+  const [listTarget, setListTarget] = useState<{ instance: OwnedCard; card: SkillCard } | null>(null);
+  const [listUpgradeTarget, setListUpgradeTarget] = useState<{ instance: OwnedUpgradeCard; card: UpgradeCard } | null>(null);
+  const [listStatusText, setListStatusText] = useState('');
+  const [listedCardIds, setListedCardIds] = useState<Set<string>>(new Set()); // instanceId set
+  const [listingPdas, setListingPdas] = useState<Record<string, string>>({}); // instanceId → listingPda
+  const [listToast, setListToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   // ── Welcome Gift State ──────────────────────────────────────────────────────
   const { publicKey } = useWallet();
@@ -1422,6 +1902,117 @@ export default function CardsPage() {
       })
       .catch(() => buildGift());
   }, [connected, publicKey]);
+
+  // Fetch seller's active listings so we can show "Listed" badge per instance
+  useEffect(() => {
+    if (!publicKey) { setListedCardIds(new Set()); return; }
+    fetch(`/api/marketplace/listings?seller=${publicKey.toString()}`)
+      .then(r => r.ok ? r.json() : { listings: [] })
+      .then(data => {
+        const ids = new Set<string>();
+        const pdaMap: Record<string, string> = {};
+        // Old listings have instance_id = null and were keyed by card_id; new ones use instance_id
+        (data.listings ?? []).forEach((l: any) => {
+          const key = l.instance_id ?? l.card_id;
+          if (key) { ids.add(key); if (l.listing_pda) pdaMap[key] = l.listing_pda; }
+        });
+        setListedCardIds(ids);
+        setListingPdas(pdaMap);
+      })
+      .catch(() => {});
+  }, [publicKey]);
+
+  const handleListCard = async (instance: OwnedCard, priceSol: number) => {
+    if (!publicKey) return;
+    try {
+      setListStatusText('Approve in Phantom...');
+      // Use instanceId as PDA key so each copy of the same card can be listed independently
+      const pdaKey = instance.instanceId;
+      const ix = buildListCardIx(publicKey, pdaKey, 'skill', BigInt(Math.round(priceSol * LAMPORTS_PER_SOL)));
+      const { blockhash } = await connection.getLatestBlockhash();
+      const tx = new Transaction({ feePayer: publicKey, recentBlockhash: blockhash }).add(ix);
+      const sig = await sendTransaction(tx, connection, { skipPreflight: true });
+      setListStatusText('Confirming on Solana... (~15s)');
+      await confirmWithTimeout(connection, sig);
+
+      setListStatusText('Saving listing...');
+      const res = await fetch('/api/marketplace/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txSignature: sig, sellerWallet: publicKey.toString(), instanceId: instance.instanceId, cardId: instance.cardId, cardType: 'skill', priceSol, upgradeCredits: instance.upgradeCredits ?? 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Listing failed');
+      setListedCardIds(prev => new Set(prev).add(instance.instanceId));
+      setListingPdas(prev => ({ ...prev, [instance.instanceId]: data.listingPda }));
+      setListTarget(null);
+      setListStatusText('');
+      setListToast({ msg: 'Card listed on marketplace!', ok: true });
+      setTimeout(() => setListToast(null), 4000);
+    } catch (err: any) {
+      setListStatusText('');
+      setListToast({ msg: err.message ?? 'Transaction failed', ok: false });
+      setTimeout(() => setListToast(null), 4000);
+    }
+  };
+
+  const handleDelistCard = async (instanceId: string, cardId: string) => {
+    if (!publicKey) return;
+    try {
+      // PDA was created with instanceId as key
+      const ix = buildCancelListingIx(publicKey, instanceId);
+      const { blockhash } = await connection.getLatestBlockhash();
+      const tx = new Transaction({ feePayer: publicKey, recentBlockhash: blockhash }).add(ix);
+      const sig = await sendTransaction(tx, connection, { skipPreflight: true });
+      await confirmWithTimeout(connection, sig);
+
+      await fetch('/api/marketplace/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txSignature: sig, sellerWallet: publicKey.toString(), instanceId, cardId }),
+      });
+      setListedCardIds(prev => { const s = new Set(prev); s.delete(instanceId); return s; });
+      setListingPdas(prev => { const m = { ...prev }; delete m[instanceId]; return m; });
+      setListToast({ msg: 'Listing cancelled.', ok: true });
+      setTimeout(() => setListToast(null), 4000);
+    } catch (err: any) {
+      setListToast({ msg: err.message ?? 'Transaction failed', ok: false });
+      setTimeout(() => setListToast(null), 4000);
+    }
+  };
+
+  const handleListUpgradeCard = async (instance: OwnedUpgradeCard, priceSol: number) => {
+    if (!publicKey) return;
+    try {
+      setListStatusText('Approve in Phantom...');
+      const pdaKey = instance.instanceId;
+      const ix = buildListCardIx(publicKey, pdaKey, 'upgrade', BigInt(Math.round(priceSol * LAMPORTS_PER_SOL)));
+      const { blockhash } = await connection.getLatestBlockhash();
+      const tx = new Transaction({ feePayer: publicKey, recentBlockhash: blockhash }).add(ix);
+      const sig = await sendTransaction(tx, connection, { skipPreflight: true });
+      setListStatusText('Confirming on Solana... (~15s)');
+      await confirmWithTimeout(connection, sig);
+
+      setListStatusText('Saving listing...');
+      const res = await fetch('/api/marketplace/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txSignature: sig, sellerWallet: publicKey.toString(), instanceId: instance.instanceId, cardId: instance.upgradeCardId, cardType: 'upgrade', priceSol, upgradeCredits: 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Listing failed');
+      setListedCardIds(prev => new Set(prev).add(instance.instanceId));
+      setListingPdas(prev => ({ ...prev, [instance.instanceId]: data.listingPda }));
+      setListUpgradeTarget(null);
+      setListStatusText('');
+      setListToast({ msg: 'Card listed on marketplace!', ok: true });
+      setTimeout(() => setListToast(null), 4000);
+    } catch (err: any) {
+      setListStatusText('');
+      setListToast({ msg: err.message ?? 'Transaction failed', ok: false });
+      setTimeout(() => setListToast(null), 4000);
+    }
+  };
 
   const handleCardClick = (instance: OwnedCard, card: SkillCard) => {
     setShimmerIds(prev => new Set(prev).add(instance.instanceId));
@@ -1655,9 +2246,9 @@ export default function CardsPage() {
           />
         </div>
 
-        {/* ── Tab switcher ── */}
+        {/* ── Tab switcher + Marketplace button ── */}
         {connected && (
-          <div style={{ display: 'flex', gap: 12, marginBottom: 28 }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap', alignItems: 'center' }}>
             {([{ key: 'skill', label: '🎴 Skill Cards', count: allCards.length }, { key: 'upgrade', label: '⬆ Upgrade Cards', count: upgradeCards.length }] as const).map(tab => (
               <button
                 key={tab.key}
@@ -1679,6 +2270,22 @@ export default function CardsPage() {
                 {tab.label} {tab.count > 0 && <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>({tab.count})</span>}
               </button>
             ))}
+            <button
+              onClick={() => setShowMarketplace(true)}
+              style={{
+                marginLeft: 'auto', padding: '14px 24px',
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.06))',
+                border: '1px solid rgba(255,215,0,0.4)',
+                color: '#ffd700', fontWeight: 800, fontSize: 15,
+                cursor: 'pointer', letterSpacing: '0.04em',
+                transition: 'all 0.2s', borderRadius: '12px',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}
+              onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,215,0,0.18)'; }}
+              onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.06))'; }}
+            >
+              🏪 Marketplace
+            </button>
           </div>
         )}
 
@@ -1963,6 +2570,7 @@ export default function CardsPage() {
               const credits = instance.upgradeCredits ?? 0;
               const isMaxed = credits >= MAX_UPGRADE_CREDITS;
               const hasCompatibleUpgrade = !isMaxed && upgradeCards.some(u => u.card.position === card.position);
+              const isListedInMarket = listedCardIds.has(instance.instanceId) || listedCardIds.has(instance.cardId);
               return (
                 <div
                   className="card-responsive-wrapper"
@@ -1988,6 +2596,21 @@ export default function CardsPage() {
                           animation: 'card-shine 0.38s ease-out forwards',
                         }} />
                       </div>
+                    )}
+                    {/* Listed badge */}
+                    {isListedInMarket && (
+                      <button
+                        onClick={e => { e.stopPropagation(); const pdaKey = listedCardIds.has(instance.instanceId) ? instance.instanceId : instance.cardId; handleDelistCard(pdaKey, instance.cardId); }}
+                        style={{
+                          position: 'absolute', top: 8, left: 8, zIndex: 20,
+                          background: 'rgba(255,165,0,0.95)', border: 'none', borderRadius: 10,
+                          color: '#000', fontWeight: 900, fontSize: 12, padding: '5px 12px',
+                          cursor: 'pointer', letterSpacing: 0.4, whiteSpace: 'nowrap',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                        }}
+                      >
+                        LISTED · Cancel
+                      </button>
                     )}
                     {/* Upgrade badge */}
                     {hasCompatibleUpgrade && (
@@ -2165,6 +2788,7 @@ export default function CardsPage() {
                   const instance = instances[0];
                   const count = instances.length;
                   const rarityColor = UPGRADE_RARITY_COLOR[card.rarity];
+                  const listedUpgradeInstance = instances.find(i => listedCardIds.has(i.instanceId) || listedCardIds.has(i.upgradeCardId));
                   return (
                     <div
                       key={instance.instanceId}
@@ -2182,6 +2806,21 @@ export default function CardsPage() {
                       {/* Card image and stats */}
                       <div style={{ position: 'relative' }}>
                         <UpgradeCardDisplay card={card} width={220} />
+                        {/* Listed badge */}
+                        {listedUpgradeInstance && (
+                          <button
+                            onClick={e => { e.stopPropagation(); const pdaKey = listedCardIds.has(listedUpgradeInstance.instanceId) ? listedUpgradeInstance.instanceId : listedUpgradeInstance.upgradeCardId; handleDelistCard(pdaKey, listedUpgradeInstance.upgradeCardId); }}
+                            style={{
+                              position: 'absolute', top: 8, left: 8, zIndex: 20,
+                              background: 'rgba(255,165,0,0.95)', border: 'none', borderRadius: 10,
+                              color: '#000', fontWeight: 900, fontSize: 12, padding: '5px 12px',
+                              cursor: 'pointer', letterSpacing: 0.4, whiteSpace: 'nowrap',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.6)',
+                            }}
+                          >
+                            LISTED · Cancel
+                          </button>
+                        )}
                         
                         {/* Gaming Duplicates Badge */}
                         {count > 1 && (
@@ -2228,6 +2867,9 @@ export default function CardsPage() {
           instance={viewTarget.instance}
           onClose={() => setViewTarget(null)}
           onEquip={viewTarget.instance ? () => { setEquipTarget(viewTarget as { instance: OwnedCard; card: SkillCard }); setViewTarget(null); } : undefined}
+          isListed={viewTarget.instance ? (listedCardIds.has(viewTarget.instance.instanceId) || listedCardIds.has(viewTarget.instance.cardId)) : false}
+          onList={viewTarget.instance ? () => { setListTarget(viewTarget as { instance: OwnedCard; card: SkillCard }); setViewTarget(null); } : undefined}
+          onDelist={viewTarget.instance ? () => { const i = viewTarget.instance!; const pdaKey = listedCardIds.has(i.instanceId) ? i.instanceId : i.cardId; handleDelistCard(pdaKey, i.cardId); setViewTarget(null); } : undefined}
         />
       )}
 
@@ -2236,6 +2878,9 @@ export default function CardsPage() {
         <UpgradeCardDetailModal
           card={viewUpgradeTarget.card}
           instance={viewUpgradeTarget.instance}
+          isListed={viewUpgradeTarget.instance ? (listedCardIds.has(viewUpgradeTarget.instance.instanceId) || listedCardIds.has(viewUpgradeTarget.instance.upgradeCardId)) : false}
+          onList={viewUpgradeTarget.instance ? () => { setListUpgradeTarget(viewUpgradeTarget as { instance: OwnedUpgradeCard; card: UpgradeCard }); setViewUpgradeTarget(null); } : undefined}
+          onDelist={viewUpgradeTarget.instance ? () => { const i = viewUpgradeTarget.instance!; const pdaKey = listedCardIds.has(i.instanceId) ? i.instanceId : i.upgradeCardId; handleDelistCard(pdaKey, i.upgradeCardId); setViewUpgradeTarget(null); } : undefined}
           onClose={() => setViewUpgradeTarget(null)}
         />
       )}
@@ -2307,6 +2952,56 @@ export default function CardsPage() {
             reload();
           }}
         />
+      )}
+
+      {/* Marketplace Modal */}
+      {showMarketplace && (
+        <MarketplaceModal
+          walletPublicKey={publicKey?.toString() ?? null}
+          connection={connection}
+          sendTransaction={sendTransaction}
+          onClose={() => setShowMarketplace(false)}
+          onListingSold={(instanceId) => {
+            setListedCardIds(prev => { const s = new Set(prev); s.delete(instanceId); return s; });
+            reload();
+          }}
+        />
+      )}
+
+      {/* List Skill Card Modal */}
+      {listTarget && (
+        <ListCardModal
+          cardName={listTarget.card.name}
+          cardSubtitle={`${listTarget.card.rarity} · ${listTarget.card.position}`}
+          statusText={listStatusText}
+          onClose={() => { setListTarget(null); setListStatusText(''); }}
+          onConfirm={(priceSol) => handleListCard(listTarget.instance, priceSol)}
+        />
+      )}
+
+      {/* List Upgrade Card Modal */}
+      {listUpgradeTarget && (
+        <ListCardModal
+          cardName={listUpgradeTarget.card.name}
+          cardSubtitle={`${listUpgradeTarget.card.rarity} · ${listUpgradeTarget.card.position} Upgrade`}
+          statusText={listStatusText}
+          onClose={() => { setListUpgradeTarget(null); setListStatusText(''); }}
+          onConfirm={(priceSol) => handleListUpgradeCard(listUpgradeTarget.instance, priceSol)}
+        />
+      )}
+
+      {/* Listing toast */}
+      {listToast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 99999,
+          background: listToast.ok ? 'rgba(0,232,122,0.12)' : 'rgba(255,60,60,0.12)',
+          border: `1px solid ${listToast.ok ? 'rgba(0,232,122,0.4)' : 'rgba(255,60,60,0.4)'}`,
+          borderRadius: 10, padding: '12px 20px',
+          color: listToast.ok ? '#00e87a' : '#ff6b6b',
+          fontSize: '0.85rem', fontWeight: 700, maxWidth: 300,
+        }}>
+          {listToast.msg}
+        </div>
       )}
 
       {/* Welcome Gift Flow */}
