@@ -808,7 +808,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               SystemProgram.transfer({
                 fromPubkey: publicKey,
                 toPubkey: treasury,
-                lamports: Math.floor(0.01 * LAMPORTS_PER_SOL),
+                lamports: Math.floor(0.1 * LAMPORTS_PER_SOL),
               })
             );
             tx.recentBlockhash = blockhash;
@@ -1015,7 +1015,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           <div style={{ fontSize: '3rem' }}>🔒</div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 800, margin: 0 }}>Connect Wallet to Play</h1>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 380, margin: 0 }}>
-            You need a Solana wallet to build a lineup and enter this contest. Entry fee is <strong>0.01 SOL</strong>.
+            You need a Solana wallet to build a lineup and enter this contest. Entry fee is <strong>0.1 SOL</strong>.
           </p>
           <WalletMultiButton style={{ borderRadius: 8, fontWeight: 700, fontSize: '1rem', padding: '12px 28px' }} />
           {isDevnet && (
@@ -2135,11 +2135,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       maxWidth: '400px',
                     }}
                   >
-                    {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? '🔒 Lock Lineup & Pay 0.01 SOL' : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}
+                    {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? '🔒 Lock Lineup & Pay 0.1 SOL' : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}
                   </button>
                   {isLineupFull && captain && (
                     <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Entry fee: 0.01 SOL • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
+                      Entry fee: 0.1 SOL • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
                     </p>
                   )}
                 </div>
@@ -2299,7 +2299,8 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
     case 6:
       return {
         speakerTitle: 'Guide',
-        text: `"Once your squad is ready, lock it in by paying the 0.01 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
+        text: `"Once your squad is ready, lock it in by paying the 0.1 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
+
         image: '/NPC/NPC%20Guide%20Male.svg',
         position: 'right',
         targetId: 'submit-button',

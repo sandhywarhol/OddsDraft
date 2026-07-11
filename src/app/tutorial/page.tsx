@@ -85,7 +85,8 @@ function getTutorialData(step: number): TutorialStep | null {
     };
     case 6: return {
       speakerTitle: 'Guide',
-      text: `"Once your squad is ready, lock it in by paying the 0.01 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
+      text: `"Once your squad is ready, lock it in by paying the 0.1 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
+
       position: 'right', targetId: 'submit-button',
     };
     case 7: return {
@@ -758,7 +759,7 @@ export default function TutorialPage() {
                           border: '2px solid rgba(255,255,255,0.15)', borderRadius: 4, cursor: 'not-allowed',
                         }}
                       >
-                        LOCK IN LINEUP — 0.01 SOL
+                        LOCK IN LINEUP — 0.1 SOL
                       </button>
                       <p style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
                         Demo mode — real entry available on the Match Schedule

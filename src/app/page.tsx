@@ -700,7 +700,7 @@ function FeaturesSection() {
       tag: 'SYS_CARDS'
     },
     {
-      title: 'Card Marketplace (Coming Soon)',
+      title: 'Card Marketplace',
       desc: 'Trade and sell your rare Skill Cards to other players in the open marketplace.',
       icon: '🏪',
       color: '#10b981',
