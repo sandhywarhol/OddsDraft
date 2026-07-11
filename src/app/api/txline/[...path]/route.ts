@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-// NEXT_PUBLIC_TXLINE_ENV=production overrides the Solana network setting,
-// allowing production TxLINE data on devnet Solana (no real SOL needed).
-const useProdTxLine =
-  process.env.NEXT_PUBLIC_TXLINE_ENV === 'production' ||
-  process.env.NEXT_PUBLIC_SOLANA_NETWORK !== 'devnet';
+// txline-dev.txodds.com is permanently broken — always use production TxLINE.
+// Only fall back to devnet if explicitly requested via NEXT_PUBLIC_TXLINE_ENV=devnet.
+// This allows Solana to stay on devnet (no real SOL) while getting real match data.
+const useProdTxLine = process.env.NEXT_PUBLIC_TXLINE_ENV !== 'devnet';
 
 const TXLINE_ORIGIN = useProdTxLine
   ? 'https://txline.txodds.com'
