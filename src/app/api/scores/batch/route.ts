@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const TXLINE_ORIGIN = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet'
+// Always use mainnet TxLINE — txline-dev.txodds.com is broken.
+// NEXT_PUBLIC_TXLINE_ENV=devnet is the only override; absent = mainnet.
+const TXLINE_ORIGIN = process.env.NEXT_PUBLIC_TXLINE_ENV === 'devnet'
   ? 'https://txline-dev.txodds.com'
   : 'https://txline.txodds.com';
 

@@ -50,8 +50,48 @@ export default function Navbar() {
   }, [connected, publicKey, connection]);
 
 
+  const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
+
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 'var(--z-sticky)' }}>
+
+      {/* Devnet warning banner — only shown when NEXT_PUBLIC_SOLANA_NETWORK=devnet */}
+      {isDevnet && (
+        <div style={{
+          background: 'linear-gradient(90deg, #7c3aed, #4f46e5)',
+          color: '#fff',
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+          textAlign: 'center',
+          padding: '5px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+        }}>
+          <span style={{
+            background: 'rgba(255,255,255,0.18)',
+            borderRadius: 4,
+            padding: '1px 7px',
+            fontSize: '0.6rem',
+            letterSpacing: '0.12em',
+          }}>
+            DEVNET
+          </span>
+          Test network — SOL prizes are valueless devnet tokens · Live match data from TxLINE mainnet
+          <span style={{
+            background: 'rgba(255,255,255,0.18)',
+            borderRadius: 4,
+            padding: '1px 7px',
+            fontSize: '0.6rem',
+            letterSpacing: '0.12em',
+          }}>
+            SMART CONTRACT
+          </span>
+        </div>
+      )}
+
       <nav className="navbar" style={{ position: 'relative', zIndex: 'auto' }}>
       {/* Solid background and shiny effect container */}
       <div className="navbar__bg">

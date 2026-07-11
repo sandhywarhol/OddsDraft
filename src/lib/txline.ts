@@ -5,25 +5,30 @@ import axios from 'axios';
 import idl from './txline_idl.json';
 import type { WalletContextState } from '@solana/wallet-adapter-react';
 
-const IS_DEVNET = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
+// TxLINE subscription always uses mainnet because:
+//   a) txline-dev.txodds.com is currently broken
+//   b) We may run Solana on devnet for prize testing while keeping live match data
+// Override: set NEXT_PUBLIC_TXLINE_ENV=production to force mainnet (already the default).
+// Set NEXT_PUBLIC_TXLINE_ENV=devnet ONLY if txline-dev is ever restored and needed.
+const TXLINE_IS_DEVNET = process.env.NEXT_PUBLIC_TXLINE_ENV === 'devnet';
 
 const TXLINE_PROGRAM_ID = new PublicKey(
-  IS_DEVNET
+  TXLINE_IS_DEVNET
     ? '6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J'
     : '9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA'
 );
 const TXL_TOKEN_MINT = new PublicKey(
-  IS_DEVNET
+  TXLINE_IS_DEVNET
     ? '4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG'
     : 'Zhw9TVKp68a1QrftncMSd6ELXKDtpVMNuMGr1jNwdeL'
 );
 
 // TxLINE sets access-control-allow-origin: * so browser can call directly.
 // Direct calls bypass Vercel's serverless IPs which TxLINE blocks with 403.
-const TXLINE_API_BASE = IS_DEVNET ? 'https://txline-dev.txodds.com' : 'https://txline.txodds.com';
+const TXLINE_API_BASE = TXLINE_IS_DEVNET ? 'https://txline-dev.txodds.com' : 'https://txline.txodds.com';
 
 // Free tier ID differs per network: devnet=1, mainnet=12
-export const SERVICE_LEVEL_ID = IS_DEVNET ? 1 : 12;
+export const SERVICE_LEVEL_ID = TXLINE_IS_DEVNET ? 1 : 12;
 export const DURATION_WEEKS = 4;
 export const SELECTED_LEAGUES: number[] = []; // empty for standard bundle
 
