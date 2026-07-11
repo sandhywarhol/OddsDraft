@@ -1921,11 +1921,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           const parsed = parseLineupData(lineupData);
           if (!parsed || !isMounted) return;
           const { home, away, homeCoach, awayCoach } = parsed;
-          lineupFetchedRef.current = true;
-          if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
+          // Always update the displayed lineup so starters appear immediately
           setRealLineup({ home, away, homeCoach, awayCoach });
           realLineupRef.current = { home, away };
-          console.log(`[LivePage] Real lineup loaded: ${home.length} home, ${away.length} away`);
+          const hasBench = [...home, ...away].some(p => p.starter === false);
+          console.log(`[LivePage] Lineup loaded: ${home.length} home, ${away.length} away, bench: ${hasBench}`);
+          if (hasBench) {
+            // Full squad (starters + bench) received — stop retrying
+            lineupFetchedRef.current = true;
+            if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
+          }
+          // Otherwise keep retrying — bench players announced later than starters
         } catch (err) {
           console.warn('[LivePage] Lineup fetch failed (will retry):', err);
         }
@@ -3616,21 +3622,23 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                           if (matchCompleted) return 'FT';
                           if (atHalfTime) return 'HT';
                           if (txlineStatus === 'live') return minute > 0 ? `${minute}'` : liveClockMinute > 0 ? `~${liveClockMinute}'` : `0'`;
-                          return isFinished ? 'FT' : '—';
+                          // TxLINE not live yet but kickoff has passed — show approximate clock
+                          if (minutesToKickoff === null && liveClockMinute > 0) return `~${liveClockMinute}'`;
+                          return isFinished ? 'FT' : minutesToKickoff === null ? `0'` : '—';
                         })()}
                       </div>
                       {appMode === 'live' ? (
                         <span
-                          className={(txlineStatus === 'live' && !matchCompleted) ? 'badge badge--live' : undefined}
-                          style={(txlineStatus !== 'live' || matchCompleted) ? {
+                          className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
+                          style={(matchCompleted || (txlineStatus !== 'live' && minutesToKickoff !== null)) ? {
                             fontSize: '0.65rem', padding: '2px 8px', borderRadius: 4, fontWeight: 700,
                             background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)',
                             border: '1px solid rgba(255,255,255,0.1)',
                           } : { fontSize: '0.65rem' }}
                         >
-                          {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? (
+                          {matchCompleted ? 'FINAL' : (txlineStatus === 'live' || minutesToKickoff === null) ? (
                             <><span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} /> LIVE</>
-                          ) : txlineStatus === 'connecting' ? 'CONNECTING…' : minutesToKickoff === null ? 'LIVE' : 'WAITING'}
+                          ) : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
                         </span>
                       ) : (
                         <span className="badge badge--live" style={{ fontSize: '0.65rem' }}>
@@ -4041,7 +4049,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
                       }}
                     >
-                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                      {matchCompleted ? 'FINAL' : (txlineStatus === 'live' || minutesToKickoff === null) ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
                     </span>
                   ) : (
                     <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
@@ -4232,7 +4240,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                         border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
                       }}
                     >
-                      {matchCompleted ? 'FINAL' : txlineStatus === 'live' ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
+                      {matchCompleted ? 'FINAL' : (txlineStatus === 'live' || minutesToKickoff === null) ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
                     </span>
                   ) : (
                     <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
