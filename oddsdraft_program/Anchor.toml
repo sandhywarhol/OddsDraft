@@ -6,9 +6,18 @@ skip_local_validator = true
 resolution = true
 skip-lint = false
 
+# ── Program addresses per cluster ─────────────────────────────────────────────
+# Devnet and localnet share the same keypair (target/deploy/oddsdraft_program-keypair.json),
+# so the program ID is identical. If you ever regenerate the keypair, update both entries.
 [programs.localnet]
 oddsdraft_program = "FW8MmmLJ99w5LxVBZAG5T3Lx5WU7vnh1XaSSS2vj8AGJ"
 
+[programs.devnet]
+oddsdraft_program = "FW8MmmLJ99w5LxVBZAG5T3Lx5WU7vnh1XaSSS2vj8AGJ"
+
+# ── Active provider ────────────────────────────────────────────────────────────
+# Change cluster to "devnet" when deploying, then switch back to "localnet" for local dev.
+# Deploy command: anchor deploy --provider.cluster devnet
 [provider]
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"

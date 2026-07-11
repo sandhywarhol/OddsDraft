@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "anchor:build": "cd oddsdraft_program && anchor build",
+    "anchor:deploy:devnet": "bash oddsdraft_program/scripts/deploy-devnet.sh",
+    "anchor:program-id": "cd oddsdraft_program && solana-keygen pubkey target/deploy/oddsdraft_program-keypair.json"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
