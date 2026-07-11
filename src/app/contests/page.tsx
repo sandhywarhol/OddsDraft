@@ -10,7 +10,7 @@ import { useTxLine } from '@/context/TxLineContext';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { MatchResult } from '@/app/api/match/result/route';
+import type { MatchResult, PeriodStats } from '@/app/api/match/result/route';
 import { hasOpenedPack, openCardPack } from '@/lib/card-collection';
 import CardPackOpener from '@/components/CardPackOpener';
 import FlagImage from '@/components/FlagImage';
@@ -100,7 +100,7 @@ export default function ContestsPage() {
     if (Object.keys(scores).length > 0) setFinishedScores(prev => ({ ...scores, ...prev }));
   }, [isDemo, allFixtures]);
 
-  // Fetch live schedule from ESPN (corrects knockout team names / times)
+  // Fetch live schedule from TxLINE (corrects knockout team names / kickoff times)
   useEffect(() => {
     fetch('/api/schedule/wc2026')
       .then(r => r.json())
@@ -698,6 +698,51 @@ export default function ContestsPage() {
                       })}
                     </div>
                   )}
+
+                  {/* Period statistics */}
+                  {matchResult.data.stats && (() => {
+                    const { h1, h2, total } = matchResult.data.stats;
+                    const allRows: { label: string; hKey: keyof PeriodStats; aKey: keyof PeriodStats }[] = [
+                      { label: 'Goals',          hKey: 'homeGoals',   aKey: 'awayGoals'   },
+                      { label: 'Shots',          hKey: 'homeShots',   aKey: 'awayShots'   },
+                      { label: 'Corners',        hKey: 'homeCorners', aKey: 'awayCorners' },
+                      { label: 'Yellow Cards',   hKey: 'homeYellows', aKey: 'awayYellows' },
+                      { label: 'Red Cards',      hKey: 'homeReds',    aKey: 'awayReds'    },
+                      { label: 'Danger Attacks', hKey: 'homeDangers', aKey: 'awayDangers' },
+                    ];
+                    const statRows = allRows.filter(r => (total[r.hKey] as number) > 0 || (total[r.aKey] as number) > 0);
+                    if (statRows.length === 0) return null;
+                    const StatSection = ({ label, data }: { label: string; data: PeriodStats }) => (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 5, opacity: 0.7 }}>{label}</div>
+                        {statRows.map(row => {
+                          const hv = data[row.hKey] as number;
+                          const av = data[row.aKey] as number;
+                          return (
+                            <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', alignItems: 'center', gap: 0, padding: '3px 0' }}>
+                              <div style={{ textAlign: 'right', fontSize: '0.83rem', fontWeight: hv > av ? 700 : 400, color: hv > av ? 'var(--text-primary)' : 'var(--text-muted)', paddingRight: 12, fontVariantNumeric: 'tabular-nums' }}>{hv}</div>
+                              <div style={{ textAlign: 'center', fontSize: '0.67rem', color: 'var(--text-muted)', letterSpacing: '0.03em' }}>{row.label}</div>
+                              <div style={{ textAlign: 'left', fontSize: '0.83rem', fontWeight: av > hv ? 700 : 400, color: av > hv ? 'var(--text-primary)' : 'var(--text-muted)', paddingLeft: 12, fontVariantNumeric: 'tabular-nums' }}>{av}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                    return (
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 14, marginBottom: 4 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', marginBottom: 8 }}>
+                          <div style={{ textAlign: 'right', fontSize: '0.72rem', fontWeight: 700, paddingRight: 12 }}>{matchResult.fixture.homeTeam}</div>
+                          <div style={{ textAlign: 'center', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Statistics</div>
+                          <div style={{ textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, paddingLeft: 12 }}>{matchResult.fixture.awayTeam}</div>
+                        </div>
+                        <StatSection label="1st Half" data={h1} />
+                        <StatSection label="2nd Half" data={h2} />
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}>
+                          <StatSection label="Full Time" data={total} />
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Venue */}
                   {matchResult.data.venue && (

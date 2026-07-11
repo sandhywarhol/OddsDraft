@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
+import { createServiceClient } from '@/lib/supabase';
 
 export interface MatchEvent {
   minute: string;
@@ -10,10 +11,32 @@ export interface MatchEvent {
   teamFlag?: string;
 }
 
+export interface PeriodStats {
+  homeGoals: number;
+  awayGoals: number;
+  homeCorners: number;
+  awayCorners: number;
+  homeYellows: number;
+  awayYellows: number;
+  homeReds: number;
+  awayReds: number;
+  homeShots: number;
+  awayShots: number;
+  homeDangers: number;
+  awayDangers: number;
+}
+
+export interface MatchStats {
+  h1: PeriodStats;
+  h2: PeriodStats;
+  total: PeriodStats;
+}
+
 export interface MatchResult {
   events: MatchEvent[];
   venue?: string;
   attendance?: string;
+  stats?: MatchStats;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -52,8 +75,13 @@ function fmtUTC(d: Date) {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
+function blankPeriod(): PeriodStats {
+  return { homeGoals: 0, awayGoals: 0, homeCorners: 0, awayCorners: 0, homeYellows: 0, awayYellows: 0, homeReds: 0, awayReds: 0, homeShots: 0, awayShots: 0, homeDangers: 0, awayDangers: 0 };
+}
+
+// ── ESPN helpers ──────────────────────────────────────────────────────────────
+
 async function fetchDayEvents(dateStr: string): Promise<any[]> {
-  const now = Date.now();
   const cutoff = new Date(); cutoff.setUTCDate(cutoff.getUTCDate() - 3);
   const isRecent = new Date(`${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`).getTime() >= cutoff.getTime();
   try {
@@ -76,38 +104,123 @@ async function fetchEventDetail(internalRef: string, isLive: boolean): Promise<a
   } catch { return null; }
 }
 
+// ── TxLINE period stats ───────────────────────────────────────────────────────
+
+async function fetchTxLineStats(appUrl: string, fixtureId: string): Promise<MatchStats | null> {
+  try {
+    const res = await fetch(`${appUrl}/api/txline/api/fixtures/snapshot`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    const fixtures: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
+    const tf = fixtures.find(f => String(f.FixtureId ?? f.fixtureId ?? '') === fixtureId);
+    if (!tf?.Score) return null;
+
+    // Respect Participant1IsHome so home stats map to the correct side
+    const isP1Home = tf.Participant1IsHome !== false;
+    const homeScore = isP1Home ? tf.Score.Participant1 : tf.Score.Participant2;
+    const awayScore = isP1Home ? tf.Score.Participant2 : tf.Score.Participant1;
+
+    const ext = (p: any): { goals: number; corners: number; yellows: number; reds: number } => ({
+      goals:   Number(p?.Goals   ?? 0),
+      corners: Number(p?.Corners ?? 0),
+      yellows: Number(p?.YellowCards ?? 0),
+      reds:    Number(p?.RedCards    ?? 0),
+    });
+
+    const h1H = ext(homeScore?.Period1);
+    const h1A = ext(awayScore?.Period1);
+    const h2H = ext(homeScore?.Period2);
+    const h2A = ext(awayScore?.Period2);
+    const totH = ext(homeScore?.Total ?? homeScore);
+    const totA = ext(awayScore?.Total ?? awayScore);
+
+    return {
+      h1:    { ...blankPeriod(), homeGoals: h1H.goals,   awayGoals: h1A.goals,   homeCorners: h1H.corners,  awayCorners: h1A.corners,  homeYellows: h1H.yellows,  awayYellows: h1A.yellows,  homeReds: h1H.reds,  awayReds: h1A.reds  },
+      h2:    { ...blankPeriod(), homeGoals: h2H.goals,   awayGoals: h2A.goals,   homeCorners: h2H.corners,  awayCorners: h2A.corners,  homeYellows: h2H.yellows,  awayYellows: h2A.yellows,  homeReds: h2H.reds,  awayReds: h2A.reds  },
+      total: { ...blankPeriod(), homeGoals: totH.goals,  awayGoals: totA.goals,  homeCorners: totH.corners, awayCorners: totA.corners, homeYellows: totH.yellows, awayYellows: totA.yellows, homeReds: totH.reds, awayReds: totA.reds },
+    };
+  } catch { return null; }
+}
+
+// ── Supabase event counts (shots, dangers) ────────────────────────────────────
+
+async function fetchSupabaseEventCounts(
+  fixtureId: string,
+  homeTeam: string,
+): Promise<{ h1Home: Partial<PeriodStats>; h1Away: Partial<PeriodStats>; h2Home: Partial<PeriodStats>; h2Away: Partial<PeriodStats>; totHome: Partial<PeriodStats>; totAway: Partial<PeriodStats> } | null> {
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from('live_match_events')
+      .select('event_type, team_name, minute')
+      .eq('fixture_id', fixtureId)
+      .in('event_type', ['shot', 'danger_attack', 'corner_kick']);
+    if (error || !data?.length) return null;
+
+    const counts = {
+      h1Home: { homeShots: 0, homeDangers: 0, homeCorners: 0 },
+      h1Away: { awayShots: 0, awayDangers: 0, awayCorners: 0 },
+      h2Home: { homeShots: 0, homeDangers: 0, homeCorners: 0 },
+      h2Away: { awayShots: 0, awayDangers: 0, awayCorners: 0 },
+      totHome: { homeShots: 0, homeDangers: 0, homeCorners: 0 },
+      totAway: { awayShots: 0, awayDangers: 0, awayCorners: 0 },
+    };
+
+    for (const ev of data) {
+      const isHome = teamsMatch(homeTeam, ev.team_name ?? '');
+      const isH1 = (Number(ev.minute) || 0) <= 45;
+      const half = isH1 ? (isHome ? counts.h1Home : counts.h1Away) : (isHome ? counts.h2Home : counts.h2Away);
+      const tot = isHome ? counts.totHome : counts.totAway;
+      if (ev.event_type === 'shot')          { (half as any)[isHome ? 'homeShots' : 'awayShots']++; (tot as any)[isHome ? 'homeShots' : 'awayShots']++; }
+      if (ev.event_type === 'danger_attack') { (half as any)[isHome ? 'homeDangers' : 'awayDangers']++; (tot as any)[isHome ? 'homeDangers' : 'awayDangers']++; }
+      if (ev.event_type === 'corner_kick')   { (half as any)[isHome ? 'homeCorners' : 'awayCorners']++; (tot as any)[isHome ? 'homeCorners' : 'awayCorners']++; }
+    }
+    return counts;
+  } catch { return null; }
+}
+
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 // GET /api/match/result?fixtureId=18176123
-// Returns goals, cards, venue and attendance for a completed fixture.
-// Data is sourced and normalised server-side; no third-party service is
-// referenced in the public request or response.
+// Returns goals, cards, venue, attendance and H1/H2/total statistics.
+// ESPN provides the event timeline; TxLINE + Supabase provide period breakdowns.
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const fixtureId = url.searchParams.get('fixtureId');
   if (!fixtureId) return NextResponse.json({ error: 'Missing fixtureId' }, { status: 400 });
 
-  // Look up fixture from our own schedule
   const staticFixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
   if (!staticFixture) return NextResponse.json({ events: [] });
 
-  // Caller may pass correct team names (e.g. from ESPN schedule API) to override
-  // the static names which can be wrong for knockout matches (pre-tournament predictions).
   const fixture = {
     ...staticFixture,
     homeTeam: url.searchParams.get('homeTeam') ?? staticFixture.homeTeam,
     awayTeam: url.searchParams.get('awayTeam') ?? staticFixture.awayTeam,
   };
 
-  // Search ±1 day around kickoff — ESPN indexes matches by local kickoff date which
-  // can differ from UTC date when the match falls near midnight in either direction.
   const kickoff = new Date(fixture.kickoffAt);
   const datesToTry = [-1, 0, 1].map(delta => {
     const d = new Date(kickoff.getTime() + delta * 86_400_000);
     return fmtUTC(d);
   });
-  const allDayEvents = (await Promise.all(datesToTry.map(fetchDayEvents))).flat();
 
+  const now = Date.now();
+  const koMs = kickoff.getTime();
+  const isLive = koMs > 0 && now > koMs && now < koMs + 3 * 60 * 60 * 1000;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
+
+  // Fetch ESPN + TxLINE + Supabase in parallel
+  const [allDayEventsResult, txlineResult, supabaseResult] = await Promise.allSettled([
+    Promise.all(datesToTry.map(fetchDayEvents)).then(arrays => arrays.flat()),
+    fetchTxLineStats(appUrl, fixtureId),
+    fetchSupabaseEventCounts(fixtureId, fixture.homeTeam),
+  ]);
+
+  const allDayEvents = allDayEventsResult.status === 'fulfilled' ? allDayEventsResult.value : [];
+  const txStats     = txlineResult.status     === 'fulfilled' ? txlineResult.value     : null;
+  const evCounts    = supabaseResult.status   === 'fulfilled' ? supabaseResult.value   : null;
+
+  // ── ESPN event timeline ───────────────────────────────────────────────────
   const findMatch = (evList: any[]) => evList.find(ev => {
     const comp = ev.competitions?.[0];
     if (!comp) return false;
@@ -118,23 +231,11 @@ export async function GET(req: NextRequest) {
     return teamsMatch(fixture.homeTeam, h) && teamsMatch(fixture.awayTeam, a);
   });
 
-  const event = findMatch(allDayEvents);
-
-  if (!event?.id) return NextResponse.json({ events: [] });
-
-  // Determine if match is currently live (started but not finished)
-  const now = Date.now();
-  const koMs = new Date(fixture.kickoffAt).getTime();
-  const isLive = koMs > 0 && now > koMs && now < koMs + 3 * 60 * 60 * 1000;
-
-  // Fetch full match detail using the internal reference
-  const detail = await fetchEventDetail(event.id, isLive);
-  if (!detail) return NextResponse.json({ events: [] });
+  const espnEvent = findMatch(allDayEvents);
+  const detail = espnEvent?.id ? await fetchEventDetail(espnEvent.id, isLive) : null;
 
   const events: MatchEvent[] = [];
-  // Track minute+type keys to avoid duplicating the same event from multiple ESPN arrays
   const seenKeys = new Set<string>();
-
   const pushEvent = (ev: MatchEvent) => {
     const key = `${ev.type}-${ev.minute}-${ev.player.slice(0,6)}`;
     if (seenKeys.has(key)) return;
@@ -147,54 +248,84 @@ export async function GET(req: NextRequest) {
     : teamsMatch(fixture.awayTeam, teamName) ? fixture.awayTeam
     : teamName;
 
-  // Goals from scoringPlays (standard field)
-  for (const play of (detail.scoringPlays ?? [])) {
-    const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
-    const text: string = play.text ?? '';
-    const assistMatch = text.match(/\(([^)]+)\)/);
-    const player = text.replace(/\s*\([^)]*\)/, '').trim();
-    pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
+  if (detail) {
+    // Goals from scoringPlays
+    for (const play of (detail.scoringPlays ?? [])) {
+      const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
+      const text: string = play.text ?? '';
+      const assistMatch = text.match(/\(([^)]+)\)/);
+      const player = text.replace(/\s*\([^)]*\)/, '').trim();
+      pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
+    }
+
+    // Goals + cards from keyEvents (extra-time goals are often only here)
+    for (const play of (detail.keyEvents ?? detail.keyPlays ?? [])) {
+      const typeText = (play.type?.text ?? '').toLowerCase();
+      const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
+      const isGoalEvent = typeText.includes('goal') || play.scoringPlay === true || play.isScoringPlay === true;
+      const isCardEvent = typeText.includes('card');
+      if (!isGoalEvent && !isCardEvent) continue;
+      const text: string = play.text ?? '';
+      const assistMatch = text.match(/\(([^)]+)\)/);
+      const player = play.participants?.[0]?.athlete?.displayName ?? text.replace(/\s*\([^)]*\)/, '').trim();
+      if (!player) continue;
+      pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
+    }
+
+    // Remaining plays (scoring plays not in scoringPlays)
+    for (const play of (detail.plays ?? [])) {
+      if (!play.scoringPlay && !play.isScoringPlay) continue;
+      const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
+      const text: string = play.text ?? play.athletesInvolved?.[0]?.displayName ?? '';
+      if (!text) continue;
+      const assistMatch = text.match(/\(([^)]+)\)/);
+      const player = play.participants?.[0]?.athlete?.displayName ?? play.athletesInvolved?.[0]?.displayName ?? text.replace(/\s*\([^)]*\)/, '').trim();
+      if (!player) continue;
+      pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
+    }
+
+    events.sort((a, b) => (parseInt(a.minute) || 0) - (parseInt(b.minute) || 0));
   }
 
-  // Goals + cards from keyEvents — ESPN sometimes puts goals here when scoringPlays is empty,
-  // and extra-time goals are often only here (not in scoringPlays).
-  for (const play of (detail.keyEvents ?? detail.keyPlays ?? [])) {
-    const typeText = (play.type?.text ?? '').toLowerCase();
-    const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
-    // Include: explicit goal/card types, or any event tagged as a scoring play
-    const isGoalEvent = typeText.includes('goal') || play.scoringPlay === true || play.isScoringPlay === true;
-    const isCardEvent = typeText.includes('card');
-    if (!isGoalEvent && !isCardEvent) continue;
-    const text: string = play.text ?? '';
-    const assistMatch = text.match(/\(([^)]+)\)/);
-    const player = play.participants?.[0]?.athlete?.displayName
-      ?? text.replace(/\s*\([^)]*\)/, '').trim();
-    if (!player) continue;
-    pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
-  }
-
-  // Also check detail.scoringPlays more broadly in case some goals are only in a sub-array
-  for (const play of (detail.plays ?? [])) {
-    if (!play.scoringPlay && !play.isScoringPlay) continue;
-    const type = eventType(play.type?.text ?? '', play.scoringPlay?.scoringType ?? '');
-    const text: string = play.text ?? play.athletesInvolved?.[0]?.displayName ?? '';
-    if (!text) continue;
-    const assistMatch = text.match(/\(([^)]+)\)/);
-    const player = play.participants?.[0]?.athlete?.displayName
-      ?? play.athletesInvolved?.[0]?.displayName
-      ?? text.replace(/\s*\([^)]*\)/, '').trim();
-    if (!player) continue;
-    pushEvent({ minute: play.clock?.displayValue ?? '?', type, player, assist: assistMatch?.[1], team: resolveTeam(play.team?.displayName ?? play.team?.name ?? '') });
-  }
-
-  events.sort((a, b) => (parseInt(a.minute) || 0) - (parseInt(b.minute) || 0));
-
-  // Venue / attendance — strip third-party source names from values
-  const gameInfo = detail.gameInfo ?? detail.header?.competitions?.[0];
+  const gameInfo = detail?.gameInfo ?? detail?.header?.competitions?.[0];
   const venue = gameInfo?.venue?.fullName ?? gameInfo?.venue?.name;
   const attendance = gameInfo?.attendance != null ? Number(gameInfo.attendance).toLocaleString() : undefined;
 
-  const result: MatchResult = { events, venue, attendance };
+  // ── Build combined stats (TxLINE period data + Supabase shot/danger counts) ─
+  let stats: MatchStats | undefined;
+  if (txStats || evCounts) {
+    const base: MatchStats = txStats ?? { h1: blankPeriod(), h2: blankPeriod(), total: blankPeriod() };
+
+    if (evCounts) {
+      // Shots + dangers always come from Supabase (TxLINE snapshot doesn't have shot counts)
+      base.h1.homeShots    = evCounts.h1Home.homeShots    ?? 0;
+      base.h1.awayShots    = evCounts.h1Away.awayShots    ?? 0;
+      base.h1.homeDangers  = evCounts.h1Home.homeDangers  ?? 0;
+      base.h1.awayDangers  = evCounts.h1Away.awayDangers  ?? 0;
+      base.h2.homeShots    = evCounts.h2Home.homeShots    ?? 0;
+      base.h2.awayShots    = evCounts.h2Away.awayShots    ?? 0;
+      base.h2.homeDangers  = evCounts.h2Home.homeDangers  ?? 0;
+      base.h2.awayDangers  = evCounts.h2Away.awayDangers  ?? 0;
+      base.total.homeShots   = evCounts.totHome.homeShots   ?? 0;
+      base.total.awayShots   = evCounts.totAway.awayShots   ?? 0;
+      base.total.homeDangers = evCounts.totHome.homeDangers ?? 0;
+      base.total.awayDangers = evCounts.totAway.awayDangers ?? 0;
+
+      // Use Supabase corner counts as fallback when TxLINE has no period breakdown
+      if (base.h1.homeCorners === 0 && base.h1.awayCorners === 0 && base.h2.homeCorners === 0 && base.h2.awayCorners === 0) {
+        base.h1.homeCorners    = evCounts.h1Home.homeCorners    ?? 0;
+        base.h1.awayCorners    = evCounts.h1Away.awayCorners    ?? 0;
+        base.h2.homeCorners    = evCounts.h2Home.homeCorners    ?? 0;
+        base.h2.awayCorners    = evCounts.h2Away.awayCorners    ?? 0;
+        base.total.homeCorners = evCounts.totHome.homeCorners   ?? 0;
+        base.total.awayCorners = evCounts.totAway.awayCorners   ?? 0;
+      }
+    }
+
+    stats = base;
+  }
+
+  const result: MatchResult = { events, venue, attendance, stats };
   return NextResponse.json(result, {
     headers: {
       'Cache-Control': isLive
