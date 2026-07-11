@@ -112,6 +112,7 @@ export const LINEUP_POS_TO_CARD_POS: Record<string, CardPosition[]> = {
   GK:  ['Goalkeeper'],
   DEF: ['Defender'],
   MID: ['Midfielder'],
+  SWG: ['Winger'],
   ATT: ['Winger', 'Striker'],
 };
 

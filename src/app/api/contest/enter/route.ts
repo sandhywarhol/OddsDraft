@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { ENTRY_FEE_SOL } from '@/lib/fantasy-engine';
+import { deriveContestPDA, deriveParticipantPDA } from '@/lib/oddsdraft-anchor';
+
+const SMART_CONTRACT_ENABLED =
+  process.env.SMART_CONTRACT_ENABLED === 'true' ||
+  process.env.NEXT_PUBLIC_SMART_CONTRACT_ENABLED === 'true';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -144,13 +149,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── On-chain entry payment verification ──────────────────────────────
-    // When a real tx sig is provided, verify the transfer happened on-chain.
-    // Null sig is allowed for demo mode (wallet not connected).
+    // Smart contract mode: verify join_contest was called (Participant PDA exists).
+    // Legacy mode: verify SOL transfer to treasury wallet.
+    // No txSig = demo mode (wallet not connected) — allowed for testing.
     if (entryTxSig) {
-      const treasuryWallet = process.env.NEXT_PUBLIC_TREASURY_WALLET;
-      if (!treasuryWallet) {
-        return NextResponse.json({ error: 'Server configuration error: treasury not set' }, { status: 500 });
-      }
+      const rpc = process.env.SERVER_SOLANA_RPC || process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+      const connection = new Connection(rpc, 'confirmed');
 
       // Nonce check — reject reused signatures
       const { data: existingSig } = await supabase
@@ -162,38 +166,68 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Transaction signature already used' }, { status: 409 });
       }
 
-      try {
-        const rpc = process.env.SERVER_SOLANA_RPC || process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
-        const connection = new Connection(rpc, 'confirmed');
-        const txInfo = await connection.getParsedTransaction(entryTxSig, {
-          commitment: 'confirmed',
-          maxSupportedTransactionVersion: 0,
-        });
-
-        if (!txInfo) {
-          return NextResponse.json({ error: 'Transaction not found or not yet confirmed' }, { status: 400 });
+      if (SMART_CONTRACT_ENABLED) {
+        // Verify that the Participant PDA was created on-chain (= join_contest was called).
+        try {
+          const [contestPDA]     = deriveContestPDA(fixtureId, contestType);
+          const [participantPDA] = deriveParticipantPDA(contestPDA, new PublicKey(walletAddress));
+          const participantAccount = await connection.getAccountInfo(participantPDA);
+          if (!participantAccount) {
+            return NextResponse.json(
+              { error: 'Smart contract entry not found: call join_contest first' },
+              { status: 400 }
+            );
+          }
+          // Also verify the tx sig actually belongs to this user (anti-replay)
+          const txInfo = await connection.getTransaction(entryTxSig, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
+          });
+          if (!txInfo) {
+            return NextResponse.json({ error: 'Transaction not found or not yet confirmed' }, { status: 400 });
+          }
+          const signerKeys = txInfo.transaction.message.staticAccountKeys ?? (txInfo.transaction.message as any).accountKeys ?? [];
+          const walletInTx = signerKeys.some((k: PublicKey) => k.toBase58() === walletAddress);
+          if (!walletInTx) {
+            return NextResponse.json({ error: 'Transaction was not signed by your wallet' }, { status: 400 });
+          }
+        } catch (err: any) {
+          return NextResponse.json({ error: `Smart contract verification failed: ${err.message}` }, { status: 400 });
         }
-
-        const ENTRY_FEE_LAMPORTS = Math.floor(ENTRY_FEE_SOL * LAMPORTS_PER_SOL);
-        const instructions = txInfo.transaction?.message?.instructions ?? [];
-        const verified = instructions.some((ix: any) => {
-          if (ix.parsed?.type !== 'transfer') return false;
-          const info = ix.parsed.info;
-          return (
-            info.destination === treasuryWallet &&
-            info.source === walletAddress &&
-            Number(info.lamports) >= ENTRY_FEE_LAMPORTS
-          );
-        });
-
-        if (!verified) {
-          return NextResponse.json(
-            { error: 'Entry payment not verified: expected SOL transfer from your wallet to treasury' },
-            { status: 400 }
-          );
+      } else {
+        // Legacy: verify SOL transfer to treasury
+        const treasuryWallet = process.env.NEXT_PUBLIC_TREASURY_WALLET;
+        if (!treasuryWallet) {
+          return NextResponse.json({ error: 'Server configuration error: treasury not set' }, { status: 500 });
         }
-      } catch (err: any) {
-        return NextResponse.json({ error: `Transaction verification failed: ${err.message}` }, { status: 400 });
+        try {
+          const txInfo = await connection.getParsedTransaction(entryTxSig, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
+          });
+          if (!txInfo) {
+            return NextResponse.json({ error: 'Transaction not found or not yet confirmed' }, { status: 400 });
+          }
+          const ENTRY_FEE_LAMPORTS = Math.floor(ENTRY_FEE_SOL * LAMPORTS_PER_SOL);
+          const instructions = txInfo.transaction?.message?.instructions ?? [];
+          const verified = instructions.some((ix: any) => {
+            if (ix.parsed?.type !== 'transfer') return false;
+            const info = ix.parsed.info;
+            return (
+              info.destination === treasuryWallet &&
+              info.source === walletAddress &&
+              Number(info.lamports) >= ENTRY_FEE_LAMPORTS
+            );
+          });
+          if (!verified) {
+            return NextResponse.json(
+              { error: 'Entry payment not verified: expected SOL transfer from your wallet to treasury' },
+              { status: 400 }
+            );
+          }
+        } catch (err: any) {
+          return NextResponse.json({ error: `Transaction verification failed: ${err.message}` }, { status: 400 });
+        }
       }
     }
 

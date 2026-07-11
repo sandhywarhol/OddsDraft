@@ -16,6 +16,7 @@ import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { buildJoinContestIx } from '@/lib/oddsdraft-anchor';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import FlagImage from '@/components/FlagImage';
 import { prefetchPlayerPhotos } from '@/lib/player-photos';
@@ -626,16 +627,27 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       } catch { /* ignore */ }
 
       // ── Steps 1-4: Payment ────────────────────────────────────────────
-      const treasuryAddr = process.env.NEXT_PUBLIC_TREASURY_WALLET;
-      if (treasuryAddr) {
-        const treasury = new PublicKey(treasuryAddr);
+      if (process.env.NEXT_PUBLIC_SMART_CONTRACT_ENABLED === 'true') {
+        // Smart contract path: call join_contest on the Anchor program.
+        // Step 1: ensure Contest PDA exists on-chain, then get blockhash.
+        setStep(1, { status: 'loading', detail: 'Preparing contest on-chain…' });
+        try {
+          const prepRes = await fetch(`/api/contest/prepare?fixtureId=${contestId}&contestType=${contestType}`);
+          if (!prepRes.ok) {
+            const err = await prepRes.json().catch(() => ({ error: 'Prepare failed' }));
+            fail(1, err.error || `Prepare contest failed (HTTP ${prepRes.status})`);
+            return;
+          }
+        } catch (e: any) {
+          fail(1, `Failed to prepare contest: ${e?.message ?? 'Network error'}`);
+          return;
+        }
+
         const MAX_ATTEMPTS = 3;
         let paid = false;
         let lastSig: string | null = null;
 
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-          // Step 1: blockhash
-          setStep(1, { status: 'loading', detail: attempt > 1 ? `Attempt ${attempt}/${MAX_ATTEMPTS}` : undefined });
           let blockhash = '';
           let lastValidBlockHeight = 0;
           try {
@@ -646,15 +658,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           }
           setStep(1, { status: 'ok', detail: `${blockhash.slice(0, 8)}…` });
 
-          // Step 2: wallet approval
-          setStep(2, { status: 'loading', detail: 'Approve in your wallet…' });
-          const tx = new Transaction().add(
-            SystemProgram.transfer({
-              fromPubkey: publicKey,
-              toPubkey: treasury,
-              lamports: Math.floor(0.01 * LAMPORTS_PER_SOL),
-            })
-          );
+          // Step 2: build join_contest tx and get wallet approval
+          setStep(2, { status: 'loading', detail: attempt > 1 ? `Approve in wallet (attempt ${attempt}/${MAX_ATTEMPTS})…` : 'Approve in your wallet…' });
+          const joinIx = buildJoinContestIx(contestId, contestType, publicKey);
+          const tx = new Transaction().add(joinIx);
           tx.recentBlockhash = blockhash;
           tx.feePayer = publicKey;
 
@@ -699,7 +706,6 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               errMsg.includes('expired');
 
             if (isExpiry && lastSig) {
-              // Tx may have landed even if confirmTransaction timed out — verify on-chain
               try {
                 const statuses = await connection.getSignatureStatuses([lastSig]);
                 const st = statuses?.value?.[0];
@@ -726,6 +732,109 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         if (!paid) {
           fail(4, 'Transaction expired after all retry attempts. Please try again.');
           return;
+        }
+      } else {
+        // Legacy path: direct SOL transfer to treasury wallet.
+        const treasuryAddr = process.env.NEXT_PUBLIC_TREASURY_WALLET;
+        if (treasuryAddr) {
+          const treasury = new PublicKey(treasuryAddr);
+          const MAX_ATTEMPTS = 3;
+          let paid = false;
+          let lastSig: string | null = null;
+
+          for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            // Step 1: blockhash
+            setStep(1, { status: 'loading', detail: attempt > 1 ? `Attempt ${attempt}/${MAX_ATTEMPTS}` : undefined });
+            let blockhash = '';
+            let lastValidBlockHeight = 0;
+            try {
+              ({ blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed'));
+            } catch (e: any) {
+              fail(1, `Failed to fetch blockhash: ${e?.message ?? 'RPC error'}`);
+              return;
+            }
+            setStep(1, { status: 'ok', detail: `${blockhash.slice(0, 8)}…` });
+
+            // Step 2: wallet approval
+            setStep(2, { status: 'loading', detail: 'Approve in your wallet…' });
+            const tx = new Transaction().add(
+              SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: treasury,
+                lamports: Math.floor(0.01 * LAMPORTS_PER_SOL),
+              })
+            );
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = publicKey;
+
+            let sig = '';
+            try {
+              sig = await sendTransaction(tx, connection, {
+                skipPreflight: true,
+                preflightCommitment: 'confirmed',
+                maxRetries: 5,
+              });
+            } catch (signErr: any) {
+              const msg: string = signErr?.message ?? '';
+              if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancelled') || msg.toLowerCase().includes('denied')) {
+                fail(2, 'Transaction rejected in wallet.');
+              } else {
+                fail(2, msg || 'Wallet signing failed.');
+              }
+              return;
+            }
+            lastSig = sig;
+            setStep(2, { status: 'ok' });
+
+            // Step 3: broadcast
+            setStep(3, { status: 'ok', detail: `${sig.slice(0, 8)}…${sig.slice(-6)}` });
+
+            // Step 4: confirm
+            setStep(4, { status: 'loading', detail: 'Waiting for network confirmation…' });
+            try {
+              await connection.confirmTransaction(
+                { signature: sig, blockhash, lastValidBlockHeight },
+                'confirmed'
+              );
+              entryTxSig = sig;
+              paid = true;
+              setStep(4, { status: 'ok', detail: sig.slice(0, 8) + '…' + sig.slice(-6) });
+              break;
+            } catch (confErr: any) {
+              const errMsg: string = confErr?.message ?? '';
+              const isExpiry =
+                errMsg.includes('block height exceeded') ||
+                errMsg.includes('Blockhash not found') ||
+                errMsg.includes('expired');
+
+              if (isExpiry && lastSig) {
+                try {
+                  const statuses = await connection.getSignatureStatuses([lastSig]);
+                  const st = statuses?.value?.[0];
+                  if (st?.confirmationStatus === 'confirmed' || st?.confirmationStatus === 'finalized') {
+                    entryTxSig = lastSig;
+                    paid = true;
+                    setStep(4, { status: 'ok', detail: `Confirmed (on-chain verify) ${lastSig.slice(0, 8)}…` });
+                    break;
+                  }
+                } catch { /* fall through */ }
+              }
+
+              if (isExpiry && attempt < MAX_ATTEMPTS) {
+                setStep(4, { status: 'pending', detail: `Blockhash expired — retrying (${attempt}/${MAX_ATTEMPTS})…` });
+                lastSig = null;
+                continue;
+              }
+
+              fail(4, errMsg || 'Transaction confirmation failed.');
+              return;
+            }
+          }
+
+          if (!paid) {
+            fail(4, 'Transaction expired after all retry attempts. Please try again.');
+            return;
+          }
         }
       }
 

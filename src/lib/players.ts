@@ -987,3 +987,110 @@ export function getDynamicEvents(fixture: DemoFixture, baseEvents: any[]): any[]
     };
   });
 }
+
+// Dedicated Argentina vs Germany event script for the 'special-arg-ger' demo fixture.
+// Uses correct player IDs from wc2026-players-static.ts — no remapping needed.
+// Narrative: Argentina 3-2 Germany (Germany lead twice, Argentina comeback)
+export const ARG_GER_EVENTS = [
+  // KICK OFF
+  { id: 'ag_e0', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'KICK OFF! Argentina vs Germany — World Cup 2026 Semi-Final! The stadium is electric!' },
+  // Starting XI — Argentina
+  { id: 'ag_xi_ema', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez', type: 'starting_xi', points: 2, description: 'Emiliano Martínez starts in goal for Argentina — the 2022 World Cup hero!' },
+  { id: 'ag_xi_rom', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',        playerId: 'arg-romero',    type: 'starting_xi', points: 2, description: 'Cristian Romero anchors the Argentine defence tonight.' },
+  { id: 'ag_xi_lma', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lis. Martínez', playerId: 'arg-martinez',  type: 'starting_xi', points: 2, description: 'Lisandro Martínez alongside Romero at centre-back for Argentina.' },
+  { id: 'ag_xi_all', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-allister',  type: 'starting_xi', points: 2, description: 'Alexis Mac Allister controls the midfield for Argentina — the heartbeat of this team.' },
+  { id: 'ag_xi_mes', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',          playerId: 'arg-messi',     type: 'starting_xi', points: 2, description: 'MESSI starts — chasing a second World Cup Final. Can he deliver again?' },
+  { id: 'ag_xi_lau', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro',        playerId: 'arg-lmartinez', type: 'starting_xi', points: 2, description: 'Lautaro Martínez leads the Argentine attack alongside Álvarez.' },
+  { id: 'ag_xi_alv', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez',        playerId: 'arg-alvarez',   type: 'starting_xi', points: 2, description: 'Julián Álvarez starts up front — a dangerous presence alongside Lautaro.' },
+  // Starting XI — Germany
+  { id: 'ag_xi_neu', minute: 0, team: 'Germany', teamFlag: '🇩🇪', player: 'Neuer',    playerId: 'ger-neuer',    type: 'starting_xi', points: 2, description: 'Manuel Neuer starts in goal for Germany — still one of the world\'s very best.' },
+  { id: 'ag_xi_rue', minute: 0, team: 'Germany', teamFlag: '🇩🇪', player: 'Rüdiger',  playerId: 'ger-ruediger', type: 'starting_xi', points: 2, description: 'Antonio Rüdiger commands the German backline with pace and presence.' },
+  { id: 'ag_xi_tah', minute: 0, team: 'Germany', teamFlag: '🇩🇪', player: 'Tah',      playerId: 'ger-tah',      type: 'starting_xi', points: 2, description: 'Jonathan Tah partners Rüdiger at centre-back — a formidable defensive duo.' },
+  { id: 'ag_xi_gor', minute: 0, team: 'Germany', teamFlag: '🇩🇪', player: 'Goretzka', playerId: 'ger-goretzka', type: 'starting_xi', points: 2, description: 'Leon Goretzka provides power and energy from central midfield.' },
+  { id: 'ag_xi_mus', minute: 0, team: 'Germany', teamFlag: '🇩🇪', player: 'Musiala',  playerId: 'ger-musiala',  type: 'starting_xi', points: 2, description: 'Jamal Musiala — Germany\'s match-winner — ready to unlock any defence tonight.' },
+  { id: 'ag_xi_wir', minute: 0, team: 'Germany', teamFlag: '🇩🇪', player: 'Wirtz',    playerId: 'ger-wirtz',    type: 'starting_xi', points: 2, description: 'Florian Wirtz — tournament revelation — starts on the left for Germany.' },
+  { id: 'ag_xi_hav', minute: 0, team: 'Germany', teamFlag: '🇩🇪', player: 'Havertz',  playerId: 'ger-havertz',  type: 'starting_xi', points: 2, description: 'Kai Havertz leads the German attack — direct, powerful, dangerous in the box.' },
+
+  // FIRST HALF
+  { id: 'ag_d1', minute: 8, team: 'Germany', teamFlag: '🇩🇪', player: 'Musiala', playerId: 'ger-musiala', type: 'danger_attack', points: 0, description: 'Musiala drives into the Argentine half! Germany pressing with intent from the start.' },
+
+  { id: 'ag_asst_gor1', minute: 11, team: 'Germany', teamFlag: '🇩🇪', player: 'Goretzka', playerId: 'ger-goretzka', type: 'assist', points: 6, description: 'Goretzka surges from deep and threads a perfectly weighted through ball for Havertz!' },
+  { id: 'ag_goal_hav', minute: 12, team: 'Germany', teamFlag: '🇩🇪', player: 'Havertz', playerId: 'ger-havertz', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! Havertz rounds Emiliano Martínez and rolls it into an empty net — Germany lead!' },
+  { id: 'ag_conc_ema1', minute: 12, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-emartinez', type: 'goal_conceded', points: -1, description: 'Emiliano Martínez caught off his line — Havertz punishes the Argentine backline.' },
+  { id: 'ag_conc_rom1', minute: 12, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'goal_conceded', points: -1, description: 'Romero appeals for offside but the flag stays down — Havertz was perfectly timed.' },
+
+  { id: 'ag_d2', minute: 20, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Argentina finding their rhythm — Messi drifting inside, demanding the ball!' },
+
+  { id: 'ag_save_ema1', minute: 26, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-emartinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez tips Musiala\'s curling effort over the bar! Argentina survive.' },
+
+  { id: 'ag_yc_rue', minute: 30, team: 'Germany', teamFlag: '🇩🇪', player: 'Rüdiger', playerId: 'ger-ruediger', type: 'yellow_card', points: -2, description: 'Yellow card for Rüdiger — catches Álvarez late to halt a dangerous counter.' },
+
+  { id: 'ag_d3', minute: 35, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'danger_attack', points: 0, description: 'ARGENTINA PRESSING! Álvarez cutting inside, driving at the German defence!' },
+
+  { id: 'ag_asst_mes1', minute: 37, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'MESSI — a delightful first-time ball slices the German defence clean open for Lautaro!' },
+  { id: 'ag_goal_lau', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro', playerId: 'arg-lmartinez', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! Lautaro slides the ball under Neuer — Argentina level! The stadium is on its feet!' },
+  { id: 'ag_conc_neu1', minute: 38, team: 'Germany', teamFlag: '🇩🇪', player: 'Neuer', playerId: 'ger-neuer', type: 'goal_conceded', points: -1, description: 'Neuer wrong-footed by Lautaro\'s precise placement — absolutely no chance.' },
+  { id: 'ag_conc_rue1', minute: 38, team: 'Germany', teamFlag: '🇩🇪', player: 'Rüdiger', playerId: 'ger-ruediger', type: 'goal_conceded', points: -1, description: 'Rüdiger failed to track Lautaro\'s run — Argentina punish the lapse ruthlessly.' },
+
+  { id: 'ag_save_neu1', minute: 42, team: 'Germany', teamFlag: '🇩🇪', player: 'Neuer', playerId: 'ger-neuer', type: 'goalkeeper_save', points: 1, description: 'Neuer stretches to his right to palm away Álvarez\'s thunderbolt — world class!' },
+
+  { id: 'ag_poss_mes', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'possession_bonus', points: 1, description: 'Messi dominated the first half — pulling strings, controlling every phase of play.' },
+  { id: 'ag_poss_mus', minute: 44, team: 'Germany', teamFlag: '🇩🇪', player: 'Musiala', playerId: 'ger-musiala', type: 'possession_bonus', points: 1, description: 'Musiala was everywhere in the first half — carrying, probing, creating danger.' },
+
+  { id: 'ag_ht', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half Time! Argentina 1–1 Germany — a breathtaking opening 45 minutes!' },
+
+  // SECOND HALF
+  { id: 'ag_ko2', minute: 46, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half under way — Germany get us going again. Can they recapture the lead?' },
+
+  { id: 'ag_d4', minute: 52, team: 'Germany', teamFlag: '🇩🇪', player: 'Havertz', playerId: 'ger-havertz', type: 'danger_attack', points: 0, description: 'Germany building again — Havertz holding the ball up brilliantly, bringing Musiala and Wirtz into play.' },
+
+  { id: 'ag_asst_gor2', minute: 54, team: 'Germany', teamFlag: '🇩🇪', player: 'Goretzka', playerId: 'ger-goretzka', type: 'assist', points: 6, description: 'Goretzka surges into the box and pulls the ball back to Musiala — the timing is perfect!' },
+  { id: 'ag_goal_mus', minute: 55, team: 'Germany', teamFlag: '🇩🇪', player: 'Musiala', playerId: 'ger-musiala', type: 'goal', points: 12, goalType: 'Shot', description: 'GOAL! MUSIALA strikes first time — the ball arrows into the far corner! Germany lead again!' },
+  { id: 'ag_conc_ema2', minute: 55, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-emartinez', type: 'goal_conceded', points: -1, description: 'E. Martínez had no chance — Musiala\'s strike was unstoppable. Germany 2-1.' },
+  { id: 'ag_conc_lma2', minute: 55, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lis. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -1, description: 'Lisandro Martínez caught out by Goretzka\'s run — the gap is punished immediately.' },
+
+  { id: 'ag_var', minute: 57, team: '', teamFlag: '', player: '', playerId: '', type: 'var_review', points: 0, description: 'VAR checks the build-up to Musiala\'s goal for a foul on Mac Allister — the goal stands!' },
+
+  { id: 'ag_pw_mus', minute: 60, team: 'Germany', teamFlag: '🇩🇪', player: 'Musiala', playerId: 'ger-musiala', type: 'penalty_won', points: 3, description: 'Musiala is brought down in the box! Clear foul — the referee immediately points to the spot!' },
+  { id: 'ag_pc_lma', minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lis. Martínez', playerId: 'arg-martinez', type: 'penalty_conceded', points: -3, description: 'Lisandro Martínez — late lunge on Musiala — concedes a penalty. Argentina in deep trouble!' },
+  { id: 'ag_pm_hav', minute: 61, team: 'Germany', teamFlag: '🇩🇪', player: 'Havertz', playerId: 'ger-havertz', type: 'penalty_missed', points: -3, description: 'HAVERTZ MISSES THE PENALTY! He blazes it wide of the right post — an incredible reprieve for Argentina!' },
+
+  { id: 'ag_d5', minute: 63, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'ARGENTINA RESPONSE! Messi drives forward at pace — the crowd roaring every touch!' },
+
+  { id: 'ag_asst_alv', minute: 64, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'assist', points: 6, description: 'Álvarez peels off Rüdiger and finds Messi arriving in the box — perfect weight on the pass!' },
+  { id: 'ag_goal_mes', minute: 65, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'goal', points: 11, goalType: 'Shot', description: 'GOOOOAL! MESSI! A curling left-footed strike into the top corner — PURE GENIUS! 2–2!' },
+  { id: 'ag_conc_neu2', minute: 65, team: 'Germany', teamFlag: '🇩🇪', player: 'Neuer', playerId: 'ger-neuer', type: 'goal_conceded', points: -1, description: 'Neuer got a fingertip to it but couldn\'t stop Messi\'s curler — nobody could.' },
+  { id: 'ag_conc_tah2', minute: 65, team: 'Germany', teamFlag: '🇩🇪', player: 'Tah', playerId: 'ger-tah', type: 'goal_conceded', points: -1, description: 'Tah failed to close down Messi fast enough — world-class finishing takes no prisoners.' },
+
+  { id: 'ag_sub_hav', minute: 66, team: 'Germany', teamFlag: '🇩🇪', player: 'Woltemade', playerId: 'ger-woltemade', type: 'substitution', points: 0, playerOut: 'Havertz', description: 'Substitution: Woltemade replaces Havertz — Nagelsmann reacts after the missed penalty.' },
+  { id: 'ag_app_wol', minute: 66, team: 'Germany', teamFlag: '🇩🇪', player: 'Woltemade', playerId: 'ger-woltemade', type: 'sub_appearance', points: 1, description: 'Nick Woltemade comes on — fresh legs and physicality to trouble the Argentine defence.' },
+
+  { id: 'ag_pw_wir', minute: 70, team: 'Germany', teamFlag: '🇩🇪', player: 'Wirtz', playerId: 'ger-wirtz', type: 'penalty_won', points: 3, description: 'Wirtz wins a penalty! He cuts inside and is clipped by Romero — the referee has no hesitation!' },
+  { id: 'ag_pc_rom', minute: 70, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'penalty_conceded', points: -3, description: 'Romero clips Wirtz from behind — unavoidable penalty. Argentina on the ropes!' },
+  { id: 'ag_pm_wir', minute: 71, team: 'Germany', teamFlag: '🇩🇪', player: 'Wirtz', playerId: 'ger-wirtz', type: 'penalty_missed', points: -3, description: 'WIRTZ MISSES! Emiliano Martínez dives to his left and SAVES IT! Unbelievable scenes!' },
+  { id: 'ag_ps_ema', minute: 71, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-emartinez', type: 'penalty_save', points: 5, description: 'EMILIANO MARTÍNEZ SAVES THE PENALTY! Two German penalties missed — Argentina survive!' },
+
+  { id: 'ag_sub_gor', minute: 75, team: 'Germany', teamFlag: '🇩🇪', player: 'Sanè', playerId: 'ger-sane', type: 'substitution', points: 0, playerOut: 'Goretzka', description: 'Substitution: Sanè replaces Goretzka — fresh pace for Germany on the left.' },
+  { id: 'ag_app_san', minute: 75, team: 'Germany', teamFlag: '🇩🇪', player: 'Sanè', playerId: 'ger-sane', type: 'sub_appearance', points: 1, description: 'Leroy Sanè enters the fray — direct running and trickery to test Argentina\'s full-backs.' },
+  { id: 'ag_save_ema2', minute: 75, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-emartinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez! Spreads himself to deny Woltemade a tap-in — this goalkeeper is inspired!' },
+
+  { id: 'ag_d6', minute: 76, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'danger_attack', points: 0, description: 'Argentina sensing this moment! Álvarez leads the counter-attack — Germany scrambling!' },
+
+  { id: 'ag_asst_all', minute: 77, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-allister', type: 'assist', points: 6, description: 'Mac Allister plays a perfectly timed through ball into Álvarez\'s path — inch perfect!' },
+  { id: 'ag_goal_alv', minute: 77, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! ÁLVAREZ! Lifts it calmly over Neuer — ARGENTINA LEAD 3–2! 13 minutes remaining!' },
+  { id: 'ag_conc_neu3', minute: 77, team: 'Germany', teamFlag: '🇩🇪', player: 'Neuer', playerId: 'ger-neuer', type: 'goal_conceded', points: -1, description: 'Neuer beaten by the chip — Álvarez\'s composure in front of goal was extraordinary.' },
+  { id: 'ag_conc_tah3', minute: 77, team: 'Germany', teamFlag: '🇩🇪', player: 'Tah', playerId: 'ger-tah', type: 'goal_conceded', points: -1, description: 'Tah failed to track Álvarez\'s diagonal run — Argentina punish the lapse on the counter.' },
+
+  { id: 'ag_sub_lma', minute: 80, team: 'Argentina', teamFlag: '🇦🇷', player: 'Otamendi', playerId: 'arg-otamendi', type: 'substitution', points: 0, playerOut: 'Lis. Martínez', description: 'Substitution: Otamendi replaces Lisandro Martínez — defensive reinforcement to protect the lead.' },
+  { id: 'ag_app_ota', minute: 80, team: 'Argentina', teamFlag: '🇦🇷', player: 'Otamendi', playerId: 'arg-otamendi', type: 'sub_appearance', points: 1, description: 'Nicolás Otamendi enters — experienced head to help Argentina see this out.' },
+  { id: 'ag_sub_lau', minute: 83, team: 'Argentina', teamFlag: '🇦🇷', player: 'Simeone', playerId: 'arg-simeone', type: 'substitution', points: 0, playerOut: 'Lautaro', description: 'Substitution: Simeone replaces Lautaro — the goalscorer given a well-deserved ovation.' },
+  { id: 'ag_app_sim', minute: 83, team: 'Argentina', teamFlag: '🇦🇷', player: 'Simeone', playerId: 'arg-simeone', type: 'sub_appearance', points: 1, description: 'Giuliano Simeone enters to help Argentina hold what they have in the final minutes.' },
+  { id: 'ag_save_ema3', minute: 82, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-emartinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez! Fingertips Wirtz\'s swerving effort around the post — three saves tonight!' },
+
+  { id: 'ag_d7', minute: 87, team: 'Germany', teamFlag: '🇩🇪', player: 'Wirtz', playerId: 'ger-wirtz', type: 'danger_attack', points: 0, description: 'Germany throwing everything forward in the final minutes! Wirtz driving at the Argentine defence!' },
+
+  { id: 'ag_poss_alv', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'possession_bonus', points: 1, description: 'Álvarez running channels relentlessly — relieving Argentina\'s pressure in the dying minutes.' },
+  { id: 'ag_poss_gor', minute: 88, team: 'Germany', teamFlag: '🇩🇪', player: 'Goretzka', playerId: 'ger-goretzka', type: 'possession_bonus', points: 1, description: 'Goretzka covered every blade of grass for Germany tonight — a tireless performance.' },
+
+  { id: 'ag_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'FULL TIME! Argentina 3–2 Germany! La Albiceleste are heading to the World Cup Final!' },
+];

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
+import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { calculateEventPoints, POINT_MAP, getPrizeForRank } from '@/lib/fantasy-engine';
 import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
@@ -115,6 +115,30 @@ const DEMO_LEADERBOARD = [
   { rank: 19, username: 'YieldFarmer', wallet: 'Yf3...7sN', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=YieldFarmer', points: 18.5, prize: '-', isUser: false },
   { rank: 20, username: 'MoonBoyz', wallet: 'Mb4...5vL', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MoonBoyz', points: 12.0, prize: '-', isUser: false },
 ];
+
+// Simulated player picks for each demo bot — determines which match events give them points.
+// Top bots chose the match's key performers; lower bots picked fringe players.
+const DEMO_BOT_LINEUPS: Record<string, string[]> = {
+  CryptoGoalkeeper: ['arg-emartinez', 'arg-romero', 'arg-messi', 'arg-lmartinez', 'arg-alvarez', 'ger-neuer', 'ger-havertz', 'ger-goretzka'],
+  MbappeObsessed:   ['arg-messi', 'arg-alvarez', 'ger-musiala', 'ger-wirtz', 'ger-neuer'],
+  TacticalMaster:   ['arg-messi', 'arg-lmartinez', 'ger-havertz', 'ger-goretzka', 'ger-tah'],
+  SolanaBaller:     ['arg-messi', 'arg-emartinez', 'ger-musiala', 'ger-havertz'],
+  BlockStriker:     ['arg-alvarez', 'arg-lmartinez', 'ger-wirtz', 'ger-goretzka'],
+  DegenDeGea:       ['arg-emartinez', 'arg-romero', 'ger-neuer', 'ger-tah', 'ger-ruediger'],
+  PhantomPlaymaker: ['arg-messi', 'arg-allister', 'ger-musiala', 'ger-wirtz'],
+  GigaChadFC:       ['arg-lmartinez', 'arg-alvarez', 'ger-havertz', 'ger-goretzka'],
+  SolStriker:       ['arg-messi', 'arg-allister', 'ger-havertz', 'ger-ruediger'],
+  NodeNavigator:    ['arg-alvarez', 'arg-allister', 'ger-musiala', 'ger-tah'],
+  RugPullResist:    ['arg-messi', 'arg-emartinez', 'ger-neuer', 'ger-wirtz'],
+  LedgerLegend:     ['arg-romero', 'arg-allister', 'ger-goretzka', 'ger-tah'],
+  ApeInUnited:      ['arg-simeone', 'arg-paz', 'ger-havertz', 'ger-beier'],
+  CryptoCruiser:    ['arg-alvarez', 'arg-almada', 'ger-wirtz', 'ger-leweling'],
+  SatoshiSquad:     ['arg-emartinez', 'arg-otamendi', 'ger-ruediger', 'ger-schlotterbeck'],
+  GasLimitFC:       ['arg-paredes', 'arg-barco', 'ger-nmecha', 'ger-gross'],
+  HODLUnited:       ['arg-lmartinez', 'arg-almada', 'ger-undav', 'ger-beier'],
+  YieldFarmer:      ['arg-fernandez', 'arg-celso', 'ger-stiller', 'ger-amiri'],
+  MoonBoyz:         ['arg-gonzalez', 'arg-palacios', 'ger-ouedraogo', 'ger-brown'],
+};
 
 const EVENT_COLORS: Record<string, string> = {
   goal:                    '#2e7d32',
@@ -759,7 +783,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     ? { ...wcFixture, status: getFixtureStatus(wcFixture), homeScore: 0, awayScore: 0 }
     : (DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0]);
 
-  const matchEvents = getDynamicEvents(fixture, LIVE_EVENTS);
+  const matchEvents = fixture.fixtureId === 'special-arg-ger'
+    ? ARG_GER_EVENTS
+    : getDynamicEvents(fixture, LIVE_EVENTS);
 
   const [initialState] = useState(() => {
     // Live mode: always start clean — API provides score/events/minute
@@ -1365,29 +1391,48 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // time-based fallback (which requires lastGameStateRef to be set by TxLINE first).
   useEffect(() => {
     if (appMode !== 'live') return;
+    // Don't mark completion for matches that haven't kicked off yet
+    if (wcFixture?.kickoffAt && new Date(wcFixture.kickoffAt).getTime() > Date.now()) return;
     const fixtureIdStr = contestId;
+
+    const markCompleted = (homeScore?: number, awayScore?: number) => {
+      if (matchCompletedRef.current) return;
+      if (lastGameStateRef.current === null) lastGameStateRef.current = 'FullTime';
+      matchCompletedRef.current = true;
+      setMatchCompleted(true);
+      if (homeScore !== undefined && awayScore !== undefined) {
+        setScore(prev => ({
+          home: Math.max(prev.home, homeScore),
+          away: Math.max(prev.away, awayScore),
+        }));
+      }
+    };
+
+    // Primary: check live_match_events for full_time event
     fetch(`/api/live/events?fixtureId=${fixtureIdStr}`)
       .then(r => r.ok ? r.json() : [])
-      .then((rows: { event_type?: string; type?: string; minute?: number; home_score?: number; away_score?: number }[]) => {
+      .then((rows: { event_type?: string; type?: string; home_score?: number; away_score?: number }[]) => {
         if (!rows.length) return;
         const hasFullTime = rows.some(r => (r.event_type ?? r.type) === 'full_time');
-        if (hasFullTime && !matchCompletedRef.current) {
-          if (lastGameStateRef.current === null) lastGameStateRef.current = 'FullTime';
-          matchCompletedRef.current = true;
-          setMatchCompleted(true);
-          // Seed score from the last row that has score data
+        if (hasFullTime) {
           const lastWithScore = [...rows].reverse().find(r => r.home_score !== undefined);
-          if (lastWithScore) {
-            setScore(prev => ({
-              home: Math.max(prev.home, lastWithScore.home_score ?? 0),
-              away: Math.max(prev.away, lastWithScore.away_score ?? 0),
-            }));
-          }
+          markCompleted(lastWithScore?.home_score, lastWithScore?.away_score);
         }
       })
       .catch(() => {});
+
+    // Fallback: if contest_results exist for this wallet, match is over
+    // (covers cases where live_match_events write is blocked by RLS, e.g. local dev)
+    const walletAddr = publicKey?.toBase58() ?? '';
+    if (!walletAddr) return;
+    fetch(`/api/prize/status?fixtureId=${fixtureIdStr}&contestType=${contestType}&wallet=${encodeURIComponent(walletAddr)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((status: { found?: boolean } | null) => {
+        if (status?.found) markCompleted();
+      })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, contestId]);
+  }, [appMode, contestId, contestType, publicKey]);
 
   // ── Shared helper: apply stats-based bonuses to lineup at HT/FT ─────────────
   // Called from both live-mode polling and demo-mode event trigger.
@@ -3005,13 +3050,25 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
       }
 
-      // Update leaderboard points (demo mode — bots accumulate simulated points)
+      // Update leaderboard points (demo mode — bots accumulate based on their simulated lineups)
       setLeaderboard((prev) => {
         const next = prev.map(entry => {
           if (entry.isUser) {
             return { ...entry, points: entry.points + delta };
           }
-          return { ...entry, points: entry.points + Math.abs(event.points) * (Math.random() * 0.4) };
+          // Bots with the event's player get points proportional to the event value;
+          // bots without the player get tiny background noise for positive events only.
+          const botPlayers = DEMO_BOT_LINEUPS[entry.username] ?? [];
+          const botHasPlayer = !!(event.playerId && botPlayers.includes(event.playerId));
+          let botDelta = 0;
+          if (event.points !== 0) {
+            if (botHasPlayer) {
+              botDelta = event.points * (0.7 + Math.random() * 0.6);
+            } else if (event.points > 0) {
+              botDelta = event.points * Math.random() * 0.06;
+            }
+          }
+          return { ...entry, points: Math.round((entry.points + botDelta) * 100) / 100 };
         });
         
         const sorted = next.sort((a, b) => b.points - a.points).map((e, i) => {
@@ -3276,7 +3333,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               return { ...entry, prize: p > 0 ? `${p.toFixed(2)} SOL` : '-' };
             });
           }
-          setLeaderboard(restartBoard);
+          // Reset all points to 0 so the next replay starts fresh
+          setLeaderboard(restartBoard.map(e => ({ ...e, points: 0 })).sort((a, b) => a.rank - b.rank));
           setLatestEvent(null);
         }, 120000);
         return () => clearTimeout(resetTimer);
@@ -4080,12 +4138,31 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   homeFp = realLineup.home;
                   awayFp = realLineup.away;
                 } else if (appMode !== 'live' || forceDemoMode) {
-                  const demoPlayers = events.filter(e => e.type === 'starting_xi');
-                  for (const ev of demoPlayers) {
-                    const isHome = ev.team === fixture.homeTeam;
-                    const fp: FormationPlayer = { id: ev.playerId, name: ev.player, position: 'MID', participant: isHome ? 1 : 2 };
-                    if (isHome) homeFp.push(fp); else awayFp.push(fp);
+                  // Build formation from starting XI with real positions, then apply subs
+                  const starterEvs = events.filter((e: any) => e.type === 'starting_xi');
+                  const subOutNames = new Set(
+                    events.filter((e: any) => e.type === 'substitution' && e.playerOut).map((e: any) => e.playerOut as string)
+                  );
+                  const subInEvs = events.filter((e: any) => e.type === 'sub_appearance');
+
+                  // Starters (minus any who have been subbed off)
+                  const activePlayers: FormationPlayer[] = starterEvs
+                    .filter((ev: any) => !subOutNames.has(ev.player))
+                    .map((ev: any) => {
+                      const isHome = ev.team === fixture.homeTeam;
+                      const pd = WC2026_PLAYERS.find(p => p.id === ev.playerId);
+                      return { id: ev.playerId, name: ev.player, position: pd?.position ?? 'MID', participant: (isHome ? 1 : 2) as 1 | 2 };
+                    });
+
+                  // Substitutes who have come on
+                  for (const ev of subInEvs) {
+                    const isHome = (ev as any).team === fixture.homeTeam;
+                    const pd = WC2026_PLAYERS.find(p => p.id === (ev as any).playerId);
+                    activePlayers.push({ id: (ev as any).playerId, name: (ev as any).player, position: pd?.position ?? 'ATT', participant: (isHome ? 1 : 2) as 1 | 2 });
                   }
+
+                  homeFp = activePlayers.filter(p => p.participant === 1);
+                  awayFp = activePlayers.filter(p => p.participant === 2);
                 } else {
                   // Live mode: TxLINE hasn't published official lineups yet.
                   // Fall back to predicted XI from official FIFA squad data (jersey 1–11).
@@ -4262,6 +4339,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       {leaderboard.map((entry) => (
                         <tr
                           key={entry.wallet}
+                          suppressHydrationWarning
                           style={{
                             background: entry.isUser ? 'rgba(0, 229, 255, 0.15)' : 'transparent',
                             transition: 'all 300ms',

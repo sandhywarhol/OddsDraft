@@ -7,8 +7,18 @@ interface FlagImageProps {
   className?: string;
 }
 
+// flagcdn.com subdivision codes for flags that use emoji tag sequences
+// (🏴󠁧󠁢󠁥󠁮󠁧󠁿 England, 🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland, 🏴󠁧󠁢󠁷󠁬󠁳󠁿 Wales)
+const SUBDIVISION: Record<string, string> = {
+  '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}': 'gb-eng',
+  '\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}': 'gb-sct',
+  '\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}': 'gb-wls',
+};
+
 function emojiToCode(emoji: string): string | null {
-  const pts = [...(emoji ?? '')].map(c => c.codePointAt(0) ?? 0);
+  if (!emoji) return null;
+  if (SUBDIVISION[emoji]) return SUBDIVISION[emoji];
+  const pts = [...emoji].map(c => c.codePointAt(0) ?? 0);
   if (
     pts.length === 2 &&
     pts[0] >= 0x1F1E6 && pts[0] <= 0x1F1FF &&

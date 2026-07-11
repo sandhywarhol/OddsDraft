@@ -1308,6 +1308,12 @@ function WelcomeGiftModal({
       }
     });
     localStorage.setItem(`txodds_welcome_gift_claimed_${publicKey}`, 'true');
+    // Persist to Supabase — prevents re-claiming on a new browser or device
+    fetch('/api/user/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallet: publicKey, packOpened: { welcomeGiftClaimed: true } }),
+    }).catch(() => { /* non-blocking — localStorage is the authoritative local guard */ });
   }, [queue, publicKey]);
 
   const currentItem = queue[currentIndex];
@@ -1381,27 +1387,40 @@ export default function CardsPage() {
       setWelcomeGiftState('checking');
       return;
     }
-    const claimedKey = `txodds_welcome_gift_claimed_${publicKey.toString()}`;
+    const walletStr = publicKey.toString();
+    const claimedKey = `txodds_welcome_gift_claimed_${walletStr}`;
+
+    const buildGift = () => {
+      const validSkillCards = SKILL_CARDS.filter(c => ['Common', 'Uncommon', 'Rare', 'Epic'].includes(c.rarity));
+      const validUpgradeCards = UPGRADE_CARDS.filter(c => c.level <= 2);
+      const generated: { type: 'skill' | 'upgrade'; cardId: string }[] = [];
+      for (let i = 0; i < 5; i++) {
+        generated.push({ type: 'skill', cardId: validSkillCards[Math.floor(Math.random() * validSkillCards.length)].id });
+        generated.push({ type: 'upgrade', cardId: validUpgradeCards[Math.floor(Math.random() * validUpgradeCards.length)].id });
+      }
+      generated.sort(() => Math.random() - 0.5);
+      setGiftQueue(generated);
+      setWelcomeGiftState('available');
+    };
+
+    // Fast path: localStorage already marked
     if (localStorage.getItem(claimedKey)) {
       setWelcomeGiftState('done');
       return;
     }
 
-    // Generate 5 Skill Cards (max Epic) and 5 Upgrade Cards (max level 2)
-    const validSkillCards = SKILL_CARDS.filter(c => ['Common', 'Uncommon', 'Rare', 'Epic'].includes(c.rarity));
-    const validUpgradeCards = UPGRADE_CARDS.filter(c => c.level <= 2);
-
-    const generated: { type: 'skill' | 'upgrade'; cardId: string }[] = [];
-    for (let i = 0; i < 5; i++) {
-      generated.push({ type: 'skill', cardId: validSkillCards[Math.floor(Math.random() * validSkillCards.length)].id });
-      generated.push({ type: 'upgrade', cardId: validUpgradeCards[Math.floor(Math.random() * validUpgradeCards.length)].id });
-    }
-    
-    // Shuffle them so they interleave nicely
-    generated.sort(() => Math.random() - 0.5);
-
-    setGiftQueue(generated);
-    setWelcomeGiftState('available');
+    // Verify against Supabase — gift is one-time per wallet across all devices
+    fetch(`/api/user/data?wallet=${walletStr}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { pack_opened?: { welcomeGiftClaimed?: boolean } } | null) => {
+        if (data?.pack_opened?.welcomeGiftClaimed) {
+          localStorage.setItem(claimedKey, 'true');
+          setWelcomeGiftState('done');
+        } else {
+          buildGift();
+        }
+      })
+      .catch(() => buildGift());
   }, [connected, publicKey]);
 
   const handleCardClick = (instance: OwnedCard, card: SkillCard) => {

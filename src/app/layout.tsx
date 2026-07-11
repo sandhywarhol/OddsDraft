@@ -31,9 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${bebasNeue.variable} ${spaceMono.variable}`}>
-      <head>
-        <Script src="https://unpkg.com/twemoji@latest/dist/twemoji.min.js" strategy="beforeInteractive" />
-      </head>
+      <head />
       <body>
         <ClientWalletProvider>
           <AudioProvider>
@@ -44,7 +42,8 @@ export default function RootLayout({
           </AudioProvider>
         </ClientWalletProvider>
         
-        {/* Twemoji parser to convert native emojis into identical SVG emojis on all platforms */}
+        {/* Twemoji: load library then run parser on an interval to catch dynamic content */}
+        <Script src="https://unpkg.com/twemoji@latest/dist/twemoji.min.js" strategy="lazyOnload" />
         <Script id="twemoji-init" strategy="lazyOnload">
           {`
             // Run periodically to catch dynamically rendered emojis (like scores or live data)
