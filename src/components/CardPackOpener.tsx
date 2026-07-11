@@ -11,6 +11,26 @@ import { type UpgradeCard, UPGRADE_RARITY_COLOR } from '@/lib/upgrade-cards';
 import SkillCardDisplay from './SkillCardDisplay';
 import UpgradeCardDisplay from './UpgradeCardDisplay';
 
+// Module-level cache so the 4.4MB SVG is only fetched once per session.
+// <img> sandboxes SVGs and blocks embedded base64 <image> elements;
+// <object> respects the SVG's own width/height attrs (1080×1350) and ignores CSS sizing.
+// Fetching + inlining as HTML is the only reliable cross-browser approach.
+let _svgCache: string | null = null;
+let _svgFetch: Promise<string> | null = null;
+function fetchUnopenedSvg(): Promise<string> {
+  if (_svgCache) return Promise.resolve(_svgCache);
+  if (!_svgFetch) {
+    _svgFetch = fetch('/card/unopened%20card.svg')
+      .then(r => r.text())
+      .then(text => {
+        // Strip the fixed pixel dimensions from the root <svg> tag so it fills its CSS container.
+        _svgCache = text.replace(/<svg([^>]*?)width="[^"]*"([^>]*?)height="[^"]*"/, '<svg$1width="100%"$2height="100%"');
+        return _svgCache;
+      });
+  }
+  return _svgFetch;
+}
+
 interface CardPackOpenerProps {
   contestId?: string;
   upgradePackMode?: boolean;
@@ -26,6 +46,7 @@ type Phase = 'idle' | 'shaking' | 'flip-out' | 'flip-in' | 'done';
 
 export default function CardPackOpener({ contestId, upgradePackMode, title, subtitle, subtitleIdle, primaryButtonText, onOpen, onClose }: CardPackOpenerProps) {
   const [phase, setPhase] = useState<Phase>('idle');
+  const [unopenedSvg, setUnopenedSvg] = useState<string>('');
   const [revealedCard, setRevealedCard] = useState<SkillCard | null>(null);
   const [revealedUpgradeCard, setRevealedUpgradeCard] = useState<UpgradeCard | null>(null);
   const [bonusUpgradeCard, setBonusUpgradeCard] = useState<UpgradeCard | null>(null);
@@ -87,6 +108,11 @@ export default function CardPackOpener({ contestId, upgradePackMode, title, subt
       return () => clearTimeout(t);
     }
   }, [phase]);
+
+  // Fetch and cache the unopened card SVG on first mount.
+  useEffect(() => {
+    fetchUnopenedSvg().then(setUnopenedSvg).catch(() => {});
+  }, []);
 
   const rarityColor = revealedCard ? RARITY_COLOR[revealedCard.rarity as keyof typeof RARITY_COLOR] : revealedUpgradeCard ? UPGRADE_RARITY_COLOR[revealedUpgradeCard.rarity as keyof typeof UPGRADE_RARITY_COLOR] : '#ffd700';
 
@@ -179,13 +205,12 @@ export default function CardPackOpener({ contestId, upgradePackMode, title, subt
               animation: phase === 'shaking' ? 'shake 0.25s ease-in-out infinite' : undefined,
               cursor: phase === 'idle' ? 'pointer' : 'default',
             }} onClick={handleOpenPack}>
-              {/* <object> instead of <img> — the SVG contains embedded base64 images which
-                  browsers block when the SVG is loaded via <img> (sandboxed). <object> renders
-                  the SVG unsandboxed so all internal <image> elements display correctly. */}
-              <object
-                data="/card/unopened%20card.svg"
-                type="image/svg+xml"
+              {/* Inline SVG via fetch — the only reliable approach for SVGs with embedded
+                  base64 <image> elements. <img> sandboxes them; <object> ignores CSS sizing
+                  because the SVG declares its own width/height. Fetched once, cached in memory. */}
+              <div
                 aria-label="Card Pack"
+                dangerouslySetInnerHTML={{ __html: unopenedSvg }}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -197,6 +222,7 @@ export default function CardPackOpener({ contestId, upgradePackMode, title, subt
                     : 'none',
                   userSelect: 'none',
                   pointerEvents: 'none',
+                  overflow: 'hidden',
                 }}
               />
               {/* Tap prompt overlay */}
