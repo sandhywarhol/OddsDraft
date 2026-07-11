@@ -157,9 +157,12 @@ export default function ContestsPage() {
       penaltyHome = fs.penaltyHome;
       penaltyAway = fs.penaltyAway;
     } else if (!isDemo && apiLiveMatch) {
-      // Fallback: TxLINE live data (empty on devnet but correct on prod)
-      homeScore = apiLiveMatch.score?.home ?? apiLiveMatch.Score?.Home ?? apiLiveMatch.HomeScore;
-      awayScore = apiLiveMatch.score?.away ?? apiLiveMatch.Score?.Away ?? apiLiveMatch.AwayScore;
+      // Fallback: TxLINE live data — Score.Participant1 may not be home, check IsHome flag
+      const isP1Home = apiLiveMatch.Participant1IsHome !== false;
+      const p1G = apiLiveMatch.Score?.Participant1?.Total?.Goals ?? apiLiveMatch.Score?.Participant1?.Goals;
+      const p2G = apiLiveMatch.Score?.Participant2?.Total?.Goals ?? apiLiveMatch.Score?.Participant2?.Goals;
+      homeScore = p1G !== undefined ? (isP1Home ? p1G : p2G) : undefined;
+      awayScore = p1G !== undefined ? (isP1Home ? p2G : p1G) : undefined;
     }
 
     return {

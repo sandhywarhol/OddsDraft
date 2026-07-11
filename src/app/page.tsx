@@ -221,13 +221,14 @@ function LiveTicker() {
       .slice(0, 3);
 
     let displayFinished = recentFinished.length > 0 ? recentFinished.map(f => {
-      const home = f.homeTeam?.name || f.HomeTeamName || 'Home';
-      const away = f.awayTeam?.name || f.AwayTeamName || 'Away';
-      const homeFlag = f.homeFlag || f.homeTeam?.flag || '';
-      const awayFlag = f.awayFlag || f.awayTeam?.flag || '';
-      const scoreHome = f.score?.home ?? f.Score?.Home ?? 0;
-      const scoreAway = f.score?.away ?? f.Score?.Away ?? 0;
-      return { home, away, homeFlag, awayFlag, scoreHome, scoreAway };
+      const isP1Home = f.Participant1IsHome !== false;
+      const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
+      const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
+      const p1Goals = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
+      const p2Goals = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
+      const scoreHome = isP1Home ? p1Goals : p2Goals;
+      const scoreAway = isP1Home ? p2Goals : p1Goals;
+      return { home, away, homeFlag: '', awayFlag: '', scoreHome, scoreAway };
     }) : [];
 
     if (displayFinished.length === 0) {
@@ -252,10 +253,10 @@ function LiveTicker() {
         } else {
           const af = (allFixtures || []).find((x: any) => String(x.FixtureId ?? x.fixtureId ?? x.id) === f.fixtureId);
           if (af) {
-             const h = af.score?.home ?? af.Score?.Home ?? af.HomeScore ?? af.home_score;
-             const a = af.score?.away ?? af.Score?.Away ?? af.AwayScore ?? af.away_score;
-             if (h !== undefined) sh = Number(h);
-             if (a !== undefined) sa = Number(a);
+            const isP1Home = af.Participant1IsHome !== false;
+            const p1G = af.Score?.Participant1?.Total?.Goals ?? af.Score?.Participant1?.Goals;
+            const p2G = af.Score?.Participant2?.Total?.Goals ?? af.Score?.Participant2?.Goals;
+            if (p1G !== undefined) { sh = isP1Home ? Number(p1G) : Number(p2G ?? 0); sa = isP1Home ? Number(p2G ?? 0) : Number(p1G); }
           }
         }
 
@@ -280,13 +281,16 @@ function LiveTicker() {
                 LIVE NOW
               </span>
               {liveFromAll.map((f: any, i: number) => {
-                const home = f.homeTeam?.name || f.HomeTeamName || f.Participant1 || 'Home';
-                const away = f.awayTeam?.name || f.AwayTeamName || f.Participant2 || 'Away';
-                const homeFlag = f.homeFlag || f.homeTeam?.flag || '';
-                const awayFlag = f.awayFlag || f.awayTeam?.flag || '';
-                const sh = f.score?.home ?? f.Score?.Home ?? f.HomeScore ?? 0;
-                const sa = f.score?.away ?? f.Score?.Away ?? f.AwayScore ?? 0;
-                const clock = f.clock?.matchTime || f.Clock?.MatchTime || '';
+                const isP1Home = f.Participant1IsHome !== false;
+                const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
+                const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
+                const homeFlag = '';
+                const awayFlag = '';
+                const p1G = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
+                const p2G = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
+                const sh = isP1Home ? p1G : p2G;
+                const sa = isP1Home ? p2G : p1G;
+                const clock = f.Clock?.MatchTime || f.Clock?.MatchClock || '';
                 return (
                   <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,229,100,0.08)', border: '1px solid rgba(0,229,100,0.3)', borderRadius: 6, padding: '3px 10px', fontSize: '0.82rem', fontWeight: 600, color: '#f8fafc' }}>
                     <><FlagImage flag={homeFlag} size={16} /> {home}</> <span style={{ color: '#00e564', fontFamily: 'Bebas Neue, cursive', fontSize: '1rem' }}>{sh}–{sa}</span> <>{away} <FlagImage flag={awayFlag} size={16} /></>
