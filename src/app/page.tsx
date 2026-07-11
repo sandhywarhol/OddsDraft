@@ -3,7 +3,7 @@
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet } from '@solana/wallet-adapter-react';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import FlagImage from '@/components/FlagImage';
@@ -162,17 +162,19 @@ function HeroSection() {
 
 function LiveTicker() {
   const { appMode, apiToken, isSubscribing, subscribeAndActivate, liveFixtures, allFixtures } = useTxLine();
-  const [finishedScores, setFinishedScores] = useState<Record<string, { home: number; away: number }>>({});
 
-  useEffect(() => {
-    if (appMode === 'demo') return;
-    fetch('/api/scores/wc2026')
-      .then(r => r.json())
-      .then((data: Record<string, { home: number; away: number }>) => {
-        setFinishedScores(prev => ({ ...prev, ...data }));
-      })
-      .catch(() => {});
-  }, [appMode]);
+  // Derive finished scores directly from TxLINE fixture snapshot — no ESPN needed
+  const finishedScores = useMemo<Record<string, { home: number; away: number }>>(() => {
+    const scores: Record<string, { home: number; away: number }> = {};
+    for (const f of allFixtures) {
+      const id = String(f.FixtureId ?? f.fixtureId ?? '');
+      if (!id) continue;
+      const h = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals;
+      const a = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals;
+      if (typeof h === 'number') scores[id] = { home: h, away: typeof a === 'number' ? a : 0 };
+    }
+    return scores;
+  }, [allFixtures]);
 
   const { connected } = useWallet();
   const demoLiveMatch = DEMO_FIXTURES.find((f) => f.status === 'live');

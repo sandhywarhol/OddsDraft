@@ -85,30 +85,20 @@ export default function ContestsPage() {
       .catch(() => {});
   }, [isDemo]);
 
-  // Try to extract scores from allFixtures (already fetched, no extra API call needed)
+  // Extract scores from TxLINE allFixtures snapshot — no ESPN needed
   useEffect(() => {
     if (isDemo || allFixtures.length === 0) return;
-    const scores: Record<string, { home: number; away: number }> = {};
+    const scores: Record<string, FixtureScore> = {};
     for (const f of allFixtures) {
-      const id = String(f.FixtureId ?? f.fixtureId ?? f.fixture_id ?? f.id ?? '');
+      const id = String(f.FixtureId ?? f.fixtureId ?? '');
       if (!id) continue;
-      const h = f.score?.home ?? f.Score?.Home ?? f.HomeScore ?? f.home_score;
-      const a = f.score?.away ?? f.Score?.Away ?? f.AwayScore ?? f.away_score;
-      if (h !== undefined && a !== undefined) scores[id] = { home: Number(h), away: Number(a) };
+      // TxLINE native: Score.Participant1.Total.Goals
+      const h = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? f.score?.home;
+      const a = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? f.score?.away;
+      if (typeof h === 'number') scores[id] = { home: h, away: typeof a === 'number' ? a : 0 };
     }
     if (Object.keys(scores).length > 0) setFinishedScores(prev => ({ ...scores, ...prev }));
   }, [isDemo, allFixtures]);
-
-  // Fetch real final scores for finished WC2026 matches from public sports data
-  useEffect(() => {
-    if (isDemo) return;
-    fetch('/api/scores/wc2026')
-      .then(r => r.json())
-      .then((data: Record<string, { home: number; away: number }>) => {
-        setFinishedScores(prev => ({ ...prev, ...data }));
-      })
-      .catch(() => {});
-  }, [isDemo]);
 
   // Fetch live schedule from ESPN (corrects knockout team names / times)
   useEffect(() => {

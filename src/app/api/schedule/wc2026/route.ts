@@ -2,46 +2,8 @@ import { NextResponse } from 'next/server';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import type { WCFixture } from '@/lib/wc2026-fixtures';
 
-// ESPN name → our canonical name
-const ESPN_NAME_MAP: Record<string, string> = {
-  'united states':                'USA',
-  'us':                           'USA',
-  'democratic republic of congo': 'Congo DR',
-  'dr congo':                     'Congo DR',
-  'republic of congo':            'Congo DR',
-  "cote d'ivoire":                'Ivory Coast',
-  "côte d'ivoire":                'Ivory Coast',
-  'cote divoire':                 'Ivory Coast',
-  'czechia':                      'Czech Republic',
-  'republic of korea':            'South Korea',
-  'korea republic':               'South Korea',
-  'cape verde islands':           'Cape Verde',
-  'bosnia and herzegovina':       'Bosnia & Herzegovina',
-  'dem. rep. congo':              'Congo DR',
-  'ivory coast':                  'Ivory Coast',
-  'new caledonia':                'New Zealand', // unlikely but safe
-};
-
-// ESPN team abbreviation → flag emoji (fallback if name match fails)
-const ABBR_FLAG: Record<string, string> = {
-  HTI: '🇭🇹', SCO: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', AUS: '🇦🇺', TUR: '🇹🇷',
-  GER: '🇩🇪', CUW: '🇨🇼', NED: '🇳🇱', JPN: '🇯🇵',
-  CIV: '🇨🇮', ECU: '🇪🇨', SWE: '🇸🇪', TUN: '🇹🇳',
-  ESP: '🇪🇸', CPV: '🇨🇻', BEL: '🇧🇪', EGY: '🇪🇬',
-  KSA: '🇸🇦', URU: '🇺🇾', IRN: '🇮🇷', NZL: '🇳🇿',
-  FRA: '🇫🇷', SEN: '🇸🇳', IRQ: '🇮🇶', NOR: '🇳🇴',
-  ARG: '🇦🇷', ALG: '🇩🇿', AUT: '🇦🇹', JOR: '🇯🇴',
-  POR: '🇵🇹', COD: '🇨🇩', ENG: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', CRO: '🇭🇷',
-  GHA: '🇬🇭', PAN: '🇵🇦', UZB: '🇺🇿', COL: '🇨🇴',
-  CZE: '🇨🇿', RSA: '🇿🇦', SUI: '🇨🇭',
-  BIH: '🇧🇦', CAN: '🇨🇦', QAT: '🇶🇦',
-  MEX: '🇲🇽', KOR: '🇰🇷', USA: '🇺🇸', MAR: '🇲🇦',
-  BRA: '🇧🇷', PAR: '🇵🇾', SAU: '🇸🇦',
-  MAG: '🇲🇦', // Morocco alternative
-};
-
-// Name lookup map from wc2026-fixtures (canonical name → flag)
-const NAME_FLAG: Record<string, string> = {
+// Canonical team name → flag emoji (mirrors wc2026-fixtures.ts)
+const FLAG: Record<string, string> = {
   'Haiti': '🇭🇹', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'Australia': '🇦🇺', 'Turkey': '🇹🇷',
   'Germany': '🇩🇪', 'Curacao': '🇨🇼', 'Netherlands': '🇳🇱', 'Japan': '🇯🇵',
   'Ivory Coast': '🇨🇮', 'Ecuador': '🇪🇨', 'Sweden': '🇸🇪', 'Tunisia': '🇹🇳',
@@ -57,179 +19,130 @@ const NAME_FLAG: Record<string, string> = {
   'Brazil': '🇧🇷', 'Paraguay': '🇵🇾',
 };
 
-// TxLINE slot IDs for each knockout round, ordered by scheduled kickoff time
-// These IDs identify the SLOT in TxLINE — teams get filled in as tournament progresses
-const TXLINE_SLOTS: Record<string, string[]> = {
-  r32:   ['18167317','18172489','18175983','18172260','18175397','18175981','18179759','18179764','18179550','18172379','18179551','18179763','18179552','18176123','18175918','18179549'],
-  r16:   ['18185036','18188721','18187298','18192996','18198205','18193785','18202701','18202783'],
-  qf:    ['18210001','18210002','18210003','18210004'],
-  sf:    ['18220001','18220002'],
-  third: ['18230001'],
-  final: ['18240001'],
+// TxLINE name aliases → our canonical name
+const TXLINE_ALIASES: Record<string, string> = {
+  'côte d\'ivoire': 'Ivory Coast',
+  'cote d\'ivoire': 'Ivory Coast',
+  'cote divoire':   'Ivory Coast',
+  'dem. rep. congo': 'Congo DR',
+  'dr congo':        'Congo DR',
+  'democratic republic of congo': 'Congo DR',
+  'republic of korea': 'South Korea',
+  'korea republic':    'South Korea',
+  'united states':     'USA',
+  'czechia':           'Czech Republic',
+  'cape verde islands':'Cape Verde',
+  'bosnia and herzegovina': 'Bosnia & Herzegovina',
+  'bosnia & hercegovina':   'Bosnia & Herzegovina',
 };
 
-function resolveESPNName(espnName: string): string {
-  const lower = espnName.toLowerCase().trim();
-  return ESPN_NAME_MAP[lower] ?? espnName;
+function resolveTeam(name: string): string {
+  const lower = name.toLowerCase().trim();
+  return TXLINE_ALIASES[lower] ?? name;
 }
 
-function getFlag(canonicalName: string, abbr?: string): string {
-  return NAME_FLAG[canonicalName]
-    ?? (abbr ? ABBR_FLAG[abbr.toUpperCase()] : undefined)
-    ?? '🏳️';
+function getFlag(name: string): string {
+  return FLAG[name] ?? '🏳️';
 }
 
-function normalizeTeam(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+function normStr(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '').trim();
 }
 
-function espnRoundToStage(roundName: string): WCFixture['stage'] {
-  const r = roundName.toLowerCase();
-  if (r.includes('group') || r.includes('matchday')) return 'group';
-  if (r.includes('round of 32') || r.includes('32')) return 'r32';
-  if (r.includes('round of 16') || r.includes('16') || r.includes('rd of 16')) return 'r16';
-  if (r.includes('quarter')) return 'qf';
-  if (r.includes('semi')) return 'sf';
-  if (r.includes('third') || r.includes('3rd') || r.includes('place')) return 'final';
-  if (r.includes('final')) return 'final';
-  return 'group';
-}
-
-async function fetchESPNDay(dateStr: string): Promise<any[]> {
-  const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateStr}&limit=20`;
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      // Recent dates need fresh data; older dates can be cached longer
-      next: { revalidate: 300 }, // 5 min cache
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.events ?? [];
-  } catch {
-    return [];
-  }
-}
-
-function buildDates(): string[] {
-  const dates: string[] = [];
-  const start = new Date('2026-06-11');
-  const end = new Date('2026-07-20');
-  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-    const y = d.getUTCFullYear();
-    const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const dy = String(d.getUTCDate()).padStart(2, '0');
-    dates.push(`${y}${mo}${dy}`);
-  }
-  return dates;
-}
-
-// GET /api/schedule/wc2026
-// Returns WCFixture[] with ESPN data (correct teams) + TxLINE slot IDs
+// GET /api/schedule/wc2026 — returns WCFixture[] sourced from TxLINE (no ESPN)
 export async function GET() {
-  const dates = buildDates();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 
-  // Fetch all days in parallel (chunked to avoid overwhelming ESPN)
-  const chunkSize = 10;
-  const allEventArrays: any[][] = [];
-  for (let i = 0; i < dates.length; i += chunkSize) {
-    const chunk = dates.slice(i, i + chunkSize);
-    const results = await Promise.all(chunk.map(d => fetchESPNDay(d)));
-    allEventArrays.push(...results);
-  }
+  try {
+    const res = await fetch(`${appUrl}/api/txline/api/fixtures/snapshot`, {
+      next: { revalidate: 300 }, // 5-min cache
+    });
 
-  // Deduplicate ESPN events by event ID
-  const seen = new Set<string>();
-  const allEvents: any[] = [];
-  for (const arr of allEventArrays) {
-    for (const ev of arr) {
-      if (!seen.has(ev.id)) {
-        seen.add(ev.id);
-        allEvents.push(ev);
+    if (!res.ok) throw new Error(`TxLINE ${res.status}`);
+    const raw = await res.json();
+    const txFixtures: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
+
+    if (txFixtures.length === 0) throw new Error('Empty TxLINE response');
+
+    // Build lookup: normalised team pair → our static WCFixture
+    const staticByTeams = new Map<string, WCFixture>();
+    for (const f of WC2026_FIXTURES) {
+      staticByTeams.set(`${normStr(f.homeTeam)}__${normStr(f.awayTeam)}`, f);
+      staticByTeams.set(`${normStr(f.awayTeam)}__${normStr(f.homeTeam)}`, f);
+    }
+    const staticById = new Map<string, WCFixture>(WC2026_FIXTURES.map(f => [f.fixtureId, f]));
+
+    // Start with our full static list as the base — preserves group stage and r32/r16
+    const resultMap = new Map<string, WCFixture>(WC2026_FIXTURES.map(f => [f.fixtureId, { ...f }]));
+
+    // Enrich / add from TxLINE data
+    for (const tf of txFixtures) {
+      const txId = String(tf.FixtureId ?? tf.fixtureId ?? '');
+      if (!txId) continue;
+
+      const rawP1 = tf.Participant1 ?? '';
+      const rawP2 = tf.Participant2 ?? '';
+      const isP1Home = tf.Participant1IsHome !== false;
+      const homeRaw = isP1Home ? rawP1 : rawP2;
+      const awayRaw = isP1Home ? rawP2 : rawP1;
+      const home = resolveTeam(homeRaw) || homeRaw;
+      const away = resolveTeam(awayRaw) || awayRaw;
+      const kickoffAt = tf.StartTime ?? '';
+
+      // Find match in our static list by ID first, then by team names
+      let match = staticById.get(txId);
+      if (!match) {
+        match = staticByTeams.get(`${normStr(home)}__${normStr(away)}`)
+             ?? staticByTeams.get(`${normStr(away)}__${normStr(home)}`);
+      }
+
+      if (match) {
+        // Update the existing entry with live TxLINE data
+        const updated = resultMap.get(match.fixtureId)!;
+        if (kickoffAt) updated.kickoffAt = kickoffAt;
+        // Update team names for knockout fixtures where teams were unknown at time of writing
+        if (home && home !== 'TBD' && !normStr(home).includes('winner') && !normStr(home).includes('loser')) {
+          updated.homeTeam = home;
+          updated.homeFlag = getFlag(home) || updated.homeFlag;
+        }
+        if (away && away !== 'TBD' && !normStr(away).includes('winner') && !normStr(away).includes('loser')) {
+          updated.awayTeam = away;
+          updated.awayFlag = getFlag(away) || updated.awayFlag;
+        }
+      } else if (home && away && kickoffAt) {
+        // New fixture from TxLINE not in our static list — add it (e.g., SF/Final with real teams)
+        const stage: WCFixture['stage'] = (() => {
+          const comp = (tf.CompetitionName ?? tf.RoundName ?? '').toLowerCase();
+          if (comp.includes('semi')) return 'sf';
+          if (comp.includes('final')) return 'final';
+          if (comp.includes('quarter')) return 'qf';
+          if (comp.includes('16')) return 'r16';
+          if (comp.includes('32')) return 'r32';
+          return 'group';
+        })();
+        resultMap.set(txId, {
+          fixtureId: txId,
+          homeTeam: home,
+          awayTeam: away,
+          homeFlag: getFlag(home),
+          awayFlag: getFlag(away),
+          kickoffAt,
+          stage,
+        });
       }
     }
-  }
 
-  // Sort by kickoff time
-  allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const fixtures = Array.from(resultMap.values()).sort(
+      (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
+    );
 
-  if (allEvents.length === 0) {
-    // ESPN unreachable — fall back to static list
+    return NextResponse.json(fixtures, {
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+    });
+  } catch (err) {
+    console.warn('[schedule/wc2026] TxLINE unavailable, returning static list:', err);
     return NextResponse.json(WC2026_FIXTURES, {
       headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
     });
   }
-
-  // Build lookup from canonical team names → TxLINE fixture (for group/r32/r16)
-  const staticByTeams = new Map<string, WCFixture>();
-  for (const f of WC2026_FIXTURES) {
-    const key = `${normalizeTeam(f.homeTeam)}__${normalizeTeam(f.awayTeam)}`;
-    const keyRev = `${normalizeTeam(f.awayTeam)}__${normalizeTeam(f.homeTeam)}`;
-    staticByTeams.set(key, f);
-    staticByTeams.set(keyRev, f);
-  }
-
-  // Track which slot IDs have been used per round
-  const slotCounters: Record<string, number> = { r32: 0, r16: 0, qf: 0, sf: 0, third: 0, final: 0 };
-
-  const fixtures: WCFixture[] = [];
-
-  for (const ev of allEvents) {
-    const comp = ev.competitions?.[0];
-    if (!comp) continue;
-
-    const comps: any[] = comp.competitors ?? [];
-    const homeComp = comps.find((c: any) => c.homeAway === 'home') ?? {};
-    const awayComp = comps.find((c: any) => c.homeAway === 'away') ?? {};
-
-    const espnHome = homeComp.team?.displayName ?? '';
-    const espnAway = awayComp.team?.displayName ?? '';
-    const homeAbbr: string = homeComp.team?.abbreviation ?? '';
-    const awayAbbr: string = awayComp.team?.abbreviation ?? '';
-
-    if (!espnHome || !espnAway) continue;
-
-    const canonHome = resolveESPNName(espnHome);
-    const canonAway = resolveESPNName(espnAway);
-
-    const kickoffAt = ev.date as string;
-    const roundName: string = ev.season?.type?.name ?? 'Group';
-    const stage = espnRoundToStage(roundName);
-
-    const homeFlag = getFlag(canonHome, homeAbbr);
-    const awayFlag = getFlag(canonAway, awayAbbr);
-
-    // Try to find matching TxLINE fixture by team names first
-    const key = `${normalizeTeam(canonHome)}__${normalizeTeam(canonAway)}`;
-    const keyRev = `${normalizeTeam(canonAway)}__${normalizeTeam(canonHome)}`;
-    const staticMatch = staticByTeams.get(key) ?? staticByTeams.get(keyRev);
-
-    let fixtureId: string;
-
-    if (staticMatch) {
-      // Exact team name match — use the known TxLINE ID
-      fixtureId = staticMatch.fixtureId;
-    } else {
-      // No name match — knockout with changed teams: assign by slot order
-      const slotKey = stage === 'final' && roundName.toLowerCase().includes('third') ? 'third' : stage;
-      const slots = TXLINE_SLOTS[slotKey] ?? [];
-      const idx = slotCounters[slotKey] ?? 0;
-      fixtureId = slots[idx] ?? `espn_${ev.id}`;
-      slotCounters[slotKey] = idx + 1;
-    }
-
-    fixtures.push({
-      fixtureId,
-      homeTeam: canonHome,
-      awayTeam: canonAway,
-      homeFlag,
-      awayFlag,
-      kickoffAt,
-      stage,
-    });
-  }
-
-  return NextResponse.json(fixtures, {
-    headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
-  });
 }

@@ -939,6 +939,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // Per-half danger attack / corner counts for stats-based scoring
   const halfDangerCountRef  = useRef<Record<number, number>>({ 1: 0, 2: 0 });
   const halfCornerCountRef  = useRef<Record<number, number>>({ 1: 0, 2: 0 });
+  // Cumulative shot counts (total + on-target) per team — updated from TxLINE shot events
+  const shotCountRef = useRef<{home: {total: number, onTarget: number}, away: {total: number, onTarget: number}}>({ home: {total: 0, onTarget: 0}, away: {total: 0, onTarget: 0} });
   // Score snapshot at half-time (to compute second-half goals separately)
   const htScoreRef = useRef<{ home: number; away: number } | null>(null);
   // Throttle danger_attack events: track last timestamp (ms) per participant to avoid spam
@@ -1282,6 +1284,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // from elapsed time since kickoff so the display doesn't stick at 0'.
   const [liveClockMinute, setLiveClockMinute] = useState<number>(0);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  // Period stats from TxLINE Score object (Period1=H1, Period2=H2, Total=overall)
+  const [txlinePeriodStats, setTxlinePeriodStats] = useState<any>(null);
+  // Ref mirror so the polling closure always reads the latest period stats
+  const txlinePeriodStatsRef = useRef<any>(null);
   const htStatsSentRef = useRef(false);
   const ftStatsSentRef = useRef(false);
 
@@ -1583,6 +1589,27 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (u.ScoreSoccer) return { home: u.ScoreSoccer['1']?.Goals ?? 0, away: u.ScoreSoccer['2']?.Goals ?? 0 };
         return undefined;
       })(),
+      // TxLINE period-keyed stats: Period1=H1, Period2=H2, Total=cumulative
+      // These fields appear in the merged Score object on the score snapshot/updates response.
+      periodStats: (() => {
+        const sc = u.Score;
+        if (!sc?.Participant1 && !sc?.Participant2) return undefined;
+        const p1 = sc?.Participant1 ?? {};
+        const p2 = sc?.Participant2 ?? {};
+        const ext = (p: any) => ({
+          goals:   Number(p?.Goals ?? 0),
+          corners: Number(p?.Corners ?? 0),
+          yellows: Number(p?.YellowCards ?? 0),
+          reds:    Number(p?.RedCards ?? 0),
+        });
+        const homeTotal = ext(p1?.Total);
+        const awayTotal = ext(p2?.Total);
+        if (homeTotal.goals === 0 && homeTotal.corners === 0 && awayTotal.goals === 0 && awayTotal.corners === 0) return undefined;
+        return {
+          home: { total: homeTotal, h1: ext(p1?.Period1), h2: ext(p1?.Period2) },
+          away: { total: awayTotal, h1: ext(p2?.Period1), h2: ext(p2?.Period2) },
+        };
+      })(),
       // TxODDS legacy: events/Events/Incidents array. TxLINE: Action at top level with Data field.
       events: (() => {
         const legacy = u.events ?? u.Events ?? u.Incidents ?? u.incidents;
@@ -1731,6 +1758,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             playerId: undefined, playerName: undefined,
             assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined });
           return events;
+        }
+
+        // Track all shots for the stats panel
+        if (action === 'shot') {
+          const sSide = participant === 1 ? 'home' : 'away';
+          shotCountRef.current[sSide].total++;
+          const oc = (rawData.Outcome ?? '').toLowerCase();
+          if (oc === 'saved' || oc === 'ontarget') shotCountRef.current[sSide].onTarget++;
         }
 
         // Shot saved → synthesize goalkeeper_save for the opposing team's GK
@@ -2097,6 +2132,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setScore({ home: latest.score.home ?? 0, away: latest.score.away ?? 0 });
           scoreRef.current = { home: latest.score.home ?? 0, away: latest.score.away ?? 0 };
         }
+        if (latest?.periodStats) {
+          setTxlinePeriodStats(latest.periodStats);
+          txlinePeriodStatsRef.current = latest.periodStats;
+        }
 
         // ── Clock tracking — update live minute display from TxLINE Clock.Seconds ──
         const pollClockRunning: boolean | undefined = latest?.clockRunning;
@@ -2195,14 +2234,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               const totalPoss = p1c + p2c;
               const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
               const awayPct = 100 - homePct;
-              // Count first-half event stats from eventsRef (live events already accumulated)
+              // Count first-half event stats — supplement with TxLINE period stats when available
+              // TxLINE Score.Period1 provides authoritative corner/card counts for the period.
+              const txPS1 = txlinePeriodStatsRef.current;
               const htStats: HalfStats = {
-                homeGoals:         scoreRef.current.home,
-                awayGoals:         scoreRef.current.away,
+                homeGoals:         txPS1?.home.h1.goals    ?? scoreRef.current.home,
+                awayGoals:         txPS1?.away.h1.goals    ?? scoreRef.current.away,
                 homeDangers:       halfDangerCountRef.current[1] ?? 0,
                 awayDangers:       halfDangerCountRef.current[2] ?? 0,
-                homeCorners:       halfCornerCountRef.current[1] ?? 0,
-                awayCorners:       halfCornerCountRef.current[2] ?? 0,
+                homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, txPS1?.home.h1.corners ?? 0),
+                awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, txPS1?.away.h1.corners ?? 0),
                 homePossessionPct: homePct,
                 awayPossessionPct: awayPct,
               };
@@ -2256,13 +2297,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               const awayPct = 100 - homePct;
               const h2HomeGoals = scoreRef.current.home - (htScoreRef.current?.home ?? 0);
               const h2AwayGoals = scoreRef.current.away - (htScoreRef.current?.away ?? 0);
+              // Supplement event-counted stats with TxLINE Score.Period2 when available
+              const txPS2 = txlinePeriodStatsRef.current;
               const ftStats: HalfStats = {
-                homeGoals:         Math.max(0, h2HomeGoals),
-                awayGoals:         Math.max(0, h2AwayGoals),
+                homeGoals:         txPS2?.home.h2.goals    ?? Math.max(0, h2HomeGoals),
+                awayGoals:         txPS2?.away.h2.goals    ?? Math.max(0, h2AwayGoals),
                 homeDangers:       halfDangerCountRef.current[1] ?? 0,
                 awayDangers:       halfDangerCountRef.current[2] ?? 0,
-                homeCorners:       halfCornerCountRef.current[1] ?? 0,
-                awayCorners:       halfCornerCountRef.current[2] ?? 0,
+                homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, txPS2?.home.h2.corners ?? 0),
+                awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, txPS2?.away.h2.corners ?? 0),
                 homePossessionPct: homePct,
                 awayPossessionPct: awayPct,
               };
@@ -2452,18 +2495,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
         if (newEvents.length === 0 && !latestStats) return;
 
-        // Add convertTxLineUpdates events to feed, replacing placeholder events:
-        // 1. PlayerStats placeholders with numeric names (e.g. "Player 533573 - goal")
-        // 2. Synthetic score-api-goal-* events added by pollScore while awaiting TxLINE confirmation
+        // Merge new events into feed, deduplicating PlayerStats placeholders
         setEvents(prev => {
           const superseded = new Set<string>();
           for (const ne of newEvents) {
             for (const e of prev) {
               // Replace PlayerStats placeholder: same player + same type
               if (e.id.startsWith('ps-') && e.type === ne.type && ne.playerId && e.playerId === ne.playerId)
-                superseded.add(e.id);
-              // Replace pollScore synthetic goal placeholder: same type + same team (no player yet)
-              if (e.id.startsWith('score-api-goal-') && e.type === ne.type && ne.team === e.team)
                 superseded.add(e.id);
             }
           }
@@ -2658,58 +2696,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
 
-  // ── LIVE MODE: Score fallback from ESPN scoreboard ───────────────────────────
-  // TxLINE is now the primary source for both score and events (score comes in with
-  // every goal event). ESPN is kept as a fallback: it silently updates the score
-  // display if TxLINE hasn't sent the goal yet, but does NOT fire the commentator
-  // dialog — that only fires from real TxLINE events so player names are always present.
-  // ESPN is also used for match-completed detection (entry.completed).
-  useEffect(() => {
-    if (appMode !== 'live') return;
-    if (!fixture.homeTeam) return;
-
-    let isMounted = true;
-    const pollScore = async () => {
-      try {
-        const res = await fetch('/api/scores/wc2026');
-        if (!res.ok || !isMounted) return;
-        const data: Record<string, { home: number; away: number; completed?: boolean }> = await res.json();
-        const entry = data[contestId];
-        if (entry && isMounted) {
-          // Update score silently — TxLINE goal events are the authoritative trigger
-          // for commentator dialog and SFX. ESPN only fills the gap if TxLINE is slow.
-          setScore(prev => ({
-            home: Math.max(prev.home, entry.home),
-            away: Math.max(prev.away, entry.away),
-          }));
-          scoreRef.current = {
-            home: Math.max(scoreRef.current.home, entry.home),
-            away: Math.max(scoreRef.current.away, entry.away),
-          };
-
-          // If the authoritative scores API says the match is completed,
-          // synthesize a full-time event so the card pack and prize flow unlock.
-          if (entry.completed && isMounted && lastGameStateRef.current !== 'FullTime') {
-            lastGameStateRef.current = 'FullTime';
-            const ftMin = Math.max(90, Math.floor((lastClockSecondsRef.current ?? 90 * 60) / 60));
-            setEvents(prev => {
-              if (prev.some(e => e.type === 'full_time')) return prev;
-              return [{ id: `synth-ft-src-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ended ${entry.home}–${entry.away}.` }, ...prev];
-            });
-            setMinute(ftMin);
-            setMatchCompleted(true);
-            playSFX('end_game');
-          }
-          if (entry.completed && isMounted) setMatchCompleted(true);
-        }
-      } catch { /* silent */ }
-    };
-
-    pollScore();
-    const interval = setInterval(pollScore, 30000); // poll every 30s for fresher scores
-    return () => { isMounted = false; clearInterval(interval); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, contestId]);
+  // ESPN score fallback removed — TxLINE is now the authoritative source for
+  // both score and match completion. FullTime is detected from TxLINE's game_finalised
+  // action and GameState field, which is already handled in the main polling loop.
 
   // ── KICKOFF SAFETY NET ────────────────────────────────────────────────────
   // If TxLINE never sends a valid game state after kickoff time passes,
@@ -4760,6 +4749,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 </div>
 
                 <StatRow label="Goals" home={goals.home} away={goals.away} highlight />
+                {(shotCountRef.current.home.total + shotCountRef.current.away.total > 0) && <>
+                  <StatRow label="Shots" home={shotCountRef.current.home.total} away={shotCountRef.current.away.total} />
+                  <StatRow label="Shots on Target" home={shotCountRef.current.home.onTarget} away={shotCountRef.current.away.onTarget} />
+                </>}
                 <StatRow label="Corner Kicks" home={corners.home} away={corners.away} />
                 <StatRow label="Goalkeeper Saves" home={saves.home} away={saves.away} />
                 <StatRow label="Danger Attacks" home={danger.home} away={danger.away} />
@@ -4767,6 +4760,30 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 {(reds.home + reds.away > 0) && <StatRow label="Red Cards" home={reds.home} away={reds.away} />}
                 {(ownGoals.home + ownGoals.away > 0) && <StatRow label="Own Goals" home={ownGoals.home} away={ownGoals.away} />}
                 <StatRow label="Substitutions" home={subs.home} away={subs.away} />
+
+                {txlinePeriodStats && (txlinePeriodStats.home.h1.goals > 0 || txlinePeriodStats.home.h1.corners > 0 || txlinePeriodStats.away.h1.goals > 0 || txlinePeriodStats.away.h1.corners > 0) && (
+                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+                    <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.85rem', color: 'var(--text-muted)', letterSpacing: '0.12em', marginBottom: 12 }}>PERIOD BREAKDOWN</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1, background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', padding: '10px 14px' }}>
+                        <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.8rem', color: 'var(--color-primary)', letterSpacing: '0.1em', marginBottom: 8 }}>1ST HALF</div>
+                        <StatRow label="Goals" home={txlinePeriodStats.home.h1.goals} away={txlinePeriodStats.away.h1.goals} />
+                        <StatRow label="Corners" home={txlinePeriodStats.home.h1.corners} away={txlinePeriodStats.away.h1.corners} />
+                        {(txlinePeriodStats.home.h1.yellows + txlinePeriodStats.away.h1.yellows > 0) && <StatRow label="Yellows" home={txlinePeriodStats.home.h1.yellows} away={txlinePeriodStats.away.h1.yellows} />}
+                        {(txlinePeriodStats.home.h1.reds + txlinePeriodStats.away.h1.reds > 0) && <StatRow label="Reds" home={txlinePeriodStats.home.h1.reds} away={txlinePeriodStats.away.h1.reds} />}
+                      </div>
+                      {(txlinePeriodStats.home.h2.goals > 0 || txlinePeriodStats.home.h2.corners > 0 || txlinePeriodStats.away.h2.goals > 0 || txlinePeriodStats.away.h2.corners > 0) && (
+                        <div style={{ flex: 1, background: 'var(--bg-glass)', border: '1px solid var(--border-subtle)', padding: '10px 14px' }}>
+                          <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '0.8rem', color: 'var(--color-danger)', letterSpacing: '0.1em', marginBottom: 8 }}>2ND HALF</div>
+                          <StatRow label="Goals" home={txlinePeriodStats.home.h2.goals} away={txlinePeriodStats.away.h2.goals} />
+                          <StatRow label="Corners" home={txlinePeriodStats.home.h2.corners} away={txlinePeriodStats.away.h2.corners} />
+                          {(txlinePeriodStats.home.h2.yellows + txlinePeriodStats.away.h2.yellows > 0) && <StatRow label="Yellows" home={txlinePeriodStats.home.h2.yellows} away={txlinePeriodStats.away.h2.yellows} />}
+                          {(txlinePeriodStats.home.h2.reds + txlinePeriodStats.away.h2.reds > 0) && <StatRow label="Reds" home={txlinePeriodStats.home.h2.reds} away={txlinePeriodStats.away.h2.reds} />}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'Bebas Neue, cursive', letterSpacing: '0.05em' }}>
                   /// LIVE STREAM / TX-LINE DATA FEED ///

@@ -806,7 +806,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     Promise.all([
       fetchLiveScoreUpdates(apiToken, contestId, guestJwt),
       buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt),
-      fetch('/api/scores/wc2026').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetch('/api/scores/txline').then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ])
       .then(([raw, pMap, scoresData]) => {
         if (cancelled) return;
