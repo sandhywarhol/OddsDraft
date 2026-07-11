@@ -109,7 +109,7 @@ function HeroSection() {
         {/* CTA Buttons */}
         <div className="hero-ctas">
           <Link href="/contests" className="btn-hero-play" id="hero-play-btn">
-            🏆 Play Now
+            Play Now
           </Link>
           <Link href="/how-it-works" className="btn-hero-learn" id="hero-learn-btn">
             How It Works
