@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendMessage, formatMatchEvent } from '@/lib/telegram-bot';
+import { sendMessage, formatMatchEvent, formatMatchStats } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
 import { calculateEventPoints } from '@/lib/fantasy-engine';
@@ -217,9 +217,51 @@ export async function GET(req: NextRequest) {
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const eventType = ACTION_MAP[rawType] ?? rawType;
 
-        // HT/FT: already stored in live_match_events above; rich stats are sent
-        // by the live page via /api/telegram/stats — skip the plain-text duplicate.
-        if (STATS_ONLY.has(eventType)) continue;
+        // HT/FT: send rich stats block from the cron so it works even when no
+        // browser tab is open. Same dedup key as /api/telegram/stats so if the
+        // live page already sent it, this insert will fail with 23505 and we skip.
+        if (STATS_ONLY.has(eventType)) {
+          const statsLabel = eventType === 'half_time' ? 'Half Time' : 'Full Time';
+          const dedupId = `stats-${eventType}`;
+          const { error: dedupErr } = await supabase
+            .from('notified_events')
+            .insert({ fixture_id: fixture.fixtureId, event_id: dedupId });
+          if (!dedupErr) {
+            // Build stats from live_match_events — same approach as /api/telegram/stats
+            const { data: matchEvRows } = await supabase
+              .from('live_match_events')
+              .select('event_type, team_name, home_score, away_score')
+              .eq('fixture_id', fixture.fixtureId);
+            const cnt = (type: string, team: string) =>
+              (matchEvRows ?? []).filter(e => e.event_type === type && e.team_name === team).length;
+            const latestRow = (matchEvRows ?? []).slice(-1)[0];
+            const dbScore = { home: latestRow?.home_score ?? scoreHome, away: latestRow?.away_score ?? scoreAway };
+            const serverStats = {
+              goals:   [cnt('goal',             fixture.homeTeam), cnt('goal',             fixture.awayTeam)] as [number,number],
+              corners: [cnt('corner_kick',      fixture.homeTeam), cnt('corner_kick',      fixture.awayTeam)] as [number,number],
+              yellows: [cnt('yellow_card',      fixture.homeTeam), cnt('yellow_card',      fixture.awayTeam)] as [number,number],
+              reds:    [cnt('red_card',         fixture.homeTeam), cnt('red_card',         fixture.awayTeam)] as [number,number],
+              saves:   [cnt('goalkeeper_save',  fixture.homeTeam), cnt('goalkeeper_save',  fixture.awayTeam)] as [number,number],
+              subs:    [cnt('substitution',     fixture.homeTeam), cnt('substitution',     fixture.awayTeam)] as [number,number],
+              dangers: [cnt('danger_attack',    fixture.homeTeam), cnt('danger_attack',    fixture.awayTeam)] as [number,number],
+            };
+            const { data: tgSubs } = await supabase
+              .from('telegram_subscriptions')
+              .select('chat_id')
+              .eq('contest_id', fixture.fixtureId);
+            if (tgSubs?.length) {
+              const text = formatMatchStats({
+                label: statsLabel, score: dbScore, stats: serverStats,
+                homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+                homeFlag: fixture.homeFlag ?? '', awayFlag: fixture.awayFlag ?? '',
+              });
+              await Promise.allSettled(tgSubs.map(s => sendMessage(s.chat_id, text, { parse_mode: 'Markdown' })));
+              console.log(`[CronMatchEvents] ${statsLabel} stats → ${tgSubs.length} subscribers (${fixture.fixtureId})`);
+            }
+          }
+          // else: 23505 = already sent by browser tab or earlier cron run — skip
+          continue;
+        }
 
         const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
         const evData = ev.Data?.New ?? ev.Data ?? {};
