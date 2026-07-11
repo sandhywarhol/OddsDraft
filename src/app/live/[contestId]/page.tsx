@@ -744,10 +744,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // TxLineContext's useEffect hasn't run yet on the first render, so appMode
   // is still 'demo' even after a page refresh in live mode.
   // forceDemoMode (?mode=demo in URL) always overrides live state.
+  // TxLineContext (parent component) writes 'live' to txline_app_mode before LivePage renders,
+  // so checking the mode flag is sufficient. We deliberately omit the txline_api_token check:
+  // auth is handled server-side by the proxy, so the client token is irrelevant — requiring it
+  // would make persistedIsLive=false on any device where NEXT_PUBLIC_TXODDS_API_TOKEN isn't set,
+  // breaking lineup/leaderboard Supabase fallbacks and showing demo state for live users.
   const persistedIsLive = !forceDemoMode
     && typeof window !== 'undefined'
-    && localStorage.getItem('txline_app_mode') === 'live'
-    && !!localStorage.getItem('txline_api_token');
+    && localStorage.getItem('txline_app_mode') !== 'demo';
 
   // Always prefer WC2026 real fixtures (works in both demo and live modes)
   const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
@@ -1353,6 +1357,37 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, wcFixture]);
+
+  // ── DB-based matchCompleted bootstrap ─────────────────────────────────────────
+  // On page load, check live_match_events for a full_time event via the API. This fires
+  // immediately — before TxLINE connects — so returning users on a fresh device see the
+  // Match Finished banner and prize section without waiting for the 30s score poll or the
+  // time-based fallback (which requires lastGameStateRef to be set by TxLINE first).
+  useEffect(() => {
+    if (appMode !== 'live') return;
+    const fixtureIdStr = contestId;
+    fetch(`/api/live/events?fixtureId=${fixtureIdStr}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: { event_type?: string; type?: string; minute?: number; home_score?: number; away_score?: number }[]) => {
+        if (!rows.length) return;
+        const hasFullTime = rows.some(r => (r.event_type ?? r.type) === 'full_time');
+        if (hasFullTime && !matchCompletedRef.current) {
+          if (lastGameStateRef.current === null) lastGameStateRef.current = 'FullTime';
+          matchCompletedRef.current = true;
+          setMatchCompleted(true);
+          // Seed score from the last row that has score data
+          const lastWithScore = [...rows].reverse().find(r => r.home_score !== undefined);
+          if (lastWithScore) {
+            setScore(prev => ({
+              home: Math.max(prev.home, lastWithScore.home_score ?? 0),
+              away: Math.max(prev.away, lastWithScore.away_score ?? 0),
+            }));
+          }
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appMode, contestId]);
 
   // ── Shared helper: apply stats-based bonuses to lineup at HT/FT ─────────────
   // Called from both live-mode polling and demo-mode event trigger.
