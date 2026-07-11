@@ -1,8 +1,12 @@
 // Player photo fetching via TheSportsDB (free, no key needed)
-// Results are cached in localStorage for 7 days
+// Results are cached in localStorage:
+//   - 7 days when a photo URL is found
+//   - 1 hour when no photo is found (so we retry later, not 7 days stuck with "no photo")
+//   - Network errors are NOT cached at all (retry on every page load)
 
-const CACHE_PREFIX = 'pphoto_v1_';
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_PREFIX      = 'pphoto_v2_';
+const CACHE_TTL_MS      = 7 * 24 * 60 * 60 * 1000; // 7 days — found photo
+const CACHE_NULL_TTL_MS =           60 * 60 * 1000; // 1 hour  — no photo found
 
 interface PhotoCache {
   url: string | null;
@@ -15,7 +19,8 @@ function readCache(playerId: string): string | null | undefined {
     const raw = localStorage.getItem(CACHE_PREFIX + playerId);
     if (!raw) return undefined;
     const c: PhotoCache = JSON.parse(raw);
-    if (Date.now() - c.ts > CACHE_TTL_MS) return undefined;
+    const ttl = c.url ? CACHE_TTL_MS : CACHE_NULL_TTL_MS;
+    if (Date.now() - c.ts > ttl) return undefined; // expired — retry
     return c.url;
   } catch { return undefined; }
 }
@@ -49,8 +54,15 @@ export async function getPlayerPhoto(playerId: string, name: string): Promise<st
   if (inFlight.has(playerId)) return inFlight.get(playerId)!;
 
   const promise = fetchFromSportsDB(name)
-    .then(url => { writeCache(playerId, url); return url; })
-    .catch(() => { writeCache(playerId, null); return null; })
+    .then(url => {
+      // Always cache the result (null = no photo), but with different TTLs (see readCache)
+      writeCache(playerId, url);
+      return url;
+    })
+    .catch(() => {
+      // Network error — do NOT cache, so it retries next page load
+      return null;
+    })
     .finally(() => inFlight.delete(playerId));
 
   inFlight.set(playerId, promise);
