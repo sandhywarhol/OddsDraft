@@ -1373,12 +1373,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   }, [appMode, wcFixture]);
 
   // ── Time-based matchCompleted fallback ────────────────────────────────────
-  // For matches where TxLINE never fires FullTime,
-  // detect completion from elapsed time (kickoff + 2.5h).
+  // For matches where TxLINE never fires the completion signal,
+  // detect completion from elapsed time. Knockout stages get 3.5h to cover
+  // 120 min ET + penalties before we force-complete.
   useEffect(() => {
     if (appMode !== 'live' || !wcFixture?.kickoffAt) return;
     const kickoffMs = new Date(wcFixture.kickoffAt).getTime();
-    const completedByMs = kickoffMs + 2.5 * 60 * 60 * 1000; // kickoff + 2.5h
+    const isKO = ['qf', 'sf', 'final'].includes(wcFixture?.stage ?? '');
+    const completedByMs = kickoffMs + (isKO ? 3.5 : 2.5) * 60 * 60 * 1000;
     const check = () => {
       // Only trigger time-based completion if TxLINE confirmed the match actually started.
       // A delayed match must not be auto-completed based on the original kickoff time.
@@ -1436,14 +1438,25 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     const minMatchElapsedMs = 85 * 60 * 1000;
     const matchOldEnoughForFullTime = !kickoffMs || (Date.now() - kickoffMs) >= minMatchElapsedMs;
 
-    // Primary: check live_match_events for full_time event
+    // Primary: check live_match_events for a completion signal.
+    // For knockout stages (QF/SF/Final), TxLINE sends full_time at 90 min but
+    // the match may continue to ET/pens — only game_finalised is the definitive
+    // end. For group/r32/r16 there is no ET so full_time is always the real end.
+    // Safety valve: if 3h have passed since kickoff, full_time is also accepted
+    // for knockout stages (handles matches that ended exactly at 90 min).
+    const isKnockoutStage = ['qf', 'sf', 'final'].includes(wcFixture?.stage ?? '');
     fetch(`/api/live/events?fixtureId=${fixtureIdStr}`)
       .then(r => r.ok ? r.json() : [])
       .then((rows: { event_type?: string; type?: string; home_score?: number; away_score?: number }[]) => {
         if (!rows.length) return;
-        const hasFullTime = rows.some(r => (r.event_type ?? r.type) === 'full_time');
-        // Guard: ignore full_time events if the match hasn't been running long enough
-        if (hasFullTime && matchOldEnoughForFullTime) {
+        const types = rows.map(r => r.event_type ?? r.type);
+        const hasGameFinalised = types.includes('game_finalised');
+        const hasFullTime = types.includes('full_time');
+        const elapsedMs = kickoffMs ? Date.now() - kickoffMs : Infinity;
+        const fullTimeIsDefinitive = !isKnockoutStage || elapsedMs >= 3 * 60 * 60 * 1000;
+        const isCompleted = hasGameFinalised || (hasFullTime && fullTimeIsDefinitive);
+        // Guard: ignore completion signals if the match hasn't been running long enough
+        if (isCompleted && matchOldEnoughForFullTime) {
           const lastWithScore = [...rows].reverse().find(r => r.home_score !== undefined);
           markCompleted(lastWithScore?.home_score, lastWithScore?.away_score);
         }

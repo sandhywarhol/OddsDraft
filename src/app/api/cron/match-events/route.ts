@@ -15,15 +15,16 @@ const supabase = createClient(
 
 const SIGNIFICANT = new Set([
   'goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save',
-  'half_time', 'full_time',
+  'half_time', 'full_time', 'game_finalised',
   'yellow_card', 'substitution', 'corner_kick', 'var_review', 'extra_time',
   'penalty_won', 'penalty_missed', 'kick_off',
 ]);
 
 // These events are stored in live_match_events and marked as notified,
-// but NOT sent as individual Telegram messages — the live page sends a
-// richer stats block via /api/telegram/stats instead.
-const STATS_ONLY = new Set(['half_time', 'full_time']);
+// but NOT sent as individual Telegram messages — a rich stats block is
+// sent by the cron instead (same dedup key as /api/telegram/stats).
+// game_finalised = true end for knockout matches (after ET/pens).
+const STATS_ONLY = new Set(['half_time', 'full_time', 'game_finalised']);
 
 const ACTION_MAP: Record<string, string> = {
   goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
@@ -32,8 +33,10 @@ const ACTION_MAP: Record<string, string> = {
   redcard: 'red_card', red_card: 'red_card',
   substitution: 'substitution', sub: 'substitution',
   penalty_save: 'penalty_save', penaltysave: 'penalty_save',
-  half_time: 'half_time', halftime: 'half_time',
+  half_time: 'half_time', halftime: 'half_time', halftime_finalised: 'half_time',
   full_time: 'full_time', fulltime: 'full_time',
+  // game_finalised = definitive match end (after ET/pens for knockout matches)
+  game_finalised: 'game_finalised',
   kick_off: 'kick_off', kickoff: 'kick_off', secondhalf: 'kick_off',
   // TxLINE raw event type names (from txodds.ts mapEventToFantasyType):
   corner: 'corner_kick', corner_kick: 'corner_kick',
@@ -217,12 +220,22 @@ export async function GET(req: NextRequest) {
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const eventType = ACTION_MAP[rawType] ?? rawType;
 
-        // HT/FT: send rich stats block from the cron so it works even when no
-        // browser tab is open. Same dedup key as /api/telegram/stats so if the
-        // live page already sent it, this insert will fail with 23505 and we skip.
+        // HT/FT stats: send rich stats block even when no browser tab is open.
+        // For knockout matches (QF/SF/Final), TxLINE sends full_time at 90 min
+        // but the match may continue to ET/pens. We skip full_time stats for
+        // knockout stages and wait for game_finalised (the definitive end signal).
+        // For group/r32/r16 there is no ET, so full_time is always the real end.
         if (STATS_ONLY.has(eventType)) {
+          const isKnockoutStage = ['qf', 'sf', 'final'].includes(fixture.stage as string);
+          // Knockout: defer FT stats until game_finalised arrives
+          if (eventType === 'full_time' && isKnockoutStage) { continue; }
+          // Non-knockout: full_time already handled stats, skip game_finalised
+          if (eventType === 'game_finalised' && !isKnockoutStage) { continue; }
+
           const statsLabel = eventType === 'half_time' ? 'Half Time' : 'Full Time';
-          const dedupId = `stats-${eventType}`;
+          // game_finalised (knockout) shares the same dedup key as full_time so
+          // if somehow both fire we never double-send.
+          const dedupId = eventType === 'half_time' ? 'stats-half_time' : 'stats-full_time';
           const { error: dedupErr } = await supabase
             .from('notified_events')
             .insert({ fixture_id: fixture.fixtureId, event_id: dedupId });
