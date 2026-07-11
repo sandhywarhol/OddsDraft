@@ -117,7 +117,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
         setIsLoadingFixtures(true);
 
         // Use proxy so no client-side token is needed
-        const proxyRes = await fetch('/api/txline/fixtures/snapshot', { cache: 'no-store' });
+        const proxyRes = await fetch('/api/txline/api/fixtures/snapshot', { cache: 'no-store' });
         if (!proxyRes.ok) throw Object.assign(new Error('fixtures fetch failed'), { response: { status: proxyRes.status } });
         const raw = await proxyRes.json();
         const all: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
