@@ -512,7 +512,7 @@ export async function POST(req: NextRequest) {
         const lines = upcoming.map(f => {
           const ko = f.kickoffAt ? formatKickoff(f.kickoffAt, tzOffset) : 'TBD';
           const koMs = new Date(f.kickoffAt).getTime();
-          const isLive = Date.now() > koMs && Date.now() < koMs + 2 * 3600 * 1000;
+          const isLive = Date.now() > koMs && Date.now() < koMs + 3 * 3600 * 1000;
           const status = isLive ? ' 🔴 LIVE' : '';
           return `${f.homeFlag} *${f.homeTeam} vs ${f.awayTeam}* ${f.awayFlag}${status}\n  🕐 ${ko}`;
         });

@@ -7,9 +7,7 @@ import { getPlayerById } from './players';
 import { WC2026_PLAYERS } from './wc2026-players-static';
 import { mapEventToFantasyType } from './txodds';
 
-const IS_PROD_TXLINE =
-  process.env.NEXT_PUBLIC_TXLINE_ENV === 'production' ||
-  process.env.NEXT_PUBLIC_SOLANA_NETWORK !== 'devnet';
+const IS_PROD_TXLINE = process.env.NEXT_PUBLIC_TXLINE_ENV !== 'devnet';
 
 // Browser calls go through our proxy to avoid CORS; server-side calls go direct
 const TXLINE_API_BASE = typeof window !== 'undefined'
