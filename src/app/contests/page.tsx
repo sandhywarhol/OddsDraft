@@ -85,7 +85,7 @@ export default function ContestsPage() {
       .catch(() => {});
   }, [isDemo]);
 
-  // Extract scores from TxLINE allFixtures snapshot — no ESPN needed
+  // Extract scores from TxLINE allFixtures snapshot
   useEffect(() => {
     if (isDemo || allFixtures.length === 0) return;
     const scores: Record<string, FixtureScore> = {};

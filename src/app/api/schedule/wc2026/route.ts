@@ -49,7 +49,9 @@ function normStr(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '').trim();
 }
 
-// GET /api/schedule/wc2026 — returns WCFixture[] sourced from TxLINE (no ESPN)
+const BACKUP_SCHEDULE_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+
+// GET /api/schedule/wc2026 — returns WCFixture[] sourced from TxLINE with secondary backup
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 
@@ -169,10 +171,10 @@ export async function GET() {
     }
     for (const id of idsToRemove) resultMap.delete(id);
 
-    // ── ESPN cross-check for remaining TBD fixtures ───────────────────────────
-    // TxLINE sometimes hasn't published SF/Final teams yet even when ESPN has.
-    // For any remaining fixture where both teams are still TBD, try ESPN's
-    // scoreboard API keyed by kickoff date to get the confirmed team names.
+    // ── Backup cross-check for remaining TBD fixtures ─────────────────────────
+    // TxLINE sometimes hasn't published SF/Final teams yet when other sources have.
+    // For any remaining fixture where both teams are still TBD, try the backup
+    // scoreboard keyed by kickoff date to get confirmed team names.
     const tbdUpcoming = Array.from(resultMap.values()).filter(
       f => (isTbd(f.homeTeam) || isTbd(f.awayTeam)) && f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now()
     );
@@ -186,31 +188,31 @@ export async function GET() {
       await Promise.all(uniqueDates.map(async (dateStr) => {
         try {
           const r = await fetch(
-            `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateStr}&limit=20`,
+            `${BACKUP_SCHEDULE_URL}?dates=${dateStr}&limit=20`,
             { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 300 } }
           );
           if (!r.ok) return;
-          const espnEvents: any[] = (await r.json()).events ?? [];
+          const backupEvents: any[] = (await r.json()).events ?? [];
 
-          for (const ev of espnEvents) {
+          for (const ev of backupEvents) {
             const comp = ev.competitions?.[0];
             const homeComp = comp?.competitors?.find((c: any) => c.homeAway === 'home');
             const awayComp = comp?.competitors?.find((c: any) => c.homeAway === 'away');
-            const espnHomeName = homeComp?.team?.displayName ?? '';
-            const espnAwayName = awayComp?.team?.displayName ?? '';
-            if (!espnHomeName || !espnAwayName) continue;
-            if (isTbd(espnHomeName) || isTbd(espnAwayName)) continue;
+            const backupHomeName = homeComp?.team?.displayName ?? '';
+            const backupAwayName = awayComp?.team?.displayName ?? '';
+            if (!backupHomeName || !backupAwayName) continue;
+            if (isTbd(backupHomeName) || isTbd(backupAwayName)) continue;
 
-            const espnTime = new Date(ev.date ?? '').getTime();
-            if (!espnTime) continue;
+            const backupTime = new Date(ev.date ?? '').getTime();
+            if (!backupTime) continue;
 
-            // Find the TBD fixture whose kickoff is within 2 hours of this ESPN event
+            // Find the TBD fixture whose kickoff is within 2 hours of this event
             for (const [, fixture] of resultMap) {
               if (!isTbd(fixture.homeTeam) && !isTbd(fixture.awayTeam)) continue;
               const fixTime = new Date(fixture.kickoffAt).getTime();
-              if (Math.abs(fixTime - espnTime) <= 2 * 3_600_000) {
-                const home = resolveTeam(espnHomeName) || espnHomeName;
-                const away = resolveTeam(espnAwayName) || espnAwayName;
+              if (Math.abs(fixTime - backupTime) <= 2 * 3_600_000) {
+                const home = resolveTeam(backupHomeName) || backupHomeName;
+                const away = resolveTeam(backupAwayName) || backupAwayName;
                 fixture.homeTeam = home;
                 fixture.awayTeam = away;
                 fixture.homeFlag = getFlag(home);
@@ -219,7 +221,7 @@ export async function GET() {
             }
           }
         } catch {
-          // ESPN unavailable for this date — leave as TBD
+          // backup unavailable for this date — leave as TBD
         }
       }));
     }
@@ -232,53 +234,52 @@ export async function GET() {
       headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
     });
   } catch (err) {
-    // TxLINE unavailable — fall back to ESPN then static list
-    console.warn('[schedule/wc2026] TxLINE unavailable, trying ESPN:', err);
+    // TxLINE unavailable — fall back to backup source then static list
+    console.warn('[schedule/wc2026] TxLINE unavailable, trying backup source:', err);
     try {
-      // Fetch ESPN schedule for the full WC window
       const r = await fetch(
-        'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260601-20260801&limit=150',
+        `${BACKUP_SCHEDULE_URL}?dates=20260601-20260801&limit=150`,
         { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 300 } }
       );
-      if (!r.ok) throw new Error(`ESPN ${r.status}`);
-      const espnEvents: any[] = (await r.json()).events ?? [];
-      if (espnEvents.length === 0) throw new Error('Empty ESPN response');
+      if (!r.ok) throw new Error(`Backup source ${r.status}`);
+      const backupEvents: any[] = (await r.json()).events ?? [];
+      if (backupEvents.length === 0) throw new Error('Empty backup response');
 
-      // Merge ESPN data onto the static list
+      // Merge backup data onto the static list
       const isTbd2 = (t: string) => !t || t.toLowerCase() === 'tbd';
-      const espnResult = new Map<string, WCFixture>(WC2026_FIXTURES.map(f => [f.fixtureId, { ...f }]));
+      const backupResult = new Map<string, WCFixture>(WC2026_FIXTURES.map(f => [f.fixtureId, { ...f }]));
 
-      for (const ev of espnEvents) {
+      for (const ev of backupEvents) {
         const comp = ev.competitions?.[0];
         const homeComp = comp?.competitors?.find((c: any) => c.homeAway === 'home');
         const awayComp = comp?.competitors?.find((c: any) => c.homeAway === 'away');
-        const espnHome = resolveTeam(homeComp?.team?.displayName ?? '') || homeComp?.team?.displayName;
-        const espnAway = resolveTeam(awayComp?.team?.displayName ?? '') || awayComp?.team?.displayName;
+        const backupHome = resolveTeam(homeComp?.team?.displayName ?? '') || homeComp?.team?.displayName;
+        const backupAway = resolveTeam(awayComp?.team?.displayName ?? '') || awayComp?.team?.displayName;
         const kickoffAt = ev.date ?? '';
-        if (!espnHome || !espnAway || !kickoffAt) continue;
-        if (isTbd2(espnHome) || isTbd2(espnAway)) continue;
+        if (!backupHome || !backupAway || !kickoffAt) continue;
+        if (isTbd2(backupHome) || isTbd2(backupAway)) continue;
 
-        const espnTime = new Date(kickoffAt).getTime();
+        const backupTime = new Date(kickoffAt).getTime();
         // Fill in teams for any TBD static fixture within 2 hours
-        for (const [, fixture] of espnResult) {
+        for (const [, fixture] of backupResult) {
           if (!isTbd2(fixture.homeTeam) && !isTbd2(fixture.awayTeam)) continue;
-          if (Math.abs(new Date(fixture.kickoffAt).getTime() - espnTime) <= 2 * 3_600_000) {
-            fixture.homeTeam = espnHome;
-            fixture.awayTeam = espnAway;
-            fixture.homeFlag = getFlag(espnHome);
-            fixture.awayFlag = getFlag(espnAway);
+          if (Math.abs(new Date(fixture.kickoffAt).getTime() - backupTime) <= 2 * 3_600_000) {
+            fixture.homeTeam = backupHome;
+            fixture.awayTeam = backupAway;
+            fixture.homeFlag = getFlag(backupHome);
+            fixture.awayFlag = getFlag(backupAway);
           }
         }
       }
 
-      const espnFixtures = Array.from(espnResult.values()).sort(
+      const backupFixtures = Array.from(backupResult.values()).sort(
         (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
       );
-      return NextResponse.json(espnFixtures, {
+      return NextResponse.json(backupFixtures, {
         headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300' },
       });
-    } catch (espnErr) {
-      console.warn('[schedule/wc2026] ESPN also unavailable, returning static list:', espnErr);
+    } catch (backupErr) {
+      console.warn('[schedule/wc2026] Backup also unavailable, returning static list:', backupErr);
       return NextResponse.json(WC2026_FIXTURES, {
         headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
       });

@@ -32,23 +32,25 @@ function norm(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function resolve(name: string) { return ALIASES[name.toLowerCase().trim()] ?? name; }
 function flag(name: string) { return FLAG[name] ?? '🏳️'; }
 
+const BACKUP_SCORE_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+
 export type RecentScore = {
   homeTeam: string; awayTeam: string;
   homeFlag: string; awayFlag: string;
   kickoffAt: string;
   scoreHome: number | null; scoreAway: number | null;
-  source: 'txline' | 'espn' | 'static';
+  source: 'txline' | 'backup' | 'static';
 };
 
 // GET /api/scores/recent
 // Returns up to 3 recently finished WC 2026 matches with scores.
-// Primary: TxLINE snapshot. Backup: ESPN scoreboard. Both keyed by date window.
+// Primary: TxLINE snapshot. Backup data source fills in any missing scores.
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
   const now = Date.now();
-  const cutoff = now - 48 * 3_600_000; // last 48 hours
+  const cutoff = now - 48 * 3_600_000;
 
-  const results = new Map<string, RecentScore>(); // key: norm(home)__norm(away)
+  const results = new Map<string, RecentScore>();
 
   // ── Step 1: TxLINE snapshot ──────────────────────────────────────────────
   try {
@@ -63,7 +65,6 @@ export async function GET() {
         const kickoffAt = tf.StartTime ?? '';
         if (!kickoffAt) continue;
         const kickoffMs = new Date(kickoffAt).getTime();
-        // Only matches that kicked off in the last 48h and are now finished
         if (kickoffMs < cutoff || kickoffMs > now) continue;
 
         const rawState = tf.GameState ?? tf.gameState ?? tf.Status ?? tf.status ?? '';
@@ -102,7 +103,7 @@ export async function GET() {
     }
   } catch { /* TxLINE unavailable */ }
 
-  // ── Step 2: Seed from static list for matches TxLINE didn't report ───────
+  // ── Step 2: Seed from static fixture list for matches TxLINE didn't report ─
   const staticFinished = WC2026_FIXTURES
     .filter(f => {
       const ms = new Date(f.kickoffAt).getTime();
@@ -124,12 +125,11 @@ export async function GET() {
     }
   }
 
-  // ── Step 3: ESPN backup for any entry missing scores ─────────────────────
+  // ── Step 3: Backup source for any entry still missing scores ─────────────
   const needScore = Array.from(results.values()).filter(r => r.scoreHome === null);
 
   if (needScore.length > 0) {
     const dates = new Set<string>();
-    // Cover today and the past 2 days (matches may have started yesterday)
     for (let i = 0; i <= 2; i++) {
       const d = new Date(now - i * 86_400_000);
       dates.add(
@@ -137,20 +137,20 @@ export async function GET() {
       );
     }
 
-    const espnEvents: any[] = [];
+    const backupEvents: any[] = [];
     await Promise.all(
       [...dates].map(async dateStr => {
         try {
           const r = await fetch(
-            `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateStr}&limit=20`,
+            `${BACKUP_SCORE_URL}?dates=${dateStr}&limit=20`,
             { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 120 } }
           );
-          if (r.ok) espnEvents.push(...((await r.json()).events ?? []));
-        } catch { /* ESPN date unavailable */ }
+          if (r.ok) backupEvents.push(...((await r.json()).events ?? []));
+        } catch { /* backup source unavailable for this date */ }
       })
     );
 
-    for (const ev of espnEvents) {
+    for (const ev of backupEvents) {
       const comp = ev.competitions?.[0];
       if (!comp?.status?.type?.completed) continue;
 
@@ -158,23 +158,22 @@ export async function GET() {
       const awayComp = comp.competitors?.find((c: any) => c.homeAway === 'away');
       if (!homeComp || !awayComp) continue;
 
-      const espnHome = resolve(homeComp.team?.displayName ?? '');
-      const espnAway = resolve(awayComp.team?.displayName ?? '');
+      const backupHome = resolve(homeComp.team?.displayName ?? '');
+      const backupAway = resolve(awayComp.team?.displayName ?? '');
       const sh = parseInt(homeComp.score ?? '', 10);
       const sa = parseInt(awayComp.score ?? '', 10);
-      if (!espnHome || !espnAway || isNaN(sh) || isNaN(sa)) continue;
+      if (!backupHome || !backupAway || isNaN(sh) || isNaN(sa)) continue;
 
-      // Try to match to an existing result entry (both orientations)
       for (const [, result] of results) {
         if (result.scoreHome !== null) continue;
         const matchNormal =
-          norm(result.homeTeam) === norm(espnHome) && norm(result.awayTeam) === norm(espnAway);
+          norm(result.homeTeam) === norm(backupHome) && norm(result.awayTeam) === norm(backupAway);
         const matchReversed =
-          norm(result.homeTeam) === norm(espnAway) && norm(result.awayTeam) === norm(espnHome);
+          norm(result.homeTeam) === norm(backupAway) && norm(result.awayTeam) === norm(backupHome);
         if (matchNormal) {
-          result.scoreHome = sh; result.scoreAway = sa; result.source = 'espn';
+          result.scoreHome = sh; result.scoreAway = sa; result.source = 'backup';
         } else if (matchReversed) {
-          result.scoreHome = sa; result.scoreAway = sh; result.source = 'espn';
+          result.scoreHome = sa; result.scoreAway = sh; result.source = 'backup';
         }
       }
     }

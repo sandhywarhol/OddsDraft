@@ -79,7 +79,7 @@ function blankPeriod(): PeriodStats {
   return { homeGoals: 0, awayGoals: 0, homeCorners: 0, awayCorners: 0, homeYellows: 0, awayYellows: 0, homeReds: 0, awayReds: 0, homeShots: 0, awayShots: 0, homeDangers: 0, awayDangers: 0 };
 }
 
-// ── ESPN helpers ──────────────────────────────────────────────────────────────
+// ── External stats helpers ───────────────────────────────────────────────────
 
 async function fetchDayEvents(dateStr: string): Promise<any[]> {
   const cutoff = new Date(); cutoff.setUTCDate(cutoff.getUTCDate() - 3);
@@ -183,7 +183,7 @@ async function fetchSupabaseEventCounts(
 
 // GET /api/match/result?fixtureId=18176123
 // Returns goals, cards, venue, attendance and H1/H2/total statistics.
-// ESPN provides the event timeline; TxLINE + Supabase provide period breakdowns.
+// External source provides the event timeline; TxLINE + Supabase provide period breakdowns.
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const fixtureId = url.searchParams.get('fixtureId');
@@ -209,7 +209,7 @@ export async function GET(req: NextRequest) {
   const isLive = koMs > 0 && now > koMs && now < koMs + 3 * 60 * 60 * 1000;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 
-  // Fetch ESPN + TxLINE + Supabase in parallel
+  // Fetch external stats + TxLINE + Supabase in parallel
   const [allDayEventsResult, txlineResult, supabaseResult] = await Promise.allSettled([
     Promise.all(datesToTry.map(fetchDayEvents)).then(arrays => arrays.flat()),
     fetchTxLineStats(appUrl, fixtureId),
@@ -220,7 +220,7 @@ export async function GET(req: NextRequest) {
   const txStats     = txlineResult.status     === 'fulfilled' ? txlineResult.value     : null;
   const evCounts    = supabaseResult.status   === 'fulfilled' ? supabaseResult.value   : null;
 
-  // ── ESPN event timeline ───────────────────────────────────────────────────
+  // ── Event timeline ────────────────────────────────────────────────────────
   const findMatch = (evList: any[]) => evList.find(ev => {
     const comp = ev.competitions?.[0];
     if (!comp) return false;
@@ -231,8 +231,8 @@ export async function GET(req: NextRequest) {
     return teamsMatch(fixture.homeTeam, h) && teamsMatch(fixture.awayTeam, a);
   });
 
-  const espnEvent = findMatch(allDayEvents);
-  const detail = espnEvent?.id ? await fetchEventDetail(espnEvent.id, isLive) : null;
+  const matchEvent = findMatch(allDayEvents);
+  const detail = matchEvent?.id ? await fetchEventDetail(matchEvent.id, isLive) : null;
 
   const events: MatchEvent[] = [];
   const seenKeys = new Set<string>();
@@ -299,21 +299,21 @@ export async function GET(req: NextRequest) {
   //   H1/H2 goals, corners, cards → TxLINE Period1/Period2 (only source with per-half data)
   //   H1/H2 shots, dangers        → Supabase event counts (TxLINE has no shot schema)
   //   H1/H2 corners (fallback)    → Supabase if TxLINE has all-zero period breakdown
-  //   Total goals, corners, cards → TxLINE Total → ESPN boxscore (only if TxLINE = 0)
-  //   Total shots                 → Supabase → ESPN totalShots (only if Supabase = 0)
+  //   Total goals, corners, cards → TxLINE Total → external boxscore (only if TxLINE = 0)
+  //   Total shots                 → Supabase → external totalShots (only if Supabase = 0)
   //   Total dangers               → Supabase only
-  // ESPN NEVER overwrites a non-zero value from TxLINE or Supabase.
+  // External stats NEVER overwrite a non-zero value from TxLINE or Supabase.
 
-  // ESPN boxscore total stats — read once, used only as last-resort fallback
-  const espnHomeTeam = detail?.boxscore?.teams?.find((t: any) => t.homeAway === 'home');
-  const espnAwayTeam = detail?.boxscore?.teams?.find((t: any) => t.homeAway === 'away');
-  const espnStat = (side: any, name: string): number => {
+  // External stats fallback — totals only, used as last resort
+  const backupHomeTeam = detail?.boxscore?.teams?.find((t: any) => t.homeAway === 'home');
+  const backupAwayTeam = detail?.boxscore?.teams?.find((t: any) => t.homeAway === 'away');
+  const backupStat = (side: any, name: string): number => {
     const s = (side?.statistics ?? []).find((x: any) => x.name === name);
     return s ? (parseInt(s.displayValue ?? '0', 10) || 0) : 0;
   };
 
   let stats: MatchStats | undefined;
-  if (txStats || evCounts || espnHomeTeam) {
+  if (txStats || evCounts || backupHomeTeam) {
     const base: MatchStats = txStats ?? { h1: blankPeriod(), h2: blankPeriod(), total: blankPeriod() };
 
     // ── Supabase: shots and dangers (TxLINE has no shot data) ───────────────
@@ -345,19 +345,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── ESPN boxscore: fill TOTAL fields that TxLINE + Supabase left at zero ─
-    // ESPN only provides match totals (no H1/H2 split), so it never touches h1/h2.
+    // ── External stats: fill TOTAL fields that TxLINE + Supabase left at zero ─
+    // External source only provides match totals (no H1/H2 split), so it never touches h1/h2.
     // Each assignment is guarded: only runs when the base value is still 0.
-    if (espnHomeTeam) {
-      if (base.total.homeShots   === 0) base.total.homeShots   = espnStat(espnHomeTeam, 'totalShots');
-      if (base.total.awayShots   === 0) base.total.awayShots   = espnStat(espnAwayTeam, 'totalShots');
-      if (base.total.homeCorners === 0) base.total.homeCorners = espnStat(espnHomeTeam, 'cornerKicks');
-      if (base.total.awayCorners === 0) base.total.awayCorners = espnStat(espnAwayTeam, 'cornerKicks');
-      if (base.total.homeYellows === 0) base.total.homeYellows = espnStat(espnHomeTeam, 'yellowCards');
-      if (base.total.awayYellows === 0) base.total.awayYellows = espnStat(espnAwayTeam, 'yellowCards');
-      if (base.total.homeReds    === 0) base.total.homeReds    = espnStat(espnHomeTeam, 'redCards');
-      if (base.total.awayReds    === 0) base.total.awayReds    = espnStat(espnAwayTeam, 'redCards');
-      // Goals intentionally not read from ESPN — inferred from score header by the client
+    if (backupHomeTeam) {
+      if (base.total.homeShots   === 0) base.total.homeShots   = backupStat(backupHomeTeam, 'totalShots');
+      if (base.total.awayShots   === 0) base.total.awayShots   = backupStat(backupAwayTeam, 'totalShots');
+      if (base.total.homeCorners === 0) base.total.homeCorners = backupStat(backupHomeTeam, 'cornerKicks');
+      if (base.total.awayCorners === 0) base.total.awayCorners = backupStat(backupAwayTeam, 'cornerKicks');
+      if (base.total.homeYellows === 0) base.total.homeYellows = backupStat(backupHomeTeam, 'yellowCards');
+      if (base.total.awayYellows === 0) base.total.awayYellows = backupStat(backupAwayTeam, 'yellowCards');
+      if (base.total.homeReds    === 0) base.total.homeReds    = backupStat(backupHomeTeam, 'redCards');
+      if (base.total.awayReds    === 0) base.total.awayReds    = backupStat(backupAwayTeam, 'redCards');
+      // Goals intentionally not read from external source — inferred from score header by the client
     }
 
     stats = base;

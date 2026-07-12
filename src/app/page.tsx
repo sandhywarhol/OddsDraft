@@ -157,7 +157,7 @@ function HeroSection() {
   );
 }
 
-// RecentlyFinishedBar — fetches from /api/scores/recent (TxLINE primary, ESPN backup).
+// RecentlyFinishedBar — fetches from /api/scores/recent (TxLINE primary, backup source).
 function RecentlyFinishedBar() {
   const [matches, setMatches] = useState<{
     homeTeam: string; awayTeam: string;
@@ -203,7 +203,7 @@ function RecentlyFinishedBar() {
   );
 }
 
-// UpcomingBar — fetches from /api/schedule/wc2026 (TxLINE primary, ESPN fallback)
+// UpcomingBar — fetches from /api/schedule/wc2026 (TxLINE primary, backup fallback)
 // and shows the next 3 upcoming WC 2026 fixtures in the same white WC-logo style
 // as the "recently finished" bar. Rendered independently of the live ticker state.
 function UpcomingBar() {

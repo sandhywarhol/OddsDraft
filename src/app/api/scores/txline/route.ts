@@ -3,7 +3,7 @@ import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 // GET /api/scores/txline
 // Returns { [contestId]: { home, away, completed } } — same shape as /api/scores/wc2026
-// but sourced entirely from TxLINE fixture snapshot (no ESPN dependency).
+// but sourced entirely from TxLINE fixture snapshot.
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 

@@ -2749,9 +2749,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
 
-  // ESPN score fallback removed — TxLINE is now the authoritative source for
-  // both score and match completion. FullTime is detected from TxLINE's game_finalised
-  // action and GameState field, which is already handled in the main polling loop.
+  // TxLINE is the authoritative source for both score and match completion.
+  // FullTime is detected from TxLINE's game_finalised action and GameState field,
+  // which is already handled in the main polling loop.
 
   // ── KICKOFF SAFETY NET ────────────────────────────────────────────────────
   // If TxLINE never sends a valid game state after kickoff time passes,

@@ -152,7 +152,7 @@ export async function resolveTxLineFixtureId(
 
 // ── 2. Player ID mapping ─────────────────────────────────────────────────────
 
-// Try to match a player name (TxLINE or ESPN) to one of our internal player IDs.
+// Try to match a player name to one of our internal player IDs.
 // Strategy: exact match → last-name match → substring match.
 export function matchPlayerName(txlineName: string, teamName: string): string | null {
   const normTx = norm(txlineName);

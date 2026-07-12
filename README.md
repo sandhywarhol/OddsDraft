@@ -37,7 +37,7 @@ Cards are tradeable on-chain. The marketplace is built and live — list any car
 
 ![Schedule](public/schedule.webp)
 
-The full FIFA World Cup 2026 fixture schedule is shown in real time. Data comes from TxLINE (primary) with ESPN as a cross-check for any TBD team slots. Upcoming and recently finished results appear on the homepage.
+The full FIFA World Cup 2026 fixture schedule is shown in real time, sourced entirely from TxLINE. Upcoming and recently finished results appear on the homepage.
 
 ---
 
@@ -95,13 +95,13 @@ POST /api/token/activate              — token activation
 
 One thing we learned: TxLINE often sends goal events with a valid `PlayerId` but empty `PlayerName`. So we built a second detection path using the `PlayerStats` cumulative snapshot — compare each poll's per-player goal count against the previous poll, and any delta means a goal just happened regardless of whether the individual event had a name attached. This made the scoring reliable.
 
-Half-time and full-time stats use a strict source priority: TxLINE period data (goals, corners, cards) → Supabase event counts (shots, danger attacks) → ESPN boxscore totals as fallback only for any field still at zero. No stat is ever sourced from two providers simultaneously.
+Half-time and full-time stats use a strict source priority: TxLINE period data (goals, corners, cards) → Supabase event counts (shots, danger attacks). No stat is ever sourced from two providers simultaneously.
 
 ---
 
 ## Stack
 
-Next.js 16 · Solana · Supabase · TxLINE · ESPN API · Vercel Edge · Telegram Bot API
+Next.js 16 · Solana · Supabase · TxLINE · Vercel Edge · Telegram Bot API
 
 ---
 
