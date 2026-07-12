@@ -169,6 +169,61 @@ export async function GET() {
     }
     for (const id of idsToRemove) resultMap.delete(id);
 
+    // ── ESPN cross-check for remaining TBD fixtures ───────────────────────────
+    // TxLINE sometimes hasn't published SF/Final teams yet even when ESPN has.
+    // For any remaining fixture where both teams are still TBD, try ESPN's
+    // scoreboard API keyed by kickoff date to get the confirmed team names.
+    const tbdUpcoming = Array.from(resultMap.values()).filter(
+      f => (isTbd(f.homeTeam) || isTbd(f.awayTeam)) && f.kickoffAt && new Date(f.kickoffAt).getTime() > Date.now()
+    );
+
+    if (tbdUpcoming.length > 0) {
+      const uniqueDates = [...new Set(tbdUpcoming.map(f => {
+        const d = new Date(f.kickoffAt);
+        return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+      }))];
+
+      await Promise.all(uniqueDates.map(async (dateStr) => {
+        try {
+          const r = await fetch(
+            `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateStr}&limit=20`,
+            { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 300 } }
+          );
+          if (!r.ok) return;
+          const espnEvents: any[] = (await r.json()).events ?? [];
+
+          for (const ev of espnEvents) {
+            const comp = ev.competitions?.[0];
+            const homeComp = comp?.competitors?.find((c: any) => c.homeAway === 'home');
+            const awayComp = comp?.competitors?.find((c: any) => c.homeAway === 'away');
+            const espnHomeName = homeComp?.team?.displayName ?? '';
+            const espnAwayName = awayComp?.team?.displayName ?? '';
+            if (!espnHomeName || !espnAwayName) continue;
+            if (isTbd(espnHomeName) || isTbd(espnAwayName)) continue;
+
+            const espnTime = new Date(ev.date ?? '').getTime();
+            if (!espnTime) continue;
+
+            // Find the TBD fixture whose kickoff is within 2 hours of this ESPN event
+            for (const [, fixture] of resultMap) {
+              if (!isTbd(fixture.homeTeam) && !isTbd(fixture.awayTeam)) continue;
+              const fixTime = new Date(fixture.kickoffAt).getTime();
+              if (Math.abs(fixTime - espnTime) <= 2 * 3_600_000) {
+                const home = resolveTeam(espnHomeName) || espnHomeName;
+                const away = resolveTeam(espnAwayName) || espnAwayName;
+                fixture.homeTeam = home;
+                fixture.awayTeam = away;
+                fixture.homeFlag = getFlag(home);
+                fixture.awayFlag = getFlag(away);
+              }
+            }
+          }
+        } catch {
+          // ESPN unavailable for this date — leave as TBD
+        }
+      }));
+    }
+
     const fixtures = Array.from(resultMap.values()).sort(
       (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
     );
@@ -177,9 +232,56 @@ export async function GET() {
       headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
     });
   } catch (err) {
-    console.warn('[schedule/wc2026] TxLINE unavailable, returning static list:', err);
-    return NextResponse.json(WC2026_FIXTURES, {
-      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
-    });
+    // TxLINE unavailable — fall back to ESPN then static list
+    console.warn('[schedule/wc2026] TxLINE unavailable, trying ESPN:', err);
+    try {
+      // Fetch ESPN schedule for the full WC window
+      const r = await fetch(
+        'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260601-20260801&limit=150',
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 300 } }
+      );
+      if (!r.ok) throw new Error(`ESPN ${r.status}`);
+      const espnEvents: any[] = (await r.json()).events ?? [];
+      if (espnEvents.length === 0) throw new Error('Empty ESPN response');
+
+      // Merge ESPN data onto the static list
+      const isTbd2 = (t: string) => !t || t.toLowerCase() === 'tbd';
+      const espnResult = new Map<string, WCFixture>(WC2026_FIXTURES.map(f => [f.fixtureId, { ...f }]));
+
+      for (const ev of espnEvents) {
+        const comp = ev.competitions?.[0];
+        const homeComp = comp?.competitors?.find((c: any) => c.homeAway === 'home');
+        const awayComp = comp?.competitors?.find((c: any) => c.homeAway === 'away');
+        const espnHome = resolveTeam(homeComp?.team?.displayName ?? '') || homeComp?.team?.displayName;
+        const espnAway = resolveTeam(awayComp?.team?.displayName ?? '') || awayComp?.team?.displayName;
+        const kickoffAt = ev.date ?? '';
+        if (!espnHome || !espnAway || !kickoffAt) continue;
+        if (isTbd2(espnHome) || isTbd2(espnAway)) continue;
+
+        const espnTime = new Date(kickoffAt).getTime();
+        // Fill in teams for any TBD static fixture within 2 hours
+        for (const [, fixture] of espnResult) {
+          if (!isTbd2(fixture.homeTeam) && !isTbd2(fixture.awayTeam)) continue;
+          if (Math.abs(new Date(fixture.kickoffAt).getTime() - espnTime) <= 2 * 3_600_000) {
+            fixture.homeTeam = espnHome;
+            fixture.awayTeam = espnAway;
+            fixture.homeFlag = getFlag(espnHome);
+            fixture.awayFlag = getFlag(espnAway);
+          }
+        }
+      }
+
+      const espnFixtures = Array.from(espnResult.values()).sort(
+        (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
+      );
+      return NextResponse.json(espnFixtures, {
+        headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300' },
+      });
+    } catch (espnErr) {
+      console.warn('[schedule/wc2026] ESPN also unavailable, returning static list:', espnErr);
+      return NextResponse.json(WC2026_FIXTURES, {
+        headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
+      });
+    }
   }
 }

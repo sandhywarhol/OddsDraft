@@ -26,6 +26,7 @@ export default function HomePage() {
 
       <HeroSection />
       <LiveTicker />
+      <UpcomingBar />
       <StatsSection />
       <HowItWorksSection />
       <FeaturesSection />
@@ -300,63 +301,13 @@ function LiveTicker() {
               })}
             </div>
           </div>
-        ) : (() => {
-          const upcoming = WC2026_FIXTURES
-            .filter(f => getFixtureStatus(f) === 'upcoming')
-            .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime())
-            .slice(0, 3);
-          return (
-            <div style={{
-              background: '#ffffff',
-              borderTop: '1px solid #e2e8f0',
-              borderBottom: '1px solid #e2e8f0',
-              padding: '6px 0',
-              color: '#0f172a',
-              overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-            }}>
-              <div className="container">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <img
-                      src="/2026_FIFA_World_Cup_emblem.svg"
-                      alt="World Cup 2026"
-                      style={{ height: '36px', objectFit: 'contain' }}
-                    />
-                    <span style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
-                      FIFA WORLD CUP 2026 - UPCOMING:
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    {upcoming.length > 0 ? upcoming.map((f, i) => (
-                      <div key={i} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        background: 'rgba(0, 0, 0, 0.65)',
-                        border: '1px solid rgba(255, 255, 255, 0.25)',
-                        borderRadius: '6px',
-                        padding: '4px 10px',
-                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
-                      }}>
-                        <FlagImage flag={f.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc' }}>{f.homeTeam}</span>
-                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', margin: '0 2px' }}>vs</span>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc' }}>{f.awayTeam}</span>
-                        <FlagImage flag={f.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
-                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginLeft: 4 }}>
-                          {new Date(f.kickoffAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} {new Date(f.kickoffAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false })} UTC
-                        </span>
-                      </div>
-                    )) : (
-                      <span style={{ color: '#64748b', fontSize: '0.78rem' }}>No upcoming matches scheduled</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        ) : (
+          <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
+            <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
+              • LIVE txLINE: No matches currently in progress.
+            </span>
+          </div>
+        )}
 
         {displayFinished.length > 0 && (
           <div id="live-ticker-section" style={{ 
@@ -484,6 +435,79 @@ function LiveTicker() {
     </div>
   );
 }
+// UpcomingBar — fetches from /api/schedule/wc2026 (TxLINE primary, ESPN fallback)
+// and shows the next 3 upcoming WC 2026 fixtures in the same white WC-logo style
+// as the "recently finished" bar. Rendered independently of the live ticker state.
+function UpcomingBar() {
+  const [upcoming, setUpcoming] = useState<{ homeTeam: string; awayTeam: string; homeFlag: string; awayFlag: string; kickoffAt: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/schedule/wc2026')
+      .then(r => r.json())
+      .then((fixtures: any[]) => {
+        const now = Date.now();
+        const next = fixtures
+          .filter((f: any) => new Date(f.kickoffAt).getTime() > now)
+          .sort((a: any, b: any) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime())
+          .slice(0, 3);
+        setUpcoming(next);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (upcoming.length === 0) return null;
+
+  return (
+    <div style={{
+      background: '#ffffff',
+      borderTop: '1px solid #e2e8f0',
+      borderBottom: '1px solid #e2e8f0',
+      padding: '6px 0',
+      color: '#0f172a',
+      overflow: 'hidden',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+    }}>
+      <div className="container">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <img
+              src="/2026_FIFA_World_Cup_emblem.svg"
+              alt="World Cup 2026"
+              style={{ height: '36px', objectFit: 'contain' }}
+            />
+            <span style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+              FIFA WORLD CUP 2026 - UPCOMING:
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {upcoming.map((f, i) => (
+              <div key={i} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(0, 0, 0, 0.65)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                borderRadius: '6px',
+                padding: '4px 10px',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
+              }}>
+                <FlagImage flag={f.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{f.homeTeam}</span>
+                <span style={{ color: '#94a3b8', fontSize: '0.7rem', margin: '0 2px' }}>vs</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{f.awayTeam}</span>
+                <FlagImage flag={f.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginLeft: 4 }}>
+                  {new Date(f.kickoffAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} {new Date(f.kickoffAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false })} UTC
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatsSection() {
   const stats = [
     { value: '48', label: 'Teams', sub: 'Qualified Nations' },
