@@ -194,20 +194,23 @@ export const WC2026_FIXTURES: WCFixture[] = [
   r16('18202783', 'Switzerland',  'Colombia',          2026, 7,  7, 20),
 
   // ── Quarter-finals ───────────────────────────────────────────────────────────
+  // Static IDs are placeholders for completed QFs — TxLINE enriches/replaces via API
   qf('18210001', 'France',       'Morocco',           2026, 7,  9, 20),   // France 2-0 Morocco
-  qf('18210002', 'Spain',        'Belgium',           2026, 7, 10, 19),   // TxLINE: 18218149
-  qf('18213979', 'Norway',       'England',           2026, 7, 11, 21),   // TxLINE fixture 18213979
-  qf('18222446', 'Argentina',    'Switzerland',       2026, 7, 12,  1),   // TxLINE fixture 18222446
+  qf('18218149', 'Spain',        'Belgium',           2026, 7, 10, 19),   // real TxLINE ID
+  qf('18213979', 'Norway',       'England',           2026, 7, 11, 21),   // real TxLINE ID
+  qf('18222446', 'Argentina',    'Switzerland',       2026, 7, 12,  1),   // real TxLINE ID
 
-  // ── Semi-finals ──────────────────────────────────────────────────────────────
-  sf('18220001', 'France',       'Brazil',            2026, 7, 14, 20),
-  sf('18220002', 'Portugal',     'Argentina',         2026, 7, 15, 20),
+  // ── Semi-finals / Final ───────────────────────────────────────────────────────
+  // Placeholders — teams TBD, real fixtures provided by TxLINE once QFs are settled.
+  // The API route (/api/schedule/wc2026) replaces these with confirmed TxLINE data.
+  sf('18220001', 'TBD',          'TBD',               2026, 7, 14, 20),
+  sf('18220002', 'TBD',          'TBD',               2026, 7, 15, 20),
 
   // ── Third Place ──────────────────────────────────────────────────────────────
-  final('18230001', 'Brazil',     'Portugal',          2026, 7, 18, 20),
+  final('18230001', 'TBD',        'TBD',              2026, 7, 18, 20),
 
   // ── Final ────────────────────────────────────────────────────────────────────
-  final('18240001', 'France',     'Argentina',         2026, 7, 19, 20),
+  final('18240001', 'TBD',        'TBD',              2026, 7, 19, 20),
 ];
 
 /** Fixture IDs for matches scheduled for today or live right now */

@@ -75,10 +75,16 @@ export async function GET() {
     // Start with our full static list as the base — preserves group stage and r32/r16
     const resultMap = new Map<string, WCFixture>(WC2026_FIXTURES.map(f => [f.fixtureId, { ...f }]));
 
+    // Track which fixture IDs and stages TxLINE confirms with real (non-TBD) teams
+    const txLineIds = new Set<string>();
+    const txLineStagesWithRealTeams = new Set<WCFixture['stage']>();
+    const isTbd = (t: string) => !t || t.toLowerCase() === 'tbd' || normStr(t).includes('winner') || normStr(t).includes('loser');
+
     // Enrich / add from TxLINE data
     for (const tf of txFixtures) {
       const txId = String(tf.FixtureId ?? tf.fixtureId ?? '');
       if (!txId) continue;
+      txLineIds.add(txId);
 
       const rawP1 = tf.Participant1 ?? '';
       const rawP2 = tf.Participant2 ?? '';
@@ -100,19 +106,12 @@ export async function GET() {
         // Update the existing entry with live TxLINE data
         const updated = resultMap.get(match.fixtureId)!;
         if (kickoffAt) updated.kickoffAt = kickoffAt;
-        // Update team names for knockout fixtures where teams were unknown at time of writing
-        if (home && home !== 'TBD' && !normStr(home).includes('winner') && !normStr(home).includes('loser')) {
-          updated.homeTeam = home;
-          updated.homeFlag = getFlag(home) || updated.homeFlag;
-        }
-        if (away && away !== 'TBD' && !normStr(away).includes('winner') && !normStr(away).includes('loser')) {
-          updated.awayTeam = away;
-          updated.awayFlag = getFlag(away) || updated.awayFlag;
-        }
-      } else if (home && away && kickoffAt) {
+        if (!isTbd(home)) { updated.homeTeam = home; updated.homeFlag = getFlag(home) || updated.homeFlag; }
+        if (!isTbd(away)) { updated.awayTeam = away; updated.awayFlag = getFlag(away) || updated.awayFlag; }
+      } else if (!isTbd(home) && !isTbd(away) && kickoffAt) {
         // New fixture from TxLINE not in our static list — add it (e.g., SF/Final with real teams)
+        const comp = (tf.CompetitionName ?? tf.RoundName ?? '').toLowerCase();
         const stage: WCFixture['stage'] = (() => {
-          const comp = (tf.CompetitionName ?? tf.RoundName ?? '').toLowerCase();
           if (comp.includes('semi')) return 'sf';
           if (comp.includes('final')) return 'final';
           if (comp.includes('quarter')) return 'qf';
@@ -130,7 +129,28 @@ export async function GET() {
           stage,
         });
       }
+
+      // Track stages where TxLINE has confirmed real (non-TBD) teams
+      if (!isTbd(home) && !isTbd(away)) {
+        const comp = (tf.CompetitionName ?? tf.RoundName ?? '').toLowerCase();
+        if (comp.includes('semi')) txLineStagesWithRealTeams.add('sf');
+        else if (comp.includes('final')) txLineStagesWithRealTeams.add('final');
+        else if (comp.includes('quarter')) txLineStagesWithRealTeams.add('qf');
+        else if (comp.includes('16')) txLineStagesWithRealTeams.add('r16');
+        else if (comp.includes('32')) txLineStagesWithRealTeams.add('r32');
+      }
     }
+
+    // Purge static placeholder entries for stages TxLINE has confirmed real fixtures for.
+    // Static entries with fake IDs (e.g. 18220001 for SF) have wrong/guessed team names —
+    // TxLINE's real fixtures for those stages were already added via the else branch above.
+    const idsToRemove: string[] = [];
+    for (const [id, fixture] of resultMap) {
+      if (!txLineIds.has(id) && txLineStagesWithRealTeams.has(fixture.stage)) {
+        idsToRemove.push(id);
+      }
+    }
+    for (const id of idsToRemove) resultMap.delete(id);
 
     const fixtures = Array.from(resultMap.values()).sort(
       (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
