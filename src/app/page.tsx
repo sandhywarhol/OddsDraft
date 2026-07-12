@@ -174,13 +174,15 @@ function RecentlyFinishedBar() {
     return scores;
   }, [allFixtures]);
 
+  const normTeam = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
   // Build list of recently finished matches: prefer TxLINE data, fall back to static list
   const finishedFromTxLine = (allFixtures || []).filter((f: any) => {
     const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
     const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
     const intState = typeof rawState === 'number' ? rawState : null;
     return [9, 10, 11].includes(intState as number) || ['fulltime', 'finished', 'postgame', 'abandoned'].some(s => strState.includes(s));
-  }).sort((a, b) => (b.StartTime || b.startTime || 0) - (a.StartTime || a.startTime || 0)).slice(0, 3);
+  }).sort((a, b) => (b.StartTime || b.startTime || 0) - (a.StartTime || a.startTime || 0)).slice(0, 2);
 
   type FinishedMatch = { home: string; away: string; homeFlag: string; awayFlag: string; scoreHome: string | number; scoreAway: string | number };
   let displayFinished: FinishedMatch[] = finishedFromTxLine.length > 0
@@ -190,32 +192,44 @@ function RecentlyFinishedBar() {
         const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
         const p1G = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
         const p2G = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
-        return { home, away, homeFlag: '', awayFlag: '', scoreHome: isP1Home ? p1G : p2G, scoreAway: isP1Home ? p2G : p1G };
+        // Look up flags from static list by team name
+        const staticMatch = WC2026_FIXTURES.find(s =>
+          normTeam(s.homeTeam) === normTeam(home) || normTeam(s.awayTeam) === normTeam(home)
+        );
+        const hFlag = staticMatch ? (normTeam(staticMatch.homeTeam) === normTeam(home) ? staticMatch.homeFlag : staticMatch.awayFlag) : '';
+        const aFlag = staticMatch ? (normTeam(staticMatch.homeTeam) === normTeam(away) ? staticMatch.homeFlag : staticMatch.awayFlag) : '';
+        return { home, away, homeFlag: hFlag, awayFlag: aFlag, scoreHome: isP1Home ? p1G : p2G, scoreAway: isP1Home ? p2G : p1G };
       })
     : [];
 
-  // Fall back to static list (matches finished within last 48h) with scores from TxLINE
+  // Fall back to static list (matches finished within last 48h) — match scores by team name
   if (displayFinished.length === 0) {
     const now = Date.now();
     const staticFinished = WC2026_FIXTURES
       .filter(f => getFixtureStatus(f) === 'finished' && now - new Date(f.kickoffAt).getTime() <= 48 * 3_600_000)
       .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime())
-      .slice(0, 3);
+      .slice(0, 2);
 
     displayFinished = staticFinished.map(f => {
       let sh: string | number = '-';
       let sa: string | number = '-';
-      if (finishedScores[f.fixtureId]) {
+      // Match by ID first, then by team name (TxLINE IDs differ from our static IDs)
+      const af = (allFixtures || []).find((x: any) =>
+        String(x.FixtureId ?? x.fixtureId ?? '') === f.fixtureId ||
+        (normTeam(x.Participant1 ?? '') === normTeam(f.homeTeam) && normTeam(x.Participant2 ?? '') === normTeam(f.awayTeam)) ||
+        (normTeam(x.Participant1 ?? '') === normTeam(f.awayTeam) && normTeam(x.Participant2 ?? '') === normTeam(f.homeTeam))
+      );
+      if (af) {
+        const isP1Home = af.Participant1IsHome !== false;
+        const nameP1 = af.Participant1 ?? '';
+        const p1G = af.Score?.Participant1?.Total?.Goals ?? af.Score?.Participant1?.Goals ?? 0;
+        const p2G = af.Score?.Participant2?.Total?.Goals ?? af.Score?.Participant2?.Goals ?? 0;
+        const p1IsStaticHome = normTeam(nameP1) === normTeam(f.homeTeam);
+        sh = p1IsStaticHome ? (isP1Home ? p1G : p2G) : (isP1Home ? p2G : p1G);
+        sa = p1IsStaticHome ? (isP1Home ? p2G : p1G) : (isP1Home ? p1G : p2G);
+      } else if (finishedScores[f.fixtureId]) {
         sh = finishedScores[f.fixtureId].home;
         sa = finishedScores[f.fixtureId].away;
-      } else {
-        const af = (allFixtures || []).find((x: any) => String(x.FixtureId ?? x.fixtureId ?? '') === f.fixtureId);
-        if (af) {
-          const isP1Home = af.Participant1IsHome !== false;
-          const p1G = af.Score?.Participant1?.Total?.Goals ?? af.Score?.Participant1?.Goals;
-          const p2G = af.Score?.Participant2?.Total?.Goals ?? af.Score?.Participant2?.Goals;
-          if (p1G !== undefined) { sh = isP1Home ? Number(p1G) : Number(p2G ?? 0); sa = isP1Home ? Number(p2G ?? 0) : Number(p1G); }
-        }
       }
       return { home: f.homeTeam, away: f.awayTeam, homeFlag: f.homeFlag, awayFlag: f.awayFlag, scoreHome: sh, scoreAway: sa };
     });
@@ -268,7 +282,7 @@ function UpcomingBar() {
             return t > now && !isTbd(f.homeTeam) && !isTbd(f.awayTeam);
           })
           .sort((a: any, b: any) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime())
-          .slice(0, 3);
+          .slice(0, 1);
         setUpcoming(next);
       })
       .catch(() => {});
