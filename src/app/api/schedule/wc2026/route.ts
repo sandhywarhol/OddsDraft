@@ -80,6 +80,33 @@ export async function GET() {
     const txLineStagesWithRealTeams = new Set<WCFixture['stage']>();
     const isTbd = (t: string) => !t || t.toLowerCase() === 'tbd' || normStr(t).includes('winner') || normStr(t).includes('loser');
 
+    // WC 2026 time window — only add new fixtures within this range
+    const WC_START_MS = new Date('2026-06-01').getTime();
+    const WC_END_MS   = new Date('2026-08-01').getTime();
+
+    // Detect stage from BOTH CompetitionName AND RoundName fields.
+    // TxLINE keeps the competition name in CompetitionName (e.g. "FIFA World Cup 2026")
+    // and the round in RoundName (e.g. "Semi-final") — using ?? picks only one.
+    // Concatenating both ensures we catch round labels regardless of which field TxLINE uses.
+    const txStage = (tf: any): WCFixture['stage'] => {
+      const s = `${tf.CompetitionName ?? ''} ${tf.RoundName ?? ''}`.toLowerCase();
+      if (s.includes('semi'))    return 'sf';
+      if (s.includes('final'))   return 'final';
+      if (s.includes('quarter')) return 'qf';
+      if (s.includes('16'))      return 'r16';
+      if (s.includes('32'))      return 'r32';
+      return 'group';
+    };
+
+    // A TxLINE fixture is "new WC 2026 data" only if it's actually from the World Cup
+    // AND within the tournament window. This prevents non-WC fixtures (e.g. Vietnam vs
+    // Myanmar, Australia vs Brazil friendlies) from appearing in our schedule.
+    const isNewWC2026 = (tf: any, kickoffAt: string): boolean => {
+      const comp = (tf.CompetitionName ?? '').toLowerCase();
+      const kickoffMs = new Date(kickoffAt).getTime();
+      return comp.includes('world cup') && kickoffMs >= WC_START_MS && kickoffMs <= WC_END_MS;
+    };
+
     // Enrich / add from TxLINE data
     for (const tf of txFixtures) {
       const txId = String(tf.FixtureId ?? tf.fixtureId ?? '');
@@ -108,17 +135,9 @@ export async function GET() {
         if (kickoffAt) updated.kickoffAt = kickoffAt;
         if (!isTbd(home)) { updated.homeTeam = home; updated.homeFlag = getFlag(home) || updated.homeFlag; }
         if (!isTbd(away)) { updated.awayTeam = away; updated.awayFlag = getFlag(away) || updated.awayFlag; }
-      } else if (!isTbd(home) && !isTbd(away) && kickoffAt) {
-        // New fixture from TxLINE not in our static list — add it (e.g., SF/Final with real teams)
-        const comp = (tf.CompetitionName ?? tf.RoundName ?? '').toLowerCase();
-        const stage: WCFixture['stage'] = (() => {
-          if (comp.includes('semi')) return 'sf';
-          if (comp.includes('final')) return 'final';
-          if (comp.includes('quarter')) return 'qf';
-          if (comp.includes('16')) return 'r16';
-          if (comp.includes('32')) return 'r32';
-          return 'group';
-        })();
+      } else if (!isTbd(home) && !isTbd(away) && kickoffAt && isNewWC2026(tf, kickoffAt)) {
+        // New WC 2026 fixture from TxLINE not in our static list (e.g. SF/Final once teams confirmed).
+        // Non-WC fixtures are blocked by isNewWC2026 — competition name must include "world cup".
         resultMap.set(txId, {
           fixtureId: txId,
           homeTeam: home,
@@ -126,18 +145,16 @@ export async function GET() {
           homeFlag: getFlag(home),
           awayFlag: getFlag(away),
           kickoffAt,
-          stage,
+          stage: txStage(tf),
         });
       }
 
-      // Track stages where TxLINE has confirmed real (non-TBD) teams
-      if (!isTbd(home) && !isTbd(away)) {
-        const comp = (tf.CompetitionName ?? tf.RoundName ?? '').toLowerCase();
-        if (comp.includes('semi')) txLineStagesWithRealTeams.add('sf');
-        else if (comp.includes('final')) txLineStagesWithRealTeams.add('final');
-        else if (comp.includes('quarter')) txLineStagesWithRealTeams.add('qf');
-        else if (comp.includes('16')) txLineStagesWithRealTeams.add('r16');
-        else if (comp.includes('32')) txLineStagesWithRealTeams.add('r32');
+      // Track stages where TxLINE has confirmed real (non-TBD) teams.
+      // Uses txStage() which reads BOTH CompetitionName and RoundName — fixing the bug
+      // where CompetitionName="FIFA World Cup 2026" shadowed RoundName="Semi-final".
+      if (!isTbd(home) && !isTbd(away) && isNewWC2026(tf, kickoffAt)) {
+        const stage = txStage(tf);
+        if (stage !== 'group') txLineStagesWithRealTeams.add(stage);
       }
     }
 
