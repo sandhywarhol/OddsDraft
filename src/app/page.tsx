@@ -230,15 +230,7 @@ function UpcomingBar() {
   if (upcoming.length === 0) return null;
 
   return (
-    <div style={{
-      background: '#ffffff',
-      borderTop: '1px solid #e2e8f0',
-      borderBottom: '1px solid #e2e8f0',
-      padding: '6px 0',
-      color: '#0f172a',
-      overflow: 'hidden',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-    }}>
+    <div style={{ padding: '6px 0', overflow: 'hidden' }}>
       <div className="container">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -247,7 +239,7 @@ function UpcomingBar() {
               alt="World Cup 2026"
               style={{ height: '36px', objectFit: 'contain' }}
             />
-            <span style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
               FIFA WORLD CUP 2026 - UPCOMING:
             </span>
           </div>
