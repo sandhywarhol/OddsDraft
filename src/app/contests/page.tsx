@@ -985,14 +985,6 @@ function ContestCard({ fixture, onSelect, counts, onViewResult, hasEntered, firs
             >
               Build Lineup →
             </button>
-            <Link
-              href={`/live/${fixture.fixtureId}${firstContestType ? `?contestType=${firstContestType}` : ''}`}
-              className="btn btn--ghost"
-              id={`watch-${fixture.fixtureId}`}
-              style={{ whiteSpace: 'nowrap' }}
-            >
-              👁 Watch
-            </Link>
           </div>
         )}
         {isLive && (

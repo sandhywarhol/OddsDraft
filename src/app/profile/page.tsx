@@ -170,6 +170,20 @@ export default function ProfilePage() {
 
   if (!mounted) return null;
 
+  if (!connected) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'transparent' }}>
+        <Navbar />
+        <main style={{ padding: '100px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 24 }}>
+          <User size={48} style={{ color: 'var(--text-secondary)' }} />
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', margin: 0 }}>Connect your wallet</h1>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 360, margin: 0 }}>Your profile, SOL balance, and match history will appear here once you connect a Solana wallet.</p>
+          <WalletMultiButton />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
       <Navbar />

@@ -758,21 +758,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const { contestId } = use(params);
   const searchParamsObj = use(searchParams);
   const contestType = (searchParamsObj.contestType as string) || 'top3';
-  // ?mode=demo forces full demo simulation regardless of live API state
-  const forceDemoMode = searchParamsObj.mode === 'demo';
   const { publicKey, signMessage } = useWallet();
   const { playSFX } = useAudio();
-  const { appMode, apiToken, guestJwt, liveFixtures, allFixtures } = useTxLine();
+  const { appMode, apiToken, guestJwt, liveFixtures, allFixtures, isAdmin } = useTxLine();
 
-  // Read persisted mode directly from localStorage for useState initializers.
-  // TxLineContext's useEffect hasn't run yet on the first render, so appMode
-  // is still 'demo' even after a page refresh in live mode.
-  // forceDemoMode (?mode=demo in URL) always overrides live state.
-  // TxLineContext (parent component) writes 'live' to txline_app_mode before LivePage renders,
-  // so checking the mode flag is sufficient. We deliberately omit the txline_api_token check:
-  // auth is handled server-side by the proxy, so the client token is irrelevant — requiring it
-  // would make persistedIsLive=false on any device where NEXT_PUBLIC_TXODDS_API_TOKEN isn't set,
-  // breaking lineup/leaderboard Supabase fallbacks and showing demo state for live users.
+  // ?mode=demo is admin-only — ignored for regular users so the URL can't be
+  // shared to expose fake leaderboard/event data to real visitors.
+  const forceDemoMode = searchParamsObj.mode === 'demo' && isAdmin;
+
   const persistedIsLive = !forceDemoMode
     && typeof window !== 'undefined'
     && localStorage.getItem('txline_app_mode') !== 'demo';

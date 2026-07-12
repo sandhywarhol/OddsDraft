@@ -69,7 +69,7 @@ export default function LeaderboardPage() {
         setLiveLeaderboard(mapped);
       } catch (err: any) {
         console.warn('[Leaderboard] fetch failed:', err);
-        setLiveLeaderboard([]);
+        setLiveLeaderboard(null as any);
       } finally {
         setIsLoading(false);
       }
@@ -186,9 +186,13 @@ export default function LeaderboardPage() {
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
                   Loading real-time rankings...
                 </div>
+              ) : liveLeaderboard === null ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  Could not load leaderboard. Please try refreshing.
+                </div>
               ) : liveLeaderboard.length === 0 ? (
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  No players found yet. Be the first to join a contest!
+                  No players yet — be the first to enter a contest!
                 </div>
               ) : (
                 <table className="leaderboard" style={{ width: '100%', borderCollapse: 'collapse', border: 'none' }}>
