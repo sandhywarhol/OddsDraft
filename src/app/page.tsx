@@ -306,23 +306,53 @@ function LiveTicker() {
             .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime())
             .slice(0, 3);
           return (
-            <div style={{ background: 'rgba(10,16,30,0.7)', padding: '5px 0', borderBottom: '1px solid rgba(0,180,255,0.1)', textAlign: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
-                <span style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Upcoming</span>
-                {upcoming.length > 0 ? upcoming.map((f, i) => (
-                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '3px 10px', fontSize: '0.78rem', fontWeight: 600, color: '#cbd5e1' }}>
-                    <FlagImage flag={f.homeFlag} size={14} />
-                    {f.homeTeam}
-                    <span style={{ color: '#64748b', fontSize: '0.7rem', margin: '0 2px' }}>vs</span>
-                    {f.awayTeam}
-                    <FlagImage flag={f.awayFlag} size={14} />
-                    <span style={{ color: '#60a5fa', fontSize: '0.68rem', marginLeft: 4 }}>
-                      {new Date(f.kickoffAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} {new Date(f.kickoffAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false })} UTC
+            <div style={{
+              background: '#ffffff',
+              borderTop: '1px solid #e2e8f0',
+              borderBottom: '1px solid #e2e8f0',
+              padding: '6px 0',
+              color: '#0f172a',
+              overflow: 'hidden',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+            }}>
+              <div className="container">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <img
+                      src="/2026_FIFA_World_Cup_emblem.svg"
+                      alt="World Cup 2026"
+                      style={{ height: '36px', objectFit: 'contain' }}
+                    />
+                    <span style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+                      FIFA WORLD CUP 2026 - UPCOMING:
                     </span>
-                  </span>
-                )) : (
-                  <span style={{ color: '#64748b', fontSize: '0.78rem' }}>No upcoming matches scheduled</span>
-                )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    {upcoming.length > 0 ? upcoming.map((f, i) => (
+                      <div key={i} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: 'rgba(0, 0, 0, 0.65)',
+                        border: '1px solid rgba(255, 255, 255, 0.25)',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
+                      }}>
+                        <FlagImage flag={f.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc' }}>{f.homeTeam}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '0.7rem', margin: '0 2px' }}>vs</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f8fafc' }}>{f.awayTeam}</span>
+                        <FlagImage flag={f.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
+                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', marginLeft: 4 }}>
+                          {new Date(f.kickoffAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })} {new Date(f.kickoffAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false })} UTC
+                        </span>
+                      </div>
+                    )) : (
+                      <span style={{ color: '#64748b', fontSize: '0.78rem' }}>No upcoming matches scheduled</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           );
@@ -425,19 +455,29 @@ function LiveTicker() {
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 8px #00e5ff' }} />
               txLINE REAL-TIME DATA ACTIVE
             </div>
-            {liveFixtures.slice(0, 2).map((fixture: any, idx) => (
+            {liveFixtures.slice(0, 2).map((fixture: any, idx) => {
+              const isP1Home = fixture.Participant1IsHome !== false;
+              const home = isP1Home ? (fixture.Participant1 || 'Home') : (fixture.Participant2 || 'Home');
+              const away = isP1Home ? (fixture.Participant2 || 'Away') : (fixture.Participant1 || 'Away');
+              const p1G = fixture.Score?.Participant1?.Total?.Goals ?? fixture.Score?.Participant1?.Goals ?? 0;
+              const p2G = fixture.Score?.Participant2?.Total?.Goals ?? fixture.Score?.Participant2?.Goals ?? 0;
+              const sh = isP1Home ? p1G : p2G;
+              const sa = isP1Home ? p2G : p1G;
+              const clock = fixture.Clock?.MatchTime || fixture.Clock?.MatchClock || '00:00';
+              return (
               <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <span className="badge badge--live" style={{ background: 'rgba(0, 229, 255, 0.2)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.5)' }}>LIVE</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                  <span style={{ fontWeight: 700 }}>{fixture.homeTeam?.name || 'Home'}</span>
+                  <span style={{ fontWeight: 700 }}>{home}</span>
                   <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em', color: '#00e5ff' }}>
-                    {fixture.score?.home ?? 0} — {fixture.score?.away ?? 0}
+                    {sh} — {sa}
                   </span>
-                  <span style={{ fontWeight: 700 }}>{fixture.awayTeam?.name || 'Away'}</span>
-                  <span style={{ fontSize: '0.8rem', color: '#00e5ff' }}>{fixture.clock?.matchTime || "00:00"}</span>
+                  <span style={{ fontWeight: 700 }}>{away}</span>
+                  <span style={{ fontSize: '0.8rem', color: '#00e5ff' }}>{clock}</span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
