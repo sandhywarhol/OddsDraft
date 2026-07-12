@@ -9,7 +9,6 @@ import Navbar from '@/components/Navbar';
 import FlagImage from '@/components/FlagImage';
 import { DEMO_FIXTURES } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
-import { formatDistanceToNow } from 'date-fns';
 
 export default function HomePage() {
   const router = useRouter();
@@ -26,8 +25,8 @@ export default function HomePage() {
 
       <HeroSection />
       <LiveTicker />
-      <RecentlyFinishedBar />
       <UpcomingBar />
+      <RecentlyFinishedBar />
       <StatsSection />
       <HowItWorksSection />
       <FeaturesSection />
