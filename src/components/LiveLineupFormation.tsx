@@ -231,7 +231,7 @@ function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: 
       {/* ── Blurred stadium background — spans entire card ── */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 0,
-        backgroundImage: 'url(/lineup.png)',
+        backgroundImage: 'url(/lineup.jpg)',
         backgroundSize: 'cover', backgroundPosition: 'center 60%',
         filter: 'blur(5px)',
         transform: 'scale(1.1)',

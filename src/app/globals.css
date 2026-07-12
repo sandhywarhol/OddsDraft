@@ -1947,7 +1947,7 @@ a {
 .wallet-adapter-modal-wrapper {
   background: 
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(3, 8, 16, 0.2)),
-    url('/lineup.png') center / cover no-repeat !important;
+    url('/lineup.jpg') center / cover no-repeat !important;
   backdrop-filter: blur(8px) !important;
   border: 1px solid #00f0ff !important;
   border-radius: 0 !important;
