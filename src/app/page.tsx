@@ -26,6 +26,7 @@ export default function HomePage() {
 
       <HeroSection />
       <LiveTicker />
+      <RecentlyFinishedBar />
       <UpcomingBar />
       <StatsSection />
       <HowItWorksSection />
@@ -161,32 +162,18 @@ function HeroSection() {
   );
 }
 
+// LiveTicker — only responsible for showing the current live/idle status bar.
+// The recently-finished and upcoming bars are separate standalone components
+// that always render regardless of whether TxLINE has live data right now.
 function LiveTicker() {
   const { appMode, apiToken, isSubscribing, subscribeAndActivate, liveFixtures, allFixtures } = useTxLine();
-
-  // Derive finished scores directly from TxLINE fixture snapshot — no ESPN needed
-  const finishedScores = useMemo<Record<string, { home: number; away: number }>>(() => {
-    const scores: Record<string, { home: number; away: number }> = {};
-    for (const f of allFixtures) {
-      const id = String(f.FixtureId ?? f.fixtureId ?? '');
-      if (!id) continue;
-      const h = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals;
-      const a = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals;
-      if (typeof h === 'number') scores[id] = { home: h, away: typeof a === 'number' ? a : 0 };
-    }
-    return scores;
-  }, [allFixtures]);
-
   const { connected } = useWallet();
   const demoLiveMatch = DEMO_FIXTURES.find((f) => f.status === 'live');
-  
   const hasLiveTxLineData = liveFixtures && liveFixtures.length > 0;
-  
-  // Conditionally choose which match to display
   const isDemo = appMode === 'demo';
-  const displayDemo = isDemo;
-  
+
   if (isDemo && !demoLiveMatch) return null;
+
   if (!isDemo && !apiToken) {
     return (
       <div id="live-ticker-section" style={{ background: '#1a1008', borderTop: '1px solid rgba(255, 77, 109, 0.2)', borderBottom: '1px solid rgba(255, 77, 109, 0.2)', padding: '12px 0', color: '#f8fafc' }}>
@@ -199,242 +186,197 @@ function LiveTicker() {
       </div>
     );
   }
-  if (!isDemo && !hasLiveTxLineData) {
-    // Check allFixtures for any in-progress match (GameState 2–8 = playing/HT/ET)
-    const liveFromAll = (allFixtures || []).filter((f: any) => {
-      const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
-      const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
-      const intState = typeof rawState === 'number' ? rawState : null;
-      return [2, 3, 4, 5, 6, 7, 8].includes(intState as number) ||
-        ['inprogress', 'live', 'playing', 'firsthalf', 'halftime', 'secondhalf', 'extratime'].some(s => strState.includes(s));
-    }).slice(0, 3);
 
-    const finishedFixtures = (allFixtures || []).filter((f: any) => {
-      const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
-      const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
-      const intState = typeof rawState === 'number' ? rawState : null;
-      return [9, 10, 11].includes(intState as number) || ['fulltime', 'finished', 'postgame', 'abandoned'].some(s => strState.includes(s));
-    });
-    
-    // Sort by most recent start time and take 3
-    const recentFinished = finishedFixtures
-      .sort((a, b) => (b.startTime || b.StartTime || 0) - (a.startTime || a.StartTime || 0))
-      .slice(0, 3);
-
-    let displayFinished = recentFinished.length > 0 ? recentFinished.map(f => {
-      const isP1Home = f.Participant1IsHome !== false;
-      const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
-      const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
-      const p1Goals = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
-      const p2Goals = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
-      const scoreHome = isP1Home ? p1Goals : p2Goals;
-      const scoreAway = isP1Home ? p2Goals : p1Goals;
-      return { home, away, homeFlag: '', awayFlag: '', scoreHome, scoreAway };
-    }) : [];
-
-    if (displayFinished.length === 0) {
-      const scheduleFinished = WC2026_FIXTURES
-        .filter(f => {
-          if (getFixtureStatus(f) !== 'finished') return false;
-          // Only show matches finished within the last 24 hours (1 hari)
-          const kickoffMs = new Date(f.kickoffAt).getTime();
-          const nowMs = Date.now();
-          return nowMs - kickoffMs <= 24 * 60 * 60 * 1000;
-        })
-        .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime())
-        .slice(0, 3);
-
-      displayFinished = scheduleFinished.map(f => {
-        let sh: string | number = '-';
-        let sa: string | number = '-';
-
-        if (finishedScores[f.fixtureId]) {
-          sh = finishedScores[f.fixtureId].home;
-          sa = finishedScores[f.fixtureId].away;
-        } else {
-          const af = (allFixtures || []).find((x: any) => String(x.FixtureId ?? x.fixtureId ?? x.id) === f.fixtureId);
-          if (af) {
-            const isP1Home = af.Participant1IsHome !== false;
-            const p1G = af.Score?.Participant1?.Total?.Goals ?? af.Score?.Participant1?.Goals;
-            const p2G = af.Score?.Participant2?.Total?.Goals ?? af.Score?.Participant2?.Goals;
-            if (p1G !== undefined) { sh = isP1Home ? Number(p1G) : Number(p2G ?? 0); sa = isP1Home ? Number(p2G ?? 0) : Number(p1G); }
-          }
-        }
-
-        return {
-          home: f.homeTeam,
-          away: f.awayTeam,
-          homeFlag: f.homeFlag,
-          awayFlag: f.awayFlag,
-          scoreHome: sh,
-          scoreAway: sa
-        };
-      });
-    }
-
+  // Live TxLINE stream is active — show the live ticker
+  if (!isDemo && hasLiveTxLineData) {
     return (
-      <>
-        {liveFromAll.length > 0 ? (
-          <div style={{ background: 'rgba(0,20,10,0.85)', padding: '6px 0', borderBottom: '1px solid rgba(0,229,100,0.2)', textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
-              <span style={{ color: '#00e564', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e564', display: 'inline-block', boxShadow: '0 0 6px #00e564' }} />
-                LIVE NOW
-              </span>
-              {liveFromAll.map((f: any, i: number) => {
-                const isP1Home = f.Participant1IsHome !== false;
-                const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
-                const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
-                const homeFlag = '';
-                const awayFlag = '';
-                const p1G = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
-                const p2G = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
+      <div id="live-ticker-section" style={{ background: '#1a1008', borderTop: '1px solid rgba(255, 77, 109, 0.2)', borderBottom: '1px solid rgba(255, 77, 109, 0.2)', padding: '12px 0', color: '#f8fafc' }}>
+        <div className="container">
+          {isDemo ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <span className="badge badge--live"><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />DEMO LIVE</span>
+              <FlagImage flag={demoLiveMatch?.homeFlag ?? ''} size={22} />
+              <span style={{ fontWeight: 700 }}>{demoLiveMatch?.homeTeam}</span>
+              <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em' }}>{demoLiveMatch?.homeScore ?? 0} — {demoLiveMatch?.awayScore ?? 0}</span>
+              <span style={{ fontWeight: 700 }}>{demoLiveMatch?.awayTeam}</span>
+              <FlagImage flag={demoLiveMatch?.awayFlag ?? ''} size={22} />
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#00e5ff', fontSize: '0.85rem' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 8px #00e5ff' }} />
+                txLINE REAL-TIME DATA ACTIVE
+              </div>
+              {liveFixtures.slice(0, 2).map((fixture: any, idx: number) => {
+                const isP1Home = fixture.Participant1IsHome !== false;
+                const home = isP1Home ? (fixture.Participant1 || 'Home') : (fixture.Participant2 || 'Home');
+                const away = isP1Home ? (fixture.Participant2 || 'Away') : (fixture.Participant1 || 'Away');
+                const p1G = fixture.Score?.Participant1?.Total?.Goals ?? fixture.Score?.Participant1?.Goals ?? 0;
+                const p2G = fixture.Score?.Participant2?.Total?.Goals ?? fixture.Score?.Participant2?.Goals ?? 0;
                 const sh = isP1Home ? p1G : p2G;
                 const sa = isP1Home ? p2G : p1G;
-                const clock = f.Clock?.MatchTime || f.Clock?.MatchClock || '';
+                const clock = fixture.Clock?.MatchTime || fixture.Clock?.MatchClock || '00:00';
                 return (
-                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,229,100,0.08)', border: '1px solid rgba(0,229,100,0.3)', borderRadius: 6, padding: '3px 10px', fontSize: '0.82rem', fontWeight: 600, color: '#f8fafc' }}>
-                    <><FlagImage flag={homeFlag} size={16} /> {home}</> <span style={{ color: '#00e564', fontFamily: 'Bebas Neue, cursive', fontSize: '1rem' }}>{sh}–{sa}</span> <>{away} <FlagImage flag={awayFlag} size={16} /></>
-                    {clock && <span style={{ color: '#00e564', fontSize: '0.75rem', marginLeft: 4 }}>{clock}'</span>}
-                  </span>
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                    <span className="badge badge--live" style={{ background: 'rgba(0,229,255,0.2)', color: '#00e5ff', border: '1px solid rgba(0,229,255,0.5)' }}>LIVE</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <span style={{ fontWeight: 700 }}>{home}</span>
+                      <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em', color: '#00e5ff' }}>{sh} — {sa}</span>
+                      <span style={{ fontWeight: 700 }}>{away}</span>
+                      <span style={{ fontSize: '0.8rem', color: '#00e5ff' }}>{clock}</span>
+                    </div>
+                  </div>
                 );
               })}
             </div>
-          </div>
-        ) : (
-          <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
-            <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
-              • LIVE txLINE: No matches currently in progress.
-            </span>
-          </div>
-        )}
-
-        {displayFinished.length > 0 && (
-          <div id="live-ticker-section" style={{ 
-            background: '#ffffff', 
-            borderTop: '1px solid #e2e8f0', 
-            borderBottom: '1px solid #e2e8f0', 
-            padding: '6px 0', 
-            color: '#0f172a', 
-            overflow: 'hidden',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
-          }}>
-            <div className="container">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <img 
-                    src="/2026_FIFA_World_Cup_emblem.svg" 
-                    alt="World Cup 2026" 
-                    style={{ height: '36px', objectFit: 'contain' }} 
-                  />
-                  <span style={{ 
-                    color: '#0f172a', 
-                    fontSize: '0.85rem', 
-                    fontWeight: 900, 
-                    textTransform: 'uppercase', 
-                    letterSpacing: '0.15em',
-                  }}>
-                    FIFA WORLD CUP 2026 - RECENTLY FINISHED:
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  {displayFinished.map((match, idx) => (
-                    <div key={idx} style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px',
-                      background: 'rgba(0, 0, 0, 0.65)',
-                      border: '1px solid rgba(255, 255, 255, 0.25)',
-                      borderRadius: '6px',
-                      padding: '4px 10px',
-                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)'
-                    }}>
-                      <FlagImage flag={match.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
-                      <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.home}</span>
-                      <span style={{ 
-                        fontFamily: 'Bebas Neue, cursive', 
-                        fontSize: '1.1rem', 
-                        color: '#00e5ff', 
-                        margin: '0 2px',
-                        textShadow: '0 0 6px rgba(0, 229, 255, 0.6)'
-                      }}>
-                        {match.scoreHome} - {match.scoreAway}
-                      </span>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.away}</span>
-                      <FlagImage flag={match.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </>
+          )}
+        </div>
+      </div>
     );
   }
 
-  return (
-    <div id="live-ticker-section" style={{
-      background: '#1a1008',
-      borderTop: '1px solid rgba(255, 77, 109, 0.2)',
-      borderBottom: '1px solid rgba(255, 77, 109, 0.2)',
-      padding: '12px 0',
-      color: '#f8fafc'
-    }}>
-      <div className="container">
-        {isDemo ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <span className="badge badge--live">
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-                DEMO LIVE
+  // No live TxLINE stream — check allFixtures for in-progress matches
+  const liveFromAll = (allFixtures || []).filter((f: any) => {
+    const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
+    const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
+    const intState = typeof rawState === 'number' ? rawState : null;
+    return [2, 3, 4, 5, 6, 7, 8].includes(intState as number) ||
+      ['inprogress', 'live', 'playing', 'firsthalf', 'halftime', 'secondhalf', 'extratime'].some(s => strState.includes(s));
+  }).slice(0, 3);
+
+  if (liveFromAll.length > 0) {
+    return (
+      <div style={{ background: 'rgba(0,20,10,0.85)', padding: '6px 0', borderBottom: '1px solid rgba(0,229,100,0.2)', textAlign: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <span style={{ color: '#00e564', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e564', display: 'inline-block', boxShadow: '0 0 6px #00e564' }} />
+            LIVE NOW
+          </span>
+          {liveFromAll.map((f: any, i: number) => {
+            const isP1Home = f.Participant1IsHome !== false;
+            const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
+            const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
+            const p1G = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
+            const p2G = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
+            const sh = isP1Home ? p1G : p2G;
+            const sa = isP1Home ? p2G : p1G;
+            const clock = f.Clock?.MatchTime || f.Clock?.MatchClock || '';
+            return (
+              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,229,100,0.08)', border: '1px solid rgba(0,229,100,0.3)', borderRadius: 6, padding: '3px 10px', fontSize: '0.82rem', fontWeight: 600, color: '#f8fafc' }}>
+                <FlagImage flag="" size={16} /> {home} <span style={{ color: '#00e564', fontFamily: 'Bebas Neue, cursive', fontSize: '1rem' }}>{sh}–{sa}</span> {away} <FlagImage flag="" size={16} />
+                {clock && <span style={{ color: '#00e564', fontSize: '0.75rem', marginLeft: 4 }}>{clock}'</span>}
               </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                <FlagImage flag={demoLiveMatch?.homeFlag ?? ''} size={22} />
-                <span style={{ fontWeight: 700 }}>{demoLiveMatch?.homeTeam}</span>
-                <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em' }}>
-                  {demoLiveMatch?.homeScore ?? 0} — {demoLiveMatch?.awayScore ?? 0}
-                </span>
-                <span style={{ fontWeight: 700 }}>{demoLiveMatch?.awayTeam}</span>
-                <FlagImage flag={demoLiveMatch?.awayFlag ?? ''} size={22} />
-              </div>
-            </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Truly idle — no live data anywhere
+  return (
+    <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
+      <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
+        • LIVE txLINE: No matches currently in progress.
+      </span>
+    </div>
+  );
+}
+
+// RecentlyFinishedBar — always renders when there are recently finished WC matches.
+// Previously this was inside LiveTicker's !hasLiveTxLineData branch, which caused it
+// to disappear whenever TxLINE had live fixture data. Now it is independent.
+function RecentlyFinishedBar() {
+  const { allFixtures } = useTxLine();
+
+  const finishedScores = useMemo<Record<string, { home: number; away: number }>>(() => {
+    const scores: Record<string, { home: number; away: number }> = {};
+    for (const f of allFixtures) {
+      const id = String(f.FixtureId ?? f.fixtureId ?? '');
+      if (!id) continue;
+      const h = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals;
+      const a = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals;
+      if (typeof h === 'number') scores[id] = { home: h, away: typeof a === 'number' ? a : 0 };
+    }
+    return scores;
+  }, [allFixtures]);
+
+  // Build list of recently finished matches: prefer TxLINE data, fall back to static list
+  const finishedFromTxLine = (allFixtures || []).filter((f: any) => {
+    const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
+    const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
+    const intState = typeof rawState === 'number' ? rawState : null;
+    return [9, 10, 11].includes(intState as number) || ['fulltime', 'finished', 'postgame', 'abandoned'].some(s => strState.includes(s));
+  }).sort((a, b) => (b.StartTime || b.startTime || 0) - (a.StartTime || a.startTime || 0)).slice(0, 3);
+
+  type FinishedMatch = { home: string; away: string; homeFlag: string; awayFlag: string; scoreHome: string | number; scoreAway: string | number };
+  let displayFinished: FinishedMatch[] = finishedFromTxLine.length > 0
+    ? finishedFromTxLine.map((f: any) => {
+        const isP1Home = f.Participant1IsHome !== false;
+        const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
+        const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
+        const p1G = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
+        const p2G = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
+        return { home, away, homeFlag: '', awayFlag: '', scoreHome: isP1Home ? p1G : p2G, scoreAway: isP1Home ? p2G : p1G };
+      })
+    : [];
+
+  // Fall back to static list (matches finished within last 48h) with scores from TxLINE
+  if (displayFinished.length === 0) {
+    const now = Date.now();
+    const staticFinished = WC2026_FIXTURES
+      .filter(f => getFixtureStatus(f) === 'finished' && now - new Date(f.kickoffAt).getTime() <= 48 * 3_600_000)
+      .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime())
+      .slice(0, 3);
+
+    displayFinished = staticFinished.map(f => {
+      let sh: string | number = '-';
+      let sa: string | number = '-';
+      if (finishedScores[f.fixtureId]) {
+        sh = finishedScores[f.fixtureId].home;
+        sa = finishedScores[f.fixtureId].away;
+      } else {
+        const af = (allFixtures || []).find((x: any) => String(x.FixtureId ?? x.fixtureId ?? '') === f.fixtureId);
+        if (af) {
+          const isP1Home = af.Participant1IsHome !== false;
+          const p1G = af.Score?.Participant1?.Total?.Goals ?? af.Score?.Participant1?.Goals;
+          const p2G = af.Score?.Participant2?.Total?.Goals ?? af.Score?.Participant2?.Goals;
+          if (p1G !== undefined) { sh = isP1Home ? Number(p1G) : Number(p2G ?? 0); sa = isP1Home ? Number(p2G ?? 0) : Number(p1G); }
+        }
+      }
+      return { home: f.homeTeam, away: f.awayTeam, homeFlag: f.homeFlag, awayFlag: f.awayFlag, scoreHome: sh, scoreAway: sa };
+    });
+  }
+
+  if (displayFinished.length === 0) return null;
+
+  return (
+    <div id="live-ticker-section" style={{ background: '#ffffff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '6px 0', color: '#0f172a', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+      <div className="container">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <img src="/2026_FIFA_World_Cup_emblem.svg" alt="World Cup 2026" style={{ height: '36px', objectFit: 'contain' }} />
+            <span style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+              FIFA WORLD CUP 2026 - RECENTLY FINISHED:
+            </span>
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#00e5ff', fontSize: '0.85rem' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 8px #00e5ff' }} />
-              txLINE REAL-TIME DATA ACTIVE
-            </div>
-            {liveFixtures.slice(0, 2).map((fixture: any, idx) => {
-              const isP1Home = fixture.Participant1IsHome !== false;
-              const home = isP1Home ? (fixture.Participant1 || 'Home') : (fixture.Participant2 || 'Home');
-              const away = isP1Home ? (fixture.Participant2 || 'Away') : (fixture.Participant1 || 'Away');
-              const p1G = fixture.Score?.Participant1?.Total?.Goals ?? fixture.Score?.Participant1?.Goals ?? 0;
-              const p2G = fixture.Score?.Participant2?.Total?.Goals ?? fixture.Score?.Participant2?.Goals ?? 0;
-              const sh = isP1Home ? p1G : p2G;
-              const sa = isP1Home ? p2G : p1G;
-              const clock = fixture.Clock?.MatchTime || fixture.Clock?.MatchClock || '00:00';
-              return (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                <span className="badge badge--live" style={{ background: 'rgba(0, 229, 255, 0.2)', color: '#00e5ff', border: '1px solid rgba(0, 229, 255, 0.5)' }}>LIVE</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                  <span style={{ fontWeight: 700 }}>{home}</span>
-                  <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em', color: '#00e5ff' }}>
-                    {sh} — {sa}
-                  </span>
-                  <span style={{ fontWeight: 700 }}>{away}</span>
-                  <span style={{ fontSize: '0.8rem', color: '#00e5ff' }}>{clock}</span>
-                </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            {displayFinished.map((match, idx) => (
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '6px', padding: '4px 10px', boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}>
+                <FlagImage flag={match.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.home}</span>
+                <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.1rem', color: '#00e5ff', margin: '0 2px', textShadow: '0 0 6px rgba(0,229,255,0.6)' }}>{match.scoreHome} - {match.scoreAway}</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.away}</span>
+                <FlagImage flag={match.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
               </div>
-              );
-            })}
+            ))}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
+
 // UpcomingBar — fetches from /api/schedule/wc2026 (TxLINE primary, ESPN fallback)
 // and shows the next 3 upcoming WC 2026 fixtures in the same white WC-logo style
 // as the "recently finished" bar. Rendered independently of the live ticker state.
@@ -446,8 +388,12 @@ function UpcomingBar() {
       .then(r => r.json())
       .then((fixtures: any[]) => {
         const now = Date.now();
+        const isTbd = (t: string) => !t || t.toLowerCase() === 'tbd';
         const next = fixtures
-          .filter((f: any) => new Date(f.kickoffAt).getTime() > now)
+          .filter((f: any) => {
+            const t = new Date(f.kickoffAt).getTime();
+            return t > now && !isTbd(f.homeTeam) && !isTbd(f.awayTeam);
+          })
           .sort((a: any, b: any) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime())
           .slice(0, 3);
         setUpcoming(next);
