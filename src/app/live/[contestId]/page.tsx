@@ -1745,7 +1745,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           } catch { /* non-critical */ }
         }
 
-        // Skip infrastructure/non-scoring actions
+        // Skip infrastructure/non-scoring actions. free_kick and non-saved shot
+        // events are tracked for stats but not shown in the event feed (too noisy).
         const skipActions = new Set([
           'coverage_update','comment','connected','disconnected','standby','weather',
           'venue','pitch','players_warming_up','players_on_the_pitch','jersey',
@@ -1753,6 +1754,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           'halftime_finalised','safe_possession','attack_possession','possession',
           'throw_in','goal_kick','additional_time',
           'action_amend','action_discarded','players_on_the_pitch',
+          'free_kick',
         ]);
         if (!action || skipActions.has(action)) return [];
 
@@ -1799,10 +1801,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         // Shot saved → synthesize goalkeeper_save for the opposing team's GK
         if (action === 'shot' && rawData.Outcome === 'Saved') {
           return [{ type: 'goalkeeper_save', minute, period: '',
-            participant: participant === 1 ? 2 : 1, // opposing team's GK
+            participant: participant === 1 ? 2 : 1,
             playerId: undefined, playerName: undefined,
             assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
         }
+
+        // Non-saved shots: tracked above for stats but not shown in the event feed
+        if (action === 'shot') return [];
 
         // penalty_outcome: TxLINE sends Data.Outcome = "Missed" | "Saved" | "Scored"
         if (action === 'penalty_outcome' || action === 'penaltyoutcome') {
@@ -4127,10 +4132,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 const typeLabels: Record<string, string> = {
                                   goal: 'GOAL', own_goal: 'OWN GOAL', assist: 'ASSIST',
                                   goalkeeper_save: 'SAVE', penalty_save: 'PENALTY SAVED',
+                                  yellow_card: 'YELLOW CARD', red_card: 'RED CARD',
                                   penalty_won: 'PENALTY WON', penalty_missed: 'PENALTY MISSED',
                                   penalty_scored: 'PENALTY SCORED', penalty_missed_shootout: 'PENALTY MISSED',
                                   goal_conceded: 'GOAL CONCEDED', clean_sheet: 'CLEAN SHEET',
                                   corner_kick: 'CORNER KICK', var_review: 'VAR REVIEW',
+                                  free_kick: 'FREE KICK', shot: 'SHOT',
                                   substitution: 'SUBSTITUTION', sub_appearance: 'SUBSTITUTION',
                                   kick_off: 'KICK OFF', half_time: 'HALF TIME',
                                   full_time: 'FULL TIME', extra_time: 'EXTRA TIME',
@@ -4152,7 +4159,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             </span>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
+                            {(() => {
+                              const BADGE: Record<string, string> = {
+                                goal: 'GOAL', own_goal: 'OWN GOAL', yellow_card: 'YEL', red_card: 'RED',
+                                goalkeeper_save: 'SAVE', penalty_save: 'PEN SAVED',
+                                penalty_won: 'PEN WON', penalty_missed: 'PEN MISSED',
+                                penalty_scored: 'PENALTY', assist: 'ASSIST',
+                                goal_conceded: 'CONCEDED', clean_sheet: 'CLEAN SHEET', free_kick: 'FREE KICK',
+                              };
+                              const badge = (event.player && event.player !== 'Unknown') ? BADGE[event.type] : null;
+                              return <>
+                                {badge && <span style={{ color: EVENT_COLORS[event.type] ?? 'var(--text-muted)', marginRight: 4, fontSize: '0.6rem', fontWeight: 800, letterSpacing: 0.5 }}>{badge} · </span>}
+                                {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
+                              </>;
+                            })()}
                           </div>
                         </div>
                         <div style={{
@@ -4318,10 +4338,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                                 const typeLabels: Record<string, string> = {
                                   goal: 'GOAL', own_goal: 'OWN GOAL', assist: 'ASSIST',
                                   goalkeeper_save: 'SAVE', penalty_save: 'PENALTY SAVED',
+                                  yellow_card: 'YELLOW CARD', red_card: 'RED CARD',
                                   penalty_won: 'PENALTY WON', penalty_missed: 'PENALTY MISSED',
                                   penalty_scored: 'PENALTY SCORED', penalty_missed_shootout: 'PENALTY MISSED',
                                   goal_conceded: 'GOAL CONCEDED', clean_sheet: 'CLEAN SHEET',
                                   corner_kick: 'CORNER KICK', var_review: 'VAR REVIEW',
+                                  free_kick: 'FREE KICK', shot: 'SHOT',
                                   substitution: 'SUBSTITUTION', sub_appearance: 'SUBSTITUTION',
                                   kick_off: 'KICK OFF', half_time: 'HALF TIME',
                                   full_time: 'FULL TIME', extra_time: 'EXTRA TIME',
@@ -4343,7 +4365,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                             </span>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
+                            {(() => {
+                              const BADGE: Record<string, string> = {
+                                goal: 'GOAL', own_goal: 'OWN GOAL', yellow_card: 'YEL', red_card: 'RED',
+                                goalkeeper_save: 'SAVE', penalty_save: 'PEN SAVED',
+                                penalty_won: 'PEN WON', penalty_missed: 'PEN MISSED',
+                                penalty_scored: 'PENALTY', assist: 'ASSIST',
+                                goal_conceded: 'CONCEDED', clean_sheet: 'CLEAN SHEET', free_kick: 'FREE KICK',
+                              };
+                              const badge = (event.player && event.player !== 'Unknown') ? BADGE[event.type] : null;
+                              return <>
+                                {badge && <span style={{ color: EVENT_COLORS[event.type] ?? 'var(--text-muted)', marginRight: 4, fontSize: '0.6rem', fontWeight: 800, letterSpacing: 0.5 }}>{badge} · </span>}
+                                {event.team ? <><FlagImage flag={event.teamFlag} size={14} /> {event.team}</> : event.description}
+                              </>;
+                            })()}
                           </div>
                         </div>
                         <div style={{

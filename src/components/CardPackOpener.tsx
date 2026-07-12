@@ -207,24 +207,47 @@ export default function CardPackOpener({ contestId, upgradePackMode, title, subt
             }} onClick={handleOpenPack}>
               {/* Inline SVG via fetch — the only reliable approach for SVGs with embedded
                   base64 <image> elements. <img> sandboxes them; <object> ignores CSS sizing
-                  because the SVG declares its own width/height. Fetched once, cached in memory. */}
-              <div
-                aria-label="Card Pack"
-                dangerouslySetInnerHTML={{ __html: unopenedSvg }}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'block',
-                  filter: phase === 'idle'
-                    ? 'drop-shadow(0 0 18px rgba(255,215,0,0.5))'
-                    : phase === 'shaking'
-                    ? 'drop-shadow(0 0 28px rgba(255,215,0,0.8)) brightness(1.1)'
-                    : 'none',
-                  userSelect: 'none',
-                  pointerEvents: 'none',
-                  overflow: 'hidden',
-                }}
-              />
+                  because the SVG declares its own width/height. Fetched once, cached in memory.
+                  CSS fallback card is shown if the SVG hasn't loaded yet. */}
+              {unopenedSvg ? (
+                <div
+                  aria-label="Card Pack"
+                  dangerouslySetInnerHTML={{ __html: unopenedSvg }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                    filter: phase === 'idle'
+                      ? 'drop-shadow(0 0 18px rgba(255,215,0,0.5))'
+                      : phase === 'shaking'
+                      ? 'drop-shadow(0 0 28px rgba(255,215,0,0.8)) brightness(1.1)'
+                      : 'none',
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                    overflow: 'hidden',
+                  }}
+                />
+              ) : (
+                /* Fallback: CSS card when SVG hasn't loaded */
+                <div style={{
+                  width: '100%', height: '100%',
+                  background: 'linear-gradient(145deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)',
+                  borderRadius: 16,
+                  border: '2px solid #ffd700',
+                  boxShadow: phase === 'idle'
+                    ? '0 0 24px rgba(255,215,0,0.4), inset 0 0 40px rgba(255,215,0,0.05)'
+                    : '0 0 40px rgba(255,215,0,0.7), inset 0 0 60px rgba(255,215,0,0.1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  animation: phase === 'shaking' ? 'shake 0.25s ease-in-out infinite' : undefined,
+                }}>
+                  <div style={{ fontSize: 48, filter: 'drop-shadow(0 0 12px #ffd700)' }}>🎴</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd700', letterSpacing: 3, textTransform: 'uppercase' }}>Card Pack</div>
+                </div>
+              )}
               {/* Tap prompt overlay */}
               {phase === 'idle' && (
                 <div style={{
