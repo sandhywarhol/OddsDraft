@@ -236,8 +236,11 @@ export async function GET(req: NextRequest) {
 
   const events: MatchEvent[] = [];
   const seenKeys = new Set<string>();
+  // Normalize minute to a bare integer string ("90+3'" → "90", "23:24" → "23")
+  // so the same event from scoringPlays vs keyEvents vs plays deduplicates correctly.
+  const normMin = (m: string) => String(parseInt(m.replace(/[^0-9]/g, '').slice(0, 3)) || 0);
   const pushEvent = (ev: MatchEvent) => {
-    const key = `${ev.type}-${ev.minute}-${ev.player.slice(0,6)}`;
+    const key = `${ev.type}-${normMin(ev.minute)}-${ev.player.replace(/\s+/g, '').toLowerCase().slice(0, 8)}`;
     if (seenKeys.has(key)) return;
     seenKeys.add(key);
     events.push(ev);
@@ -291,35 +294,70 @@ export async function GET(req: NextRequest) {
   const venue = gameInfo?.venue?.fullName ?? gameInfo?.venue?.name;
   const attendance = gameInfo?.attendance != null ? Number(gameInfo.attendance).toLocaleString() : undefined;
 
-  // ── Build combined stats (TxLINE period data + Supabase shot/danger counts) ─
+  // ── Build combined stats ─────────────────────────────────────────────────────
+  // Strict priority so sources never double-count the same stat:
+  //   H1/H2 goals, corners, cards → TxLINE Period1/Period2 (only source with per-half data)
+  //   H1/H2 shots, dangers        → Supabase event counts (TxLINE has no shot schema)
+  //   H1/H2 corners (fallback)    → Supabase if TxLINE has all-zero period breakdown
+  //   Total goals, corners, cards → TxLINE Total → ESPN boxscore (only if TxLINE = 0)
+  //   Total shots                 → Supabase → ESPN totalShots (only if Supabase = 0)
+  //   Total dangers               → Supabase only
+  // ESPN NEVER overwrites a non-zero value from TxLINE or Supabase.
+
+  // ESPN boxscore total stats — read once, used only as last-resort fallback
+  const espnHomeTeam = detail?.boxscore?.teams?.find((t: any) => t.homeAway === 'home');
+  const espnAwayTeam = detail?.boxscore?.teams?.find((t: any) => t.homeAway === 'away');
+  const espnStat = (side: any, name: string): number => {
+    const s = (side?.statistics ?? []).find((x: any) => x.name === name);
+    return s ? (parseInt(s.displayValue ?? '0', 10) || 0) : 0;
+  };
+
   let stats: MatchStats | undefined;
-  if (txStats || evCounts) {
+  if (txStats || evCounts || espnHomeTeam) {
     const base: MatchStats = txStats ?? { h1: blankPeriod(), h2: blankPeriod(), total: blankPeriod() };
 
+    // ── Supabase: shots and dangers (TxLINE has no shot data) ───────────────
     if (evCounts) {
-      // Shots + dangers always come from Supabase (TxLINE snapshot doesn't have shot counts)
-      base.h1.homeShots    = evCounts.h1Home.homeShots    ?? 0;
-      base.h1.awayShots    = evCounts.h1Away.awayShots    ?? 0;
-      base.h1.homeDangers  = evCounts.h1Home.homeDangers  ?? 0;
-      base.h1.awayDangers  = evCounts.h1Away.awayDangers  ?? 0;
-      base.h2.homeShots    = evCounts.h2Home.homeShots    ?? 0;
-      base.h2.awayShots    = evCounts.h2Away.awayShots    ?? 0;
-      base.h2.homeDangers  = evCounts.h2Home.homeDangers  ?? 0;
-      base.h2.awayDangers  = evCounts.h2Away.awayDangers  ?? 0;
+      base.h1.homeShots   = evCounts.h1Home.homeShots   ?? 0;
+      base.h1.awayShots   = evCounts.h1Away.awayShots   ?? 0;
+      base.h1.homeDangers = evCounts.h1Home.homeDangers ?? 0;
+      base.h1.awayDangers = evCounts.h1Away.awayDangers ?? 0;
+      base.h2.homeShots   = evCounts.h2Home.homeShots   ?? 0;
+      base.h2.awayShots   = evCounts.h2Away.awayShots   ?? 0;
+      base.h2.homeDangers = evCounts.h2Home.homeDangers ?? 0;
+      base.h2.awayDangers = evCounts.h2Away.awayDangers ?? 0;
       base.total.homeShots   = evCounts.totHome.homeShots   ?? 0;
       base.total.awayShots   = evCounts.totAway.awayShots   ?? 0;
       base.total.homeDangers = evCounts.totHome.homeDangers ?? 0;
       base.total.awayDangers = evCounts.totAway.awayDangers ?? 0;
 
-      // Use Supabase corner counts as fallback when TxLINE has no period breakdown
-      if (base.h1.homeCorners === 0 && base.h1.awayCorners === 0 && base.h2.homeCorners === 0 && base.h2.awayCorners === 0) {
-        base.h1.homeCorners    = evCounts.h1Home.homeCorners    ?? 0;
-        base.h1.awayCorners    = evCounts.h1Away.awayCorners    ?? 0;
-        base.h2.homeCorners    = evCounts.h2Home.homeCorners    ?? 0;
-        base.h2.awayCorners    = evCounts.h2Away.awayCorners    ?? 0;
-        base.total.homeCorners = evCounts.totHome.homeCorners   ?? 0;
-        base.total.awayCorners = evCounts.totAway.awayCorners   ?? 0;
+      // Supabase corners: only if TxLINE gave all-zero per-period breakdown
+      const txHasCorners =
+        base.h1.homeCorners > 0 || base.h1.awayCorners > 0 ||
+        base.h2.homeCorners > 0 || base.h2.awayCorners > 0;
+      if (!txHasCorners) {
+        base.h1.homeCorners    = evCounts.h1Home.homeCorners ?? 0;
+        base.h1.awayCorners    = evCounts.h1Away.awayCorners ?? 0;
+        base.h2.homeCorners    = evCounts.h2Home.homeCorners ?? 0;
+        base.h2.awayCorners    = evCounts.h2Away.awayCorners ?? 0;
+        base.total.homeCorners = evCounts.totHome.homeCorners ?? 0;
+        base.total.awayCorners = evCounts.totAway.awayCorners ?? 0;
       }
+    }
+
+    // ── ESPN boxscore: fill TOTAL fields that TxLINE + Supabase left at zero ─
+    // ESPN only provides match totals (no H1/H2 split), so it never touches h1/h2.
+    // Each assignment is guarded: only runs when the base value is still 0.
+    if (espnHomeTeam) {
+      if (base.total.homeShots   === 0) base.total.homeShots   = espnStat(espnHomeTeam, 'totalShots');
+      if (base.total.awayShots   === 0) base.total.awayShots   = espnStat(espnAwayTeam, 'totalShots');
+      if (base.total.homeCorners === 0) base.total.homeCorners = espnStat(espnHomeTeam, 'cornerKicks');
+      if (base.total.awayCorners === 0) base.total.awayCorners = espnStat(espnAwayTeam, 'cornerKicks');
+      if (base.total.homeYellows === 0) base.total.homeYellows = espnStat(espnHomeTeam, 'yellowCards');
+      if (base.total.awayYellows === 0) base.total.awayYellows = espnStat(espnAwayTeam, 'yellowCards');
+      if (base.total.homeReds    === 0) base.total.homeReds    = espnStat(espnHomeTeam, 'redCards');
+      if (base.total.awayReds    === 0) base.total.awayReds    = espnStat(espnAwayTeam, 'redCards');
+      // Goals intentionally not read from ESPN — inferred from score header by the client
     }
 
     stats = base;
