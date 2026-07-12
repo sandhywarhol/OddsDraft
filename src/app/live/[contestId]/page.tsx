@@ -2204,9 +2204,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 setMinute(45);
                 playSFX('whistle');
               }
-            } else if (approxMin >= 85 && lastGameStateRef.current !== 'FullTime') {
+            } else if (
+              approxMin >= 85 &&
+              lastGameStateRef.current !== 'FullTime' &&
+              // Never synthesize FT from a clock pause during ET or penalties —
+              // clock stops frequently during those phases (penalty kicks, etc.)
+              !['ExtraTime', 'Penalties'].includes(lastGameStateRef.current ?? '')
+            ) {
               lastGameStateRef.current = 'FullTime';
-              const ftMin = approxMin; // Use actual elapsed minute — handles ET (105', 120', etc.)
+              const ftMin = approxMin;
               if (isMounted) {
                 setEvents(prev => [{ id: `synth-ft-clk-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ends at ${ftMin}'.` }, ...prev]);
                 setMinute(ftMin);
