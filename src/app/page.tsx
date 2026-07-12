@@ -1,13 +1,11 @@
 'use client';
 
 import { useTxLine } from '@/context/TxLineContext';
-import { useWallet } from '@solana/wallet-adapter-react';
 import Link from 'next/link';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import FlagImage from '@/components/FlagImage';
-import { DEMO_FIXTURES } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 
 export default function HomePage() {
@@ -24,7 +22,6 @@ export default function HomePage() {
       <Navbar />
 
       <HeroSection />
-      <LiveTicker />
       <UpcomingBar />
       <RecentlyFinishedBar />
       <StatsSection />
@@ -161,130 +158,7 @@ function HeroSection() {
   );
 }
 
-// LiveTicker — only responsible for showing the current live/idle status bar.
-// The recently-finished and upcoming bars are separate standalone components
-// that always render regardless of whether TxLINE has live data right now.
-function LiveTicker() {
-  const { appMode, apiToken, isSubscribing, subscribeAndActivate, liveFixtures, allFixtures } = useTxLine();
-  const { connected } = useWallet();
-  const demoLiveMatch = DEMO_FIXTURES.find((f) => f.status === 'live');
-  const hasLiveTxLineData = liveFixtures && liveFixtures.length > 0;
-  const isDemo = appMode === 'demo';
-
-  if (isDemo && !demoLiveMatch) return null;
-
-  if (!isDemo && !apiToken) {
-    return (
-      <div id="live-ticker-section" style={{ background: '#1a1008', borderTop: '1px solid rgba(255, 77, 109, 0.2)', borderBottom: '1px solid rgba(255, 77, 109, 0.2)', padding: '12px 0', color: '#f8fafc' }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>LIVE MODE ACTIVE: Waiting for txLINE on-chain subscription...</span>
-          <button className="btn btn--primary btn--sm" onClick={subscribeAndActivate} disabled={!connected || isSubscribing}>
-            {isSubscribing ? 'Subscribing...' : (!connected ? 'Connect Wallet First' : 'Unlock txLINE Live Data')}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Live TxLINE stream is active — show the live ticker
-  if (!isDemo && hasLiveTxLineData) {
-    return (
-      <div id="live-ticker-section" style={{ background: '#1a1008', borderTop: '1px solid rgba(255, 77, 109, 0.2)', borderBottom: '1px solid rgba(255, 77, 109, 0.2)', padding: '12px 0', color: '#f8fafc' }}>
-        <div className="container">
-          {isDemo ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <span className="badge badge--live"><span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />DEMO LIVE</span>
-              <FlagImage flag={demoLiveMatch?.homeFlag ?? ''} size={22} />
-              <span style={{ fontWeight: 700 }}>{demoLiveMatch?.homeTeam}</span>
-              <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em' }}>{demoLiveMatch?.homeScore ?? 0} — {demoLiveMatch?.awayScore ?? 0}</span>
-              <span style={{ fontWeight: 700 }}>{demoLiveMatch?.awayTeam}</span>
-              <FlagImage flag={demoLiveMatch?.awayFlag ?? ''} size={22} />
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#00e5ff', fontSize: '0.85rem' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 8px #00e5ff' }} />
-                txLINE REAL-TIME DATA ACTIVE
-              </div>
-              {liveFixtures.slice(0, 2).map((fixture: any, idx: number) => {
-                const isP1Home = fixture.Participant1IsHome !== false;
-                const home = isP1Home ? (fixture.Participant1 || 'Home') : (fixture.Participant2 || 'Home');
-                const away = isP1Home ? (fixture.Participant2 || 'Away') : (fixture.Participant1 || 'Away');
-                const p1G = fixture.Score?.Participant1?.Total?.Goals ?? fixture.Score?.Participant1?.Goals ?? 0;
-                const p2G = fixture.Score?.Participant2?.Total?.Goals ?? fixture.Score?.Participant2?.Goals ?? 0;
-                const sh = isP1Home ? p1G : p2G;
-                const sa = isP1Home ? p2G : p1G;
-                const clock = fixture.Clock?.MatchTime || fixture.Clock?.MatchClock || '00:00';
-                return (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                    <span className="badge badge--live" style={{ background: 'rgba(0,229,255,0.2)', color: '#00e5ff', border: '1px solid rgba(0,229,255,0.5)' }}>LIVE</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                      <span style={{ fontWeight: 700 }}>{home}</span>
-                      <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.5rem', letterSpacing: '0.1em', color: '#00e5ff' }}>{sh} — {sa}</span>
-                      <span style={{ fontWeight: 700 }}>{away}</span>
-                      <span style={{ fontSize: '0.8rem', color: '#00e5ff' }}>{clock}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // No live TxLINE stream — check allFixtures for in-progress matches
-  const liveFromAll = (allFixtures || []).filter((f: any) => {
-    const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
-    const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
-    const intState = typeof rawState === 'number' ? rawState : null;
-    return [2, 3, 4, 5, 6, 7, 8].includes(intState as number) ||
-      ['inprogress', 'live', 'playing', 'firsthalf', 'halftime', 'secondhalf', 'extratime'].some(s => strState.includes(s));
-  }).slice(0, 3);
-
-  if (liveFromAll.length > 0) {
-    return (
-      <div style={{ background: 'rgba(0,20,10,0.85)', padding: '6px 0', borderBottom: '1px solid rgba(0,229,100,0.2)', textAlign: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ color: '#00e564', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#00e564', display: 'inline-block', boxShadow: '0 0 6px #00e564' }} />
-            LIVE NOW
-          </span>
-          {liveFromAll.map((f: any, i: number) => {
-            const isP1Home = f.Participant1IsHome !== false;
-            const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
-            const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
-            const p1G = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
-            const p2G = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
-            const sh = isP1Home ? p1G : p2G;
-            const sa = isP1Home ? p2G : p1G;
-            const clock = f.Clock?.MatchTime || f.Clock?.MatchClock || '';
-            return (
-              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,229,100,0.08)', border: '1px solid rgba(0,229,100,0.3)', borderRadius: 6, padding: '3px 10px', fontSize: '0.82rem', fontWeight: 600, color: '#f8fafc' }}>
-                <FlagImage flag="" size={16} /> {home} <span style={{ color: '#00e564', fontFamily: 'Bebas Neue, cursive', fontSize: '1rem' }}>{sh}–{sa}</span> {away} <FlagImage flag="" size={16} />
-                {clock && <span style={{ color: '#00e564', fontSize: '0.75rem', marginLeft: 4 }}>{clock}'</span>}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // Truly idle — no live data anywhere
-  return (
-    <div style={{ background: 'rgba(26,16,8,0.5)', padding: '4px 0', borderBottom: '1px solid rgba(255, 77, 109, 0.05)', textAlign: 'center' }}>
-      <span style={{ color: '#ff4d6d', fontSize: '0.8rem', fontWeight: 600, textShadow: '0 0 8px rgba(255, 77, 109, 0.5)', letterSpacing: '0.05em' }}>
-        • LIVE txLINE: No matches currently in progress.
-      </span>
-    </div>
-  );
-}
-
 // RecentlyFinishedBar — always renders when there are recently finished WC matches.
-// Previously this was inside LiveTicker's !hasLiveTxLineData branch, which caused it
-// to disappear whenever TxLINE had live fixture data. Now it is independent.
 function RecentlyFinishedBar() {
   const { allFixtures } = useTxLine();
 
