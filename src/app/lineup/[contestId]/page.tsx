@@ -168,7 +168,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     status: 'upcoming' as const,
   };
 
-  const isTxLineLive = !isDemo && liveFixtures?.some(f => 
+  // When the static fixture has TBD or placeholder teams, resolve real names from the live schedule
+  const [teamOverride, setTeamOverride] = useState<{ homeTeam: string; homeFlag: string; awayTeam: string; awayFlag: string } | null>(null);
+  if (teamOverride) fixture = { ...fixture, ...teamOverride };
+
+  const isTxLineLive = !isDemo && liveFixtures?.some(f =>
     f.homeTeam?.name === fixture.homeTeam || f.awayTeam?.name === fixture.awayTeam
   );
   const kickoffTime = new Date(fixture.kickoffAt);
@@ -195,7 +199,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   };
 
   useEffect(() => {
-    if (!fixture.homeTeam || !fixture.awayTeam) return;
+    const isTbd = (t: string) => !t || t === 'TBD' || t === 'Home' || t === 'Away';
+    if (isTbd(fixture.homeTeam) || isTbd(fixture.awayTeam)) return;
+    setPlayersLoading(true);
     fetch(`/api/players?team=${encodeURIComponent(fixture.homeTeam)}&team=${encodeURIComponent(fixture.awayTeam)}`)
       .then(r => r.json())
       .then((data: import('@/lib/players').Player[]) => {
@@ -205,6 +211,25 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       .finally(() => setPlayersLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixture.homeTeam, fixture.awayTeam]);
+
+  // Resolve TBD / placeholder team names from the live TxLINE schedule
+  useEffect(() => {
+    const isTbd = (t: string) => !t || t === 'TBD' || t === 'Home' || t === 'Away';
+    if (!isTbd(fixture.homeTeam) && !isTbd(fixture.awayTeam)) return;
+    fetch('/api/schedule/wc2026')
+      .then(r => r.json())
+      .then((fixtures: any[]) => {
+        if (!Array.isArray(fixtures)) { setPlayersLoading(false); return; }
+        const liveMatch = fixtures.find((f: any) => f.fixtureId === contestId);
+        if (liveMatch && !isTbd(liveMatch.homeTeam) && !isTbd(liveMatch.awayTeam)) {
+          setTeamOverride({ homeTeam: liveMatch.homeTeam, homeFlag: liveMatch.homeFlag, awayTeam: liveMatch.awayTeam, awayFlag: liveMatch.awayFlag });
+        } else {
+          setPlayersLoading(false); // teams still TBD in live schedule — stop spinner
+        }
+      })
+      .catch(() => { setPlayersLoading(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contestId]);
   const enteredContestsKey = `txodds_entered_contests_${contestId}`;
   const alreadyEntered = typeof window !== 'undefined'
     ? (JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]') as string[]).includes(contestType)
@@ -2006,7 +2031,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                             )}
                             {!playersLoading && availablePlayers.length === 0 && (
                               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: 16 }}>
-                                No players available
+                                {fixture.homeTeam === 'TBD' || fixture.awayTeam === 'TBD'
+                                  ? 'Teams not confirmed yet — check back closer to kickoff'
+                                  : 'No players available'}
                               </p>
                             )}
                             {availablePlayers.map((player) => (
