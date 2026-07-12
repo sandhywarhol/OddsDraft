@@ -713,13 +713,20 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   const isDemoFixture = DEMO_FIXTURES.some(f => f.fixtureId === contestId);
 
+  // In live mode: NEVER fall back to demo fixtures — demo team names must not
+  // appear on a real replay page.
   const fixture = wcFixture
     ? { ...wcFixture, status: getFixtureStatus(wcFixture), homeScore: 0, awayScore: 0 }
-    : (DEMO_FIXTURES.find(f => f.fixtureId === contestId) || DEMO_FIXTURES[0]);
+    : appMode !== 'demo'
+      ? { fixtureId: contestId, homeTeam: '—', awayTeam: '—', homeFlag: '🏳️', awayFlag: '🏳️',
+          kickoffAt: new Date().toISOString(), status: 'upcoming' as const, homeScore: 0, awayScore: 0 }
+      : (DEMO_FIXTURES.find(f => f.fixtureId === contestId) || DEMO_FIXTURES[0]);
 
-  // Mutable events queue — starts with demo fallback, swapped with API data in live mode
+  // Mutable events queue — demo events only in demo mode; live starts empty (API fills it)
   const eventsQueueRef = useRef<any[]>(
-    getDynamicEvents(fixture, REPLAY_EVENTS[contestId] || LIVE_EVENTS)
+    appMode === 'demo' || !!wcFixture
+      ? getDynamicEvents(fixture, REPLAY_EVENTS[contestId] || LIVE_EVENTS)
+      : []
   );
 
   // apiVersion increments after API events load, triggering the event trigger effect to re-evaluate
@@ -1145,6 +1152,23 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
             <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid currentColor', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
             Loading TxLINE data
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Live mode: fixture not in WC2026 schedule (demo ID used on live page) ──
+  if (appMode === 'live' && !wcFixture) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'transparent' }}>
+        <Navbar />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', gap: 24, padding: '0 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem' }}>⚽</div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>Match Not Found</h1>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 380, lineHeight: 1.7 }}>
+            This fixture is not in the WC 2026 schedule. It may have been a demo match.
+          </p>
+          <Link href="/contests" className="btn btn--primary">← Back to Schedule</Link>
         </div>
       </div>
     );

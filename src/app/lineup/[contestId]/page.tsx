@@ -156,7 +156,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         awayFlag: wcMatch.awayFlag,
         status: 'upcoming' as const,
       }
-    : DEMO_FIXTURES.find(f => f.fixtureId === contestId);
+    // In live mode: never fall back to demo fixtures — demo team names must not
+    // appear on a real lineup page. The generic placeholder below handles undefined.
+    : !isDemo ? undefined : DEMO_FIXTURES.find(f => f.fixtureId === contestId);
 
   if (!fixture) fixture = {
     fixtureId: contestId,

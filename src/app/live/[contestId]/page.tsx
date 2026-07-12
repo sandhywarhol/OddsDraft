@@ -779,9 +779,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   // Always prefer WC2026 real fixtures (works in both demo and live modes)
   const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
+  // In live mode: NEVER fall back to demo fixtures — demo team names must not
+  // appear on a real live page. Use a neutral placeholder so all hooks stay valid.
   const fixture = wcFixture
     ? { ...wcFixture, status: getFixtureStatus(wcFixture), homeScore: 0, awayScore: 0 }
-    : (DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0]);
+    : persistedIsLive
+      ? { fixtureId: contestId, homeTeam: '—', awayTeam: '—', homeFlag: '🏳️', awayFlag: '🏳️',
+          kickoffAt: new Date().toISOString(), status: 'upcoming' as const, homeScore: 0, awayScore: 0 }
+      : (DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0]);
 
   const matchEvents = fixture.fixtureId === 'special-arg-ger'
     ? ARG_GER_EVENTS
@@ -3394,6 +3399,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   const userPoints = leaderboard.find((e) => e.isUser)?.points ?? 0;
   const userRank = leaderboard.find((e) => e.isUser)?.rank ?? '-';
+
+  // Live mode: if the contestId is not a real WC2026 fixture, block rendering.
+  // This prevents demo fixture IDs from accidentally loading on the live page.
+  if (persistedIsLive && !wcFixture) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'transparent' }}>
+        <Navbar />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '75vh', gap: 24, padding: '0 24px', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem' }}>⚽</div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>Match Not Found</h1>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 380, lineHeight: 1.7 }}>
+            This fixture is not in the WC 2026 schedule. It may have been a demo match.
+          </p>
+          <Link href="/contests" className="btn btn--primary">← Back to Schedule</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'transparent' }}>
