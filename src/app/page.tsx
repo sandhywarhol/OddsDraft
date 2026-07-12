@@ -2,11 +2,10 @@
 
 import { useTxLine } from '@/context/TxLineContext';
 import Link from 'next/link';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import FlagImage from '@/components/FlagImage';
-import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 
 export default function HomePage() {
   const router = useRouter();
@@ -158,87 +157,25 @@ function HeroSection() {
   );
 }
 
-// RecentlyFinishedBar — always renders when there are recently finished WC matches.
+// RecentlyFinishedBar — fetches from /api/scores/recent (TxLINE primary, ESPN backup).
 function RecentlyFinishedBar() {
-  const { allFixtures } = useTxLine();
+  const [matches, setMatches] = useState<{
+    homeTeam: string; awayTeam: string;
+    homeFlag: string; awayFlag: string;
+    scoreHome: number | null; scoreAway: number | null;
+  }[]>([]);
 
-  const finishedScores = useMemo<Record<string, { home: number; away: number }>>(() => {
-    const scores: Record<string, { home: number; away: number }> = {};
-    for (const f of allFixtures) {
-      const id = String(f.FixtureId ?? f.fixtureId ?? '');
-      if (!id) continue;
-      const h = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals;
-      const a = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals;
-      if (typeof h === 'number') scores[id] = { home: h, away: typeof a === 'number' ? a : 0 };
-    }
-    return scores;
-  }, [allFixtures]);
+  useEffect(() => {
+    fetch('/api/scores/recent')
+      .then(r => r.json())
+      .then(data => setMatches((data as any[]).slice(0, 2)))
+      .catch(() => {});
+  }, []);
 
-  const normTeam = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-  // Build list of recently finished matches: prefer TxLINE data, fall back to static list
-  const finishedFromTxLine = (allFixtures || []).filter((f: any) => {
-    const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
-    const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
-    const intState = typeof rawState === 'number' ? rawState : null;
-    return [9, 10, 11].includes(intState as number) || ['fulltime', 'finished', 'postgame', 'abandoned'].some(s => strState.includes(s));
-  }).sort((a, b) => (b.StartTime || b.startTime || 0) - (a.StartTime || a.startTime || 0)).slice(0, 2);
-
-  type FinishedMatch = { home: string; away: string; homeFlag: string; awayFlag: string; scoreHome: string | number; scoreAway: string | number };
-  let displayFinished: FinishedMatch[] = finishedFromTxLine.length > 0
-    ? finishedFromTxLine.map((f: any) => {
-        const isP1Home = f.Participant1IsHome !== false;
-        const home = isP1Home ? (f.Participant1 || 'Home') : (f.Participant2 || 'Home');
-        const away = isP1Home ? (f.Participant2 || 'Away') : (f.Participant1 || 'Away');
-        const p1G = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? 0;
-        const p2G = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? 0;
-        // Look up flags from static list by team name
-        const staticMatch = WC2026_FIXTURES.find(s =>
-          normTeam(s.homeTeam) === normTeam(home) || normTeam(s.awayTeam) === normTeam(home)
-        );
-        const hFlag = staticMatch ? (normTeam(staticMatch.homeTeam) === normTeam(home) ? staticMatch.homeFlag : staticMatch.awayFlag) : '';
-        const aFlag = staticMatch ? (normTeam(staticMatch.homeTeam) === normTeam(away) ? staticMatch.homeFlag : staticMatch.awayFlag) : '';
-        return { home, away, homeFlag: hFlag, awayFlag: aFlag, scoreHome: isP1Home ? p1G : p2G, scoreAway: isP1Home ? p2G : p1G };
-      })
-    : [];
-
-  // Fall back to static list (matches finished within last 48h) — match scores by team name
-  if (displayFinished.length === 0) {
-    const now = Date.now();
-    const staticFinished = WC2026_FIXTURES
-      .filter(f => getFixtureStatus(f) === 'finished' && now - new Date(f.kickoffAt).getTime() <= 48 * 3_600_000)
-      .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime())
-      .slice(0, 2);
-
-    displayFinished = staticFinished.map(f => {
-      let sh: string | number = '-';
-      let sa: string | number = '-';
-      // Match by ID first, then by team name (TxLINE IDs differ from our static IDs)
-      const af = (allFixtures || []).find((x: any) =>
-        String(x.FixtureId ?? x.fixtureId ?? '') === f.fixtureId ||
-        (normTeam(x.Participant1 ?? '') === normTeam(f.homeTeam) && normTeam(x.Participant2 ?? '') === normTeam(f.awayTeam)) ||
-        (normTeam(x.Participant1 ?? '') === normTeam(f.awayTeam) && normTeam(x.Participant2 ?? '') === normTeam(f.homeTeam))
-      );
-      if (af) {
-        const isP1Home = af.Participant1IsHome !== false;
-        const nameP1 = af.Participant1 ?? '';
-        const p1G = af.Score?.Participant1?.Total?.Goals ?? af.Score?.Participant1?.Goals ?? 0;
-        const p2G = af.Score?.Participant2?.Total?.Goals ?? af.Score?.Participant2?.Goals ?? 0;
-        const p1IsStaticHome = normTeam(nameP1) === normTeam(f.homeTeam);
-        sh = p1IsStaticHome ? (isP1Home ? p1G : p2G) : (isP1Home ? p2G : p1G);
-        sa = p1IsStaticHome ? (isP1Home ? p2G : p1G) : (isP1Home ? p1G : p2G);
-      } else if (finishedScores[f.fixtureId]) {
-        sh = finishedScores[f.fixtureId].home;
-        sa = finishedScores[f.fixtureId].away;
-      }
-      return { home: f.homeTeam, away: f.awayTeam, homeFlag: f.homeFlag, awayFlag: f.awayFlag, scoreHome: sh, scoreAway: sa };
-    });
-  }
-
-  if (displayFinished.length === 0) return null;
+  if (matches.length === 0) return null;
 
   return (
-    <div id="live-ticker-section" style={{ background: '#ffffff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '6px 0', color: '#0f172a', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+    <div style={{ background: '#ffffff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '6px 0', color: '#0f172a', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
       <div className="container">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -248,12 +185,14 @@ function RecentlyFinishedBar() {
             </span>
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            {displayFinished.map((match, idx) => (
+            {matches.map((match, idx) => (
               <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '6px', padding: '4px 10px', boxShadow: '0 2px 4px rgba(0,0,0,0.15)' }}>
                 <FlagImage flag={match.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.home}</span>
-                <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.1rem', color: '#00e5ff', margin: '0 2px', textShadow: '0 0 6px rgba(0,229,255,0.6)' }}>{match.scoreHome} - {match.scoreAway}</span>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.away}</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.homeTeam}</span>
+                <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.1rem', color: '#00e5ff', margin: '0 2px', textShadow: '0 0 6px rgba(0,229,255,0.6)' }}>
+                  {match.scoreHome ?? '-'} - {match.scoreAway ?? '-'}
+                </span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.awayTeam}</span>
                 <FlagImage flag={match.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
               </div>
             ))}
