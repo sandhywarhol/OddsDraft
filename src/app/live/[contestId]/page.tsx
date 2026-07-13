@@ -1322,28 +1322,32 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     });
     if (hasHT && !htStatsSentRef.current) {
       htStatsSentRef.current = true;
-      fetch('/api/telegram/stats', {
+      const htPayload = {
+        contestId, label: 'Half Time',
+        homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+        homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag,
+        score: scoreRef.current, stats: buildStats(),
+      };
+      fetch('/api/telegram/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(htPayload) }).catch(() => {});
+      fetch('/api/telegram/leaderboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contestId, label: 'Half Time',
-          homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
-          homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag,
-          score: scoreRef.current, stats: buildStats(),
-        }),
+        body: JSON.stringify({ contestId, contestType: 'all', label: 'Half Time', homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag, score: scoreRef.current }),
       }).catch(() => {});
     }
     if (hasFT && !ftStatsSentRef.current) {
       ftStatsSentRef.current = true;
-      fetch('/api/telegram/stats', {
+      const ftPayload = {
+        contestId, label: 'Full Time',
+        homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+        homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag,
+        score: scoreRef.current, stats: buildStats(),
+      };
+      fetch('/api/telegram/stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ftPayload) }).catch(() => {});
+      fetch('/api/telegram/leaderboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contestId, label: 'Full Time',
-          homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
-          homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag,
-          score: scoreRef.current, stats: buildStats(),
-        }),
+        body: JSON.stringify({ contestId, contestType: 'all', label: 'Full Time', homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam, homeFlag: fixture.homeFlag, awayFlag: fixture.awayFlag, score: scoreRef.current }),
       }).catch(() => {});
     }
   }, [events, matchCompleted]); // eslint-disable-line react-hooks/exhaustive-deps

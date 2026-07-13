@@ -271,6 +271,22 @@ export async function GET(req: NextRequest) {
               await Promise.allSettled(tgSubs.map(s => sendMessage(s.chat_id, text, { parse_mode: 'Markdown' })));
               console.log(`[CronMatchEvents] ${statsLabel} stats → ${tgSubs.length} subscribers (${fixture.fixtureId})`);
             }
+
+            // Push live leaderboard + personal points to subscribers at the same HT/FT moment
+            fetch(`${appUrl}/api/telegram/leaderboard`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contestId: fixture.fixtureId,
+                contestType: 'all',
+                label: statsLabel,
+                homeTeam: fixture.homeTeam,
+                awayTeam: fixture.awayTeam,
+                homeFlag: fixture.homeFlag ?? '',
+                awayFlag: fixture.awayFlag ?? '',
+                score: dbScore,
+              }),
+            }).catch(e => console.error('[CronMatchEvents] leaderboard push failed:', e));
           }
           // else: 23505 = already sent by browser tab or earlier cron run — skip
           continue;

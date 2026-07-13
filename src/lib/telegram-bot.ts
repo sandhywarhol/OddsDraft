@@ -201,6 +201,77 @@ export interface MatchStatsPayload {
   };
 }
 
+// ── Leaderboard formatters ────────────────────────────────────────────────────
+
+export interface LeaderboardEntry {
+  rank: number;
+  walletAddress: string;
+  displayName?: string;   // Telegram @username or truncated wallet
+  points: number;
+}
+
+export interface LeaderboardPayload {
+  homeTeam: string;
+  awayTeam: string;
+  homeFlag?: string;
+  awayFlag?: string;
+  score?: { home: number; away: number };
+  label: string;           // 'Half Time' | 'Full Time' | 'Live Update'
+  entries: LeaderboardEntry[];
+  totalParticipants: number;
+}
+
+export function formatLeaderboard(p: LeaderboardPayload): string {
+  const hf = p.homeFlag ?? '';
+  const af = p.awayFlag ?? '';
+  const matchLine = p.score != null
+    ? `${hf} ${p.homeTeam} *${p.score.home}–${p.score.away}* ${p.awayTeam} ${af}`
+    : `${hf} ${p.homeTeam} vs ${p.awayTeam} ${af}`;
+
+  const labelEmoji = p.label === 'Full Time' ? '🏁' : p.label === 'Half Time' ? '⏱' : '📡';
+  const top = p.entries.slice(0, 10);
+  const medals = ['🥇', '🥈', '🥉'];
+
+  const rows = top.map((e, i) => {
+    const prefix = medals[i] ?? `${e.rank}.`;
+    const name = e.displayName ?? `${e.walletAddress.slice(0, 4)}…${e.walletAddress.slice(-4)}`;
+    return `${prefix} ${name} — *${e.points} pts*`;
+  });
+
+  return [
+    `🏆 *LEADERBOARD — ${p.homeTeam} vs ${p.awayTeam}*`,
+    `${labelEmoji} ${p.label} | ${matchLine}`,
+    '',
+    ...rows,
+    '',
+    `_${p.totalParticipants} contestant${p.totalParticipants !== 1 ? 's' : ''} competing_`,
+  ].join('\n');
+}
+
+export function formatPersonalPoints(p: {
+  homeTeam: string;
+  awayTeam: string;
+  homeFlag?: string;
+  awayFlag?: string;
+  label: string;
+  points: number;
+  rank: number;
+  totalParticipants: number;
+}): string {
+  const hf = p.homeFlag ?? '';
+  const af = p.awayFlag ?? '';
+  const labelEmoji = p.label === 'Full Time' ? '🏁' : p.label === 'Half Time' ? '⏱' : '📡';
+  const rankEmoji = p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : '📊';
+
+  return [
+    `🎮 *Your Fantasy Points*`,
+    `${hf} ${p.homeTeam} vs ${p.awayTeam} ${af} | ${labelEmoji} ${p.label}`,
+    '',
+    `${rankEmoji} Rank: *#${p.rank}* of ${p.totalParticipants}`,
+    `⭐ Score: *${p.points} pts*`,
+  ].join('\n');
+}
+
 export function formatMatchStats(p: MatchStatsPayload): string {
   const hf = p.homeFlag ?? '';
   const af = p.awayFlag ?? '';

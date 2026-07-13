@@ -12,6 +12,13 @@ const connection = new Connection(
   process.env.SERVER_SOLANA_RPC ?? 'https://api.devnet.solana.com'
 );
 
+// Supabase may return card_collection as a parsed array (jsonb) or a JSON string (text column).
+function toCardArray(v: unknown): any[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v === 'string') { try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; } }
+  return [];
+}
+
 // POST /api/marketplace/buy
 // Body: { txSignature, buyerWallet, sellerWallet, cardId }
 // Verifies the on-chain buy_card tx, transfers card ownership in Supabase.
@@ -57,8 +64,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Transfer card: remove from seller's collection, add to buyer's
-    const sellerKey = `cards_${sellerWallet}`;
-    const buyerKey  = `cards_${buyerWallet}`;
 
     const { data: sellerData } = await supabase
       .from('user_data')
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
       .eq('wallet_address', sellerWallet)
       .maybeSingle();
 
-    const sellerCards: any[] = sellerData?.card_collection ?? [];
+    const sellerCards: any[] = toCardArray(sellerData?.card_collection);
     // Prefer exact instance match; fall back to first matching cardId+type
     const cardIndex = instanceId
       ? sellerCards.findIndex((c: any) => c.instanceId === instanceId)
@@ -91,7 +96,7 @@ export async function POST(req: NextRequest) {
       .eq('wallet_address', buyerWallet)
       .maybeSingle();
 
-    const buyerCards: any[] = buyerData?.card_collection ?? [];
+    const buyerCards: any[] = toCardArray(buyerData?.card_collection);
     buyerCards.push({ type: listing.card_type, cardId, acquiredAt: new Date().toISOString() });
     await supabase
       .from('user_data')
