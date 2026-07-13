@@ -572,9 +572,14 @@ export default function ContestsPage() {
                       </div>
                       <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                         {joined ? (
-                          <Link href={`/live/${selectedFixture.fixtureId}?contestType=${ct.id}${isDemo ? '&mode=demo' : ''}`} className="btn btn--sm btn--primary" onClick={e => e.stopPropagation()} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>
-                            Watch Live →
-                          </Link>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                            <Link href={`/live/${selectedFixture.fixtureId}?contestType=${ct.id}${isDemo ? '&mode=demo' : ''}`} className="btn btn--sm btn--primary" onClick={e => e.stopPropagation()} style={{ fontSize: '0.7rem', padding: '4px 10px' }}>
+                              Watch Live →
+                            </Link>
+                            <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}${isDemo ? '&mode=demo' : ''}`} onClick={e => e.stopPropagation()} style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', textDecoration: 'underline' }}>
+                              Rebuild lineup
+                            </Link>
+                          </div>
                         ) : (
                           <>
                             <div>
