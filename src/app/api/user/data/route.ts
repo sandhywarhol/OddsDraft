@@ -36,13 +36,29 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServiceClient();
+
+  // Merge pack_opened with existing value so partial updates (e.g. tutorialSeen)
+  // don't overwrite other fields (e.g. welcomeGiftClaimed).
+  let mergedPackOpened = packOpened;
+  if (packOpened !== undefined) {
+    const { data: existing } = await supabase
+      .from('user_data')
+      .select('pack_opened')
+      .eq('wallet_address', wallet)
+      .maybeSingle();
+    const prev = (existing?.pack_opened && typeof existing.pack_opened === 'object')
+      ? existing.pack_opened as Record<string, unknown>
+      : {};
+    mergedPackOpened = { ...prev, ...(packOpened as Record<string, unknown>) };
+  }
+
   const { error } = await supabase
     .from('user_data')
     .upsert(
       {
         wallet_address: wallet,
         ...(cardCollection !== undefined && { card_collection: cardCollection }),
-        ...(packOpened !== undefined && { pack_opened: packOpened }),
+        ...(mergedPackOpened !== undefined && { pack_opened: mergedPackOpened }),
         ...(lineups !== undefined && { lineups }),
         ...(profile !== undefined && { profile }),
       },

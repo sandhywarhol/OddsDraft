@@ -263,6 +263,23 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       .catch(() => { /* non-blocking — localStorage is the fallback */ });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicKey, isDemo]);
+
+  // Sync tutorial-seen flag from Supabase so it persists across devices
+  useEffect(() => {
+    if (!publicKey || isReplayTutorial) return;
+    if (localStorage.getItem('hasSeenLineupTutorial')) return; // already set locally
+    fetch(`/api/user/data?wallet=${publicKey.toString()}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { pack_opened?: { tutorialSeen?: boolean } } | null) => {
+        if (data?.pack_opened?.tutorialSeen) {
+          localStorage.setItem('hasSeenLineupTutorial', 'true');
+          setTutorialStep(0);
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicKey]);
+
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [equippedCards, setEquippedCards] = useState<Record<string, string>>(() => {
     if (typeof window === 'undefined') return {};
@@ -510,6 +527,13 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       }
     } else {
       localStorage.setItem('hasSeenLineupTutorial', 'true');
+      if (publicKey) {
+        fetch('/api/user/data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wallet: publicKey.toString(), packOpened: { tutorialSeen: true } }),
+        }).catch(() => {});
+      }
       setTutorialStep(0);
       if (isReplayTutorial) {
         router.push('/contests');
