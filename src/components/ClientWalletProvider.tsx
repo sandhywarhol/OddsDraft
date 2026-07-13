@@ -15,11 +15,16 @@ export default function ClientWalletProvider({ children }: { children: React.Rea
   const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
 
   const endpoint = useMemo(() => {
+    // Browser: always go through our server-side proxy so the Alchemy API key stays hidden
     if (typeof window !== 'undefined') return `${window.location.origin}/api/rpc`;
+    // SSR fallback (rarely used)
     return isDevnet ? 'https://api.devnet.solana.com' : 'https://solana-rpc.publicnode.com';
   }, [isDevnet]);
 
-  const wsEndpoint = isDevnet ? 'wss://api.devnet.solana.com' : 'wss://solana-rpc.publicnode.com';
+  // WSS for transaction confirmation subscriptions — use Alchemy wss if configured
+  const wsEndpoint = isDevnet
+    ? 'wss://api.devnet.solana.com'
+    : (process.env.NEXT_PUBLIC_SOLANA_WSS ?? 'wss://solana-rpc.publicnode.com');
 
   const wallets = useMemo(
     () => [
