@@ -183,12 +183,31 @@ export async function POST(req: NextRequest) {
     }
 
     // Legacy path: direct SOL transfer from treasury to this winner.
+    // Insert a placeholder row BEFORE sending SOL — acts as a distributed lock.
+    // If two concurrent requests race past the SELECT check above, only one INSERT
+    // will succeed (DB unique constraint on fixture_id+contest_type+wallet_address).
+    const { error: reserveErr } = await supabase.from('prize_claims').insert({
+      fixture_id: fixtureId,
+      contest_type: contestType,
+      wallet_address: walletAddress,
+      rank: result.rank,
+      prize_sol: result.prize_sol,
+      tx_signature: 'pending',
+    });
+    if (reserveErr) {
+      return NextResponse.json({ error: 'Claim already in progress or completed' }, { status: 409 });
+    }
+
     const treasuryBalance = await connection.getBalance(treasury.publicKey);
     const lamportsToPay = Math.round(result.prize_sol * LAMPORTS_PER_SOL);
 
     // Keep 0.002 SOL in treasury for rent + fees
     const minReserve = 0.002 * LAMPORTS_PER_SOL;
     if (treasuryBalance < lamportsToPay + minReserve) {
+      // Roll back placeholder so user can retry later
+      await supabase.from('prize_claims')
+        .delete()
+        .eq('fixture_id', fixtureId).eq('contest_type', contestType).eq('wallet_address', walletAddress).eq('tx_signature', 'pending');
       return NextResponse.json(
         { error: 'Treasury has insufficient funds. Please contact support.' },
         { status: 503 }
@@ -208,14 +227,10 @@ export async function POST(req: NextRequest) {
       commitment: 'confirmed',
     });
 
-    await supabase.from('prize_claims').insert({
-      fixture_id: fixtureId,
-      contest_type: contestType,
-      wallet_address: walletAddress,
-      rank: result.rank,
-      prize_sol: result.prize_sol,
-      tx_signature: txSignature,
-    });
+    // Update placeholder with real tx signature
+    await supabase.from('prize_claims')
+      .update({ tx_signature: txSignature })
+      .eq('fixture_id', fixtureId).eq('contest_type', contestType).eq('wallet_address', walletAddress);
 
     return NextResponse.json({ success: true, txSignature, prizeSol: result.prize_sol });
   } catch (err: any) {

@@ -82,6 +82,10 @@ function applyRemoteData(
     for (const [key, val] of Object.entries(remote.pack_opened)) {
       if (val) localStorage.setItem(`${PACK_PREFIX}${key}`, '1');
     }
+    // Sync welcomeGiftClaimed into the key the cards page fast-path reads
+    if (remote.pack_opened.welcomeGiftClaimed) {
+      localStorage.setItem(`txodds_welcome_gift_claimed_${walletAddress}`, 'true');
+    }
   }
 
   if (remote.lineups) {

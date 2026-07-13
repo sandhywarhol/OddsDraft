@@ -1894,8 +1894,10 @@ export default function CardsPage() {
     }
     const walletStr = publicKey.toString();
     const claimedKey = `txodds_welcome_gift_claimed_${walletStr}`;
+    let cancelled = false; // guard against stale closure if publicKey changes mid-fetch
 
     const buildGift = () => {
+      if (cancelled) return;
       const validSkillCards = SKILL_CARDS.filter(c => ['Common', 'Uncommon', 'Rare', 'Epic'].includes(c.rarity));
       const validUpgradeCards = UPGRADE_CARDS.filter(c => c.level <= 2);
       const generated: { type: 'skill' | 'upgrade'; cardId: string }[] = [];
@@ -1911,13 +1913,14 @@ export default function CardsPage() {
     // Fast path: localStorage already marked
     if (localStorage.getItem(claimedKey)) {
       setWelcomeGiftState('done');
-      return;
+      return () => { cancelled = true; };
     }
 
     // Verify against Supabase — gift is one-time per wallet across all devices
     fetch(`/api/user/data?wallet=${walletStr}`)
       .then(r => r.ok ? r.json() : null)
       .then((data: { pack_opened?: { welcomeGiftClaimed?: boolean } } | null) => {
+        if (cancelled) return;
         if (data?.pack_opened?.welcomeGiftClaimed) {
           localStorage.setItem(claimedKey, 'true');
           setWelcomeGiftState('done');
@@ -1925,7 +1928,12 @@ export default function CardsPage() {
           buildGift();
         }
       })
-      .catch(() => buildGift());
+      .catch(() => {
+        // On network error: do NOT grant gift — keep 'checking' so user can retry
+        if (!cancelled) setWelcomeGiftState('checking');
+      });
+
+    return () => { cancelled = true; };
   }, [connected, publicKey]);
 
   // Load new-card IDs from localStorage on mount and after reload
