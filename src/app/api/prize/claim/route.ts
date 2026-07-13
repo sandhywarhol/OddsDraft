@@ -11,7 +11,8 @@ import {
 } from '@solana/web3.js';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
-import { buildResolveContestIx } from '@/lib/oddsdraft-anchor';
+import { buildResolveContestIx, TREASURY_PUBKEY } from '@/lib/oddsdraft-anchor';
+import { calculatePlatformFee, ENTRY_FEE_SOL } from '@/lib/fantasy-engine';
 
 const SMART_CONTRACT_ENABLED =
   process.env.SMART_CONTRACT_ENABLED === 'true' ||
@@ -122,8 +123,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No winners found for this contest.' }, { status: 404 });
       }
 
-      const winners    = allResults.map(r => new PublicKey(r.wallet_address));
-      const amounts    = allResults.map(r => BigInt(Math.round(r.prize_sol * LAMPORTS_PER_SOL)));
+      const participantCount = allResults.length;
+      const platformFeeSol = calculatePlatformFee(participantCount, ENTRY_FEE_SOL);
+      const platformFeeLamports = BigInt(Math.round(platformFeeSol * LAMPORTS_PER_SOL));
+
+      // Winners receive their prize_sol (already computed on the 90% distributable pool).
+      // Treasury receives the 10% platform fee from the Contest PDA in the same tx.
+      const winners = allResults.map(r => new PublicKey(r.wallet_address));
+      const amounts = allResults.map(r => BigInt(Math.round(r.prize_sol * LAMPORTS_PER_SOL)));
+
+      if (platformFeeLamports > BigInt(0)) {
+        winners.push(TREASURY_PUBKEY);
+        amounts.push(platformFeeLamports);
+      }
 
       const resolveIx = buildResolveContestIx(fixtureId, contestType, treasury.publicKey, winners, amounts);
       const tx = new Transaction().add(resolveIx);
@@ -150,7 +162,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Smart contract distribution failed: ${err.message}` }, { status: 500 });
       }
 
-      // Record all winners' claims in one batch insert
+      // Record all winners' claims in one batch insert (treasury entry excluded)
       const claimsToInsert = allResults.map(r => ({
         fixture_id: fixtureId,
         contest_type: contestType,
