@@ -23,6 +23,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Reject soulbound cards — look up seller's card_collection in Supabase
+    const { data: userData } = await supabase
+      .from('user_data')
+      .select('card_collection')
+      .eq('wallet_address', sellerWallet)
+      .maybeSingle();
+
+    if (userData?.card_collection) {
+      let cards: any[] = [];
+      try {
+        cards = Array.isArray(userData.card_collection)
+          ? userData.card_collection
+          : JSON.parse(userData.card_collection as string);
+      } catch {}
+      const match = instanceId
+        ? cards.find((c: any) => c.instanceId === instanceId)
+        : cards.find((c: any) => c.cardId === cardId || c.upgradeCardId === cardId);
+      if (match?.soulbound) {
+        return NextResponse.json({ error: 'This card is soulbound and cannot be sold' }, { status: 403 });
+      }
+    }
+
     // Verify the transaction landed on-chain
     const tx = await connection.getTransaction(txSignature, {
       maxSupportedTransactionVersion: 0,

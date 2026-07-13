@@ -89,6 +89,7 @@ export interface OwnedCard {
   cardId: string;
   obtainedAt: string; // ISO date
   upgradeCredits?: number; // 0–10, drives the upgrade multiplier
+  soulbound?: boolean;     // Gift cards — permanently bound to owner, cannot be sold
 }
 
 // ── Upgrade Card Inventory ────────────────────────────────────────────────────
@@ -96,6 +97,7 @@ export interface OwnedUpgradeCard {
   instanceId: string;
   upgradeCardId: string;
   obtainedAt: string;
+  soulbound?: boolean;     // Gift cards — permanently bound to owner, cannot be sold
 }
 
 export interface UpgradeCardCollection {
@@ -146,12 +148,13 @@ function saveUpgradeCollection(col: UpgradeCardCollection): void {
   localStorage.setItem(UPGRADE_COLLECTION_KEY, JSON.stringify(col));
 }
 
-export function addUpgradeCardToCollection(upgradeCardId: string): OwnedUpgradeCard {
+export function addUpgradeCardToCollection(upgradeCardId: string, soulbound = false): OwnedUpgradeCard {
   const col = getUpgradeCollection();
   const instance: OwnedUpgradeCard = {
     instanceId: makeInstanceId(),
     upgradeCardId,
     obtainedAt: new Date().toISOString(),
+    ...(soulbound ? { soulbound: true } : {}),
   };
   col.cards.unshift(instance);
   saveUpgradeCollection(col);

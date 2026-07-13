@@ -76,6 +76,7 @@ function CardDetailModal({
   onClose,
   onEquip,
   isListed,
+  isSoulbound,
   onList,
   onDelist,
 }: {
@@ -84,6 +85,7 @@ function CardDetailModal({
   onClose: () => void;
   onEquip?: () => void;
   isListed?: boolean;
+  isSoulbound?: boolean;
   onList?: () => void;
   onDelist?: () => void;
 }) {
@@ -261,7 +263,11 @@ function CardDetailModal({
               </button>
             </div>
             {instance && (
-              isListed ? (
+              isSoulbound ? (
+                <div style={{ width: '100%', padding: '10px 0', background: 'rgba(107,114,128,0.08)', border: '1px solid rgba(107,114,128,0.3)', borderRadius: 8, color: 'rgba(255,255,255,0.35)', fontWeight: 700, fontSize: 13, textAlign: 'center', letterSpacing: '0.04em' }}>
+                  🔒 Soulbound — Cannot be sold
+                </div>
+              ) : isListed ? (
                 <button
                   onClick={onDelist}
                   style={{ width: '100%', padding: '10px 0', background: 'rgba(255,60,60,0.08)', border: '1px solid rgba(255,60,60,0.35)', borderRadius: 8, color: '#ff6b6b', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
@@ -288,6 +294,7 @@ function UpgradeCardDetailModal({
   card,
   instance,
   isListed,
+  isSoulbound,
   onList,
   onDelist,
   onClose,
@@ -295,6 +302,7 @@ function UpgradeCardDetailModal({
   card: UpgradeCard;
   instance?: OwnedUpgradeCard;
   isListed?: boolean;
+  isSoulbound?: boolean;
   onList?: () => void;
   onDelist?: () => void;
   onClose: () => void;
@@ -413,7 +421,12 @@ function UpgradeCardDetailModal({
           )}
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {instance && onList && !isListed && (
+            {instance && isSoulbound && (
+              <div style={{ flex: 1, padding: '12px 16px', borderRadius: 8, background: 'rgba(107,114,128,0.08)', border: '1px solid rgba(107,114,128,0.3)', color: 'rgba(255,255,255,0.35)', fontWeight: 700, fontSize: 13, textAlign: 'center' }}>
+                🔒 Soulbound — Cannot be sold
+              </div>
+            )}
+            {instance && !isSoulbound && onList && !isListed && (
               <button
                 onClick={onList}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 8, background: 'linear-gradient(135deg, #ffd700, #d4af37)', color: '#111', fontWeight: 800, fontSize: 13, border: 'none', cursor: 'pointer' }}
@@ -421,7 +434,7 @@ function UpgradeCardDetailModal({
                 List on Marketplace
               </button>
             )}
-            {instance && onDelist && isListed && (
+            {instance && !isSoulbound && onDelist && isListed && (
               <button
                 onClick={onDelist}
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 8, background: 'rgba(255,60,60,0.12)', border: '1px solid rgba(255,60,60,0.35)', color: '#ff6b6b', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
@@ -1352,10 +1365,11 @@ function WelcomeGiftModal({
           instanceId: makeInstanceId(),
           cardId: q.cardId,
           obtainedAt: new Date().toISOString(),
-          upgradeCredits: 0
+          upgradeCredits: 0,
+          soulbound: true,
         });
       } else {
-        addUpgradeCardToCollection(q.cardId);
+        addUpgradeCardToCollection(q.cardId, true);
       }
     });
     localStorage.setItem(`txodds_welcome_gift_claimed_${publicKey}`, 'true');
@@ -2248,22 +2262,6 @@ export default function CardsPage() {
                   >
                     + DEMO: UPGRADE PACK
                   </button>
-                  <button 
-                    onClick={() => {
-                      if (publicKey) {
-                        localStorage.removeItem(`txodds_welcome_gift_claimed_${publicKey.toString()}`);
-                        window.location.reload();
-                      }
-                    }}
-                    style={{
-                      background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8,
-                      padding: '8px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
-                      letterSpacing: '0.05em'
-                    }}
-                  >
-                    + DEMO: RESET GIFT
-                  </button>
                 </>
               )}
             </div>
@@ -2628,6 +2626,7 @@ export default function CardsPage() {
               const isListedInMarket = listedCardIds.has(instance.instanceId) || listedCardIds.has(instance.cardId);
               const isNew = newCardIds.has(instance.instanceId);
               const soldListing = soldListings.find(s => s.instanceId === instance.instanceId || (!s.instanceId && s.cardId === instance.cardId && s.cardType === 'skill'));
+              const isSoulboundCard = !!instance.soulbound;
               return (
                 <div
                   className="card-responsive-wrapper"
@@ -2696,6 +2695,19 @@ export default function CardsPage() {
                         pointerEvents: 'none',
                       }}>
                         ✨ NEW
+                      </div>
+                    )}
+                    {/* Soulbound badge */}
+                    {isSoulboundCard && (
+                      <div style={{
+                        position: 'absolute', bottom: 8, right: 8, zIndex: 20,
+                        background: 'rgba(107,114,128,0.85)',
+                        border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8,
+                        color: 'rgba(255,255,255,0.7)', fontWeight: 800, fontSize: 9,
+                        padding: '3px 8px', letterSpacing: 0.5, whiteSpace: 'nowrap',
+                        pointerEvents: 'none',
+                      }}>
+                        🔒 SOULBOUND
                       </div>
                     )}
                     {/* Upgrade badge */}
@@ -2876,6 +2888,7 @@ export default function CardsPage() {
                   const listedUpgradeInstance = instances.find(i => listedCardIds.has(i.instanceId) || listedCardIds.has(i.upgradeCardId));
                   const isNewUpgrade = newCardIds.has(instance.instanceId);
                   const soldUpgradeListing = soldListings.find(s => s.instanceId === instance.instanceId || (!s.instanceId && s.cardId === instance.upgradeCardId && s.cardType === 'upgrade'));
+                  const isSoulboundUpgrade = !!instance.soulbound;
                   return (
                     <div
                       key={instance.instanceId}
@@ -2943,7 +2956,20 @@ export default function CardsPage() {
                             ✨ NEW
                           </div>
                         )}
-                        
+                        {/* Soulbound badge for upgrade cards */}
+                        {isSoulboundUpgrade && (
+                          <div style={{
+                            position: 'absolute', bottom: 8, right: 8, zIndex: 20,
+                            background: 'rgba(107,114,128,0.85)',
+                            border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8,
+                            color: 'rgba(255,255,255,0.7)', fontWeight: 800, fontSize: 9,
+                            padding: '3px 8px', letterSpacing: 0.5, whiteSpace: 'nowrap',
+                            pointerEvents: 'none',
+                          }}>
+                            🔒 SOULBOUND
+                          </div>
+                        )}
+
                         {/* Gaming Duplicates Badge */}
                         {count > 1 && (
                           <div style={{
@@ -2990,7 +3016,8 @@ export default function CardsPage() {
           onClose={() => setViewTarget(null)}
           onEquip={viewTarget.instance ? () => { setEquipTarget(viewTarget as { instance: OwnedCard; card: SkillCard }); setViewTarget(null); } : undefined}
           isListed={viewTarget.instance ? (listedCardIds.has(viewTarget.instance.instanceId) || listedCardIds.has(viewTarget.instance.cardId)) : false}
-          onList={viewTarget.instance ? () => { setListTarget(viewTarget as { instance: OwnedCard; card: SkillCard }); setViewTarget(null); } : undefined}
+          isSoulbound={!!viewTarget.instance?.soulbound}
+          onList={viewTarget.instance && !viewTarget.instance.soulbound ? () => { setListTarget(viewTarget as { instance: OwnedCard; card: SkillCard }); setViewTarget(null); } : undefined}
           onDelist={viewTarget.instance ? () => { const i = viewTarget.instance!; const pdaKey = listedCardIds.has(i.instanceId) ? i.instanceId : i.cardId; handleDelistCard(pdaKey, i.cardId); setViewTarget(null); } : undefined}
         />
       )}
@@ -3001,7 +3028,8 @@ export default function CardsPage() {
           card={viewUpgradeTarget.card}
           instance={viewUpgradeTarget.instance}
           isListed={viewUpgradeTarget.instance ? (listedCardIds.has(viewUpgradeTarget.instance.instanceId) || listedCardIds.has(viewUpgradeTarget.instance.upgradeCardId)) : false}
-          onList={viewUpgradeTarget.instance ? () => { setListUpgradeTarget(viewUpgradeTarget as { instance: OwnedUpgradeCard; card: UpgradeCard }); setViewUpgradeTarget(null); } : undefined}
+          isSoulbound={!!viewUpgradeTarget.instance?.soulbound}
+          onList={viewUpgradeTarget.instance && !viewUpgradeTarget.instance.soulbound ? () => { setListUpgradeTarget(viewUpgradeTarget as { instance: OwnedUpgradeCard; card: UpgradeCard }); setViewUpgradeTarget(null); } : undefined}
           onDelist={viewUpgradeTarget.instance ? () => { const i = viewUpgradeTarget.instance!; const pdaKey = listedCardIds.has(i.instanceId) ? i.instanceId : i.upgradeCardId; handleDelistCard(pdaKey, i.upgradeCardId); setViewUpgradeTarget(null); } : undefined}
           onClose={() => setViewUpgradeTarget(null)}
         />
