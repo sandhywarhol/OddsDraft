@@ -670,11 +670,6 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     const lineupData = { players: filledPlayers, captain, confidence, equippedCards };
     let entryTxSig: string | null = null;
 
-    // ── Save lineup to localStorage immediately ────────────────────────────
-    try {
-      localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(lineupData));
-    } catch { /* ignore */ }
-
     if (!isDemo && publicKey) {
       // Set up payment steps UI
       const STEPS: PayStep[] = [
@@ -950,6 +945,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         setStep(5, { status: 'ok', detail: 'Saved locally (server sync will retry)' });
         console.error('[contest/enter] Supabase save failed:', e);
       }
+      // Save to localStorage only after confirmed payment so JOINED badge is accurate
+      try {
+        localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(lineupData));
+      } catch { /* ignore */ }
 
     } else {
       // Demo mode — no payment, just show a brief loading animation
@@ -957,6 +956,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       setPayError(null);
       setSubmitting(true);
       await new Promise(r => setTimeout(r, 900));
+      try {
+        localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(lineupData));
+      } catch { /* ignore */ }
       setPaySteps([{ label: 'Demo lineup saved', status: 'ok' }]);
     }
 

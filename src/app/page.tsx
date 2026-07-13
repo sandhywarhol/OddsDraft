@@ -766,7 +766,7 @@ function Footer() {
             <div style={{ width: '100%', maxWidth: 140 }}>
               <div style={{ fontSize: '0.55rem', color: '#29b6f6', fontWeight: 700, letterSpacing: '0.15em', marginBottom: 10 }}>CONNECT</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <a href="https://t.me/OddsDraftBot" target="_blank" rel="noopener noreferrer"
+              <a href="https://telegram.me/OddsDraftBot" target="_blank" rel="noopener noreferrer"
                 style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#29b6f6')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}>

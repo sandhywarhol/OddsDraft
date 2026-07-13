@@ -3573,7 +3573,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           {/* Telegram notification banner — live matches only, top of page */}
           {appMode === 'live' && !matchCompleted && (
             <a
-              href={`https://t.me/OddsDraftBot?start=subscribe_${contestId}${publicKey ? `_${publicKey.toString()}` : ''}`}
+              href={`https://telegram.me/OddsDraftBot?start=subscribe_${contestId}${publicKey ? `_${publicKey.toString()}` : ''}`}
               target="_blank"
               rel="noopener noreferrer"
               style={{

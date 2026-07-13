@@ -100,7 +100,7 @@ export default function Navbar() {
             </button>
           ) : (
             <a
-              href="https://t.me/OddsDraftBot"
+              href="https://telegram.me/OddsDraftBot"
               target="_blank"
               rel="noopener noreferrer"
               style={{

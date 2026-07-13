@@ -226,7 +226,7 @@ export default function ContestsPage() {
 
           {/* Telegram Subscribe Banner */}
           <a
-            href="https://t.me/OddsDraftBot"
+            href="https://telegram.me/OddsDraftBot"
             target="_blank"
             rel="noopener noreferrer"
             style={{
