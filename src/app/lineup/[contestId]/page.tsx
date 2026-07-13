@@ -8,7 +8,7 @@ import { DEMO_FIXTURES, type Player, type DemoFixture } from '@/lib/players';
 import { getStaticPlayersByTeam, WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { type LineupPlayer, MAX_PLAYERS } from '@/types';
-import { calculateFantasyPoints } from '@/lib/fantasy-engine';
+import { calculateFantasyPoints, ENTRY_FEE_SOL } from '@/lib/fantasy-engine';
 import { getCardsForLineupPosition, getCardById, addCardToCollection, type OwnedCard } from '@/lib/card-collection';
 import { RARITY_COLOR, SKILL_CARDS, type SkillCard, getUpgradedEffectText } from '@/lib/skill-cards';
 import { formatDistanceToNow } from 'date-fns';
@@ -181,7 +181,25 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
   const [lineup, setLineup] = useState<(LineupPlayer | null)[]>([null, null, null, null, null]);
   const [activeSlot, setActiveSlot] = useState<number | null>(null);
-  const [captain, setCaptain] = useState<string>('');
+  const [captain, setCaptain] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      const raw = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
+        ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
+      if (raw) return JSON.parse(raw).captain ?? '';
+    } catch {}
+    return '';
+  });
+  // Saved players — used to display captain name on the Already Entered / Submitted screen
+  const [savedLineupPlayers] = useState<LineupPlayer[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
+        ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
+      if (raw) return JSON.parse(raw).players ?? [];
+    } catch {}
+    return [];
+  });
   const [confidence, setConfidence] = useState<Record<string, number>>({});
   const [playerSearch, setPlayerSearch] = useState('');
   const [activeTeam, setActiveTeam] = useState<'home' | 'away'>('home');
@@ -1052,13 +1070,17 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2rem', color: 'var(--color-accent)' }}>
-                {captain ? filledPlayers.find(p => p.id === captain)?.name.split(' ').pop() : '-'}
+                {(() => {
+                  if (!captain) return '-';
+                  const pool = filledPlayers.length > 0 ? filledPlayers : savedLineupPlayers;
+                  return pool.find(p => p.id === captain)?.name?.split(' ').pop() ?? '-';
+                })()}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Captain</div>
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '2rem', color: 'var(--text-primary)' }}>
-                0.01
+                {ENTRY_FEE_SOL}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>SOL Paid</div>
             </div>

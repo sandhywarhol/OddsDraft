@@ -69,5 +69,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Keep the users table in sync so the leaderboard picks up the latest display name
+  if (profile && typeof profile === 'object') {
+    const p = profile as Record<string, unknown>;
+    if (p.username) {
+      await supabase.from('users').upsert(
+        {
+          wallet_address: wallet,
+          username: p.username as string,
+          ...(p.avatar ? { avatar_url: p.avatar as string } : {}),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'wallet_address' }
+      );
+    }
+  }
+
   return NextResponse.json({ success: true });
 }

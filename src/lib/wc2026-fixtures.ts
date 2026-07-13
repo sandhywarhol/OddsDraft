@@ -10,6 +10,12 @@ export interface WCFixture {
   awayFlag: string;
   kickoffAt: string;   // ISO UTC
   stage: 'group' | 'r32' | 'r16' | 'qf' | 'sf' | 'final';
+  // Populated by the schedule API when the match is completed
+  homeScore?: number;
+  awayScore?: number;
+  penaltyHome?: number;
+  penaltyAway?: number;
+  completed?: boolean;
 }
 
 function utc(y: number, mo: number, d: number, h: number, mi = 0): string {

@@ -127,10 +127,31 @@ export default function ContestsPage() {
   }, [isDemo, allFixtures]);
 
   // Fetch live schedule from TxLINE (corrects knockout team names / kickoff times)
+  // The schedule API also embeds ESPN scores for completed matches, so we seed
+  // finishedScores from those to cover cases where TxLINE devnet returns empty Score.
   useEffect(() => {
     fetch('/api/schedule/wc2026')
       .then(r => r.json())
-      .then((data: WCFixture[]) => { if (Array.isArray(data) && data.length > 0) setScheduleFixtures(data); })
+      .then((data: WCFixture[]) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setScheduleFixtures(data);
+        // Seed finishedScores from ESPN-backed schedule data (fallback for TxLINE devnet gaps)
+        const scheduleScores: Record<string, { home: number; away: number; penaltyHome?: number; penaltyAway?: number; completed?: boolean }> = {};
+        for (const f of data) {
+          if (f.homeScore !== undefined && f.awayScore !== undefined) {
+            scheduleScores[f.fixtureId] = {
+              home: f.homeScore,
+              away: f.awayScore,
+              ...(f.penaltyHome !== undefined ? { penaltyHome: f.penaltyHome } : {}),
+              ...(f.penaltyAway !== undefined ? { penaltyAway: f.penaltyAway } : {}),
+              completed: f.completed,
+            };
+          }
+        }
+        if (Object.keys(scheduleScores).length > 0) {
+          setFinishedScores(prev => ({ ...scheduleScores, ...prev }));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -627,8 +648,11 @@ export default function ContestsPage() {
                       </div>
                     </div>
                   );
-                  return joined
-                    ? <div key={ct.id}>{card}</div>
+                  const teamsKnown = selectedFixture.homeTeam !== 'TBD'
+                    && selectedFixture.awayTeam !== 'TBD'
+                    && !!selectedFixture.homeTeam && !!selectedFixture.awayTeam;
+                  return (joined || !teamsKnown)
+                    ? <div key={ct.id} style={!teamsKnown && !joined ? { opacity: 0.45, pointerEvents: 'none' as const, cursor: 'not-allowed' } : undefined}>{card}</div>
                     : <Link href={`/lineup/${selectedFixture.fixtureId}?contestType=${ct.id}${isDemo ? '&mode=demo' : ''}`} key={ct.id} style={{ textDecoration: 'none' }}>{card}</Link>;
                 })}
               </div>

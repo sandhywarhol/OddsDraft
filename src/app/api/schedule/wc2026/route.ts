@@ -226,6 +226,59 @@ export async function GET() {
       }));
     }
 
+    // ── Fetch scores for completed fixtures from ESPN backup ──────────────────
+    // TxLINE devnet often returns empty Score objects; ESPN is the reliable fallback.
+    const completedWithoutScore = Array.from(resultMap.values()).filter(
+      f => f.kickoffAt && new Date(f.kickoffAt).getTime() < Date.now() - 90 * 60_000 && f.homeScore === undefined
+    );
+
+    if (completedWithoutScore.length > 0) {
+      const scoreDates = [...new Set(completedWithoutScore.map(f => {
+        const d = new Date(f.kickoffAt);
+        return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+      }))];
+
+      await Promise.all(scoreDates.map(async (dateStr) => {
+        try {
+          const r = await fetch(
+            `${BACKUP_SCHEDULE_URL}?dates=${dateStr}&limit=20`,
+            { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 300 } }
+          );
+          if (!r.ok) return;
+          const scoreEvents: any[] = (await r.json()).events ?? [];
+
+          for (const ev of scoreEvents) {
+            const comp = ev.competitions?.[0];
+            if (!comp?.status?.type?.completed) continue;
+            const homeComp = comp.competitors?.find((c: any) => c.homeAway === 'home');
+            const awayComp = comp.competitors?.find((c: any) => c.homeAway === 'away');
+            if (!homeComp || !awayComp) continue;
+            const sh = parseInt(homeComp.score ?? '', 10);
+            const sa = parseInt(awayComp.score ?? '', 10);
+            if (isNaN(sh) || isNaN(sa)) continue;
+            const espnHome = resolveTeam(homeComp.team?.displayName ?? '') || (homeComp.team?.displayName ?? '');
+            const espnAway = resolveTeam(awayComp.team?.displayName ?? '') || (awayComp.team?.displayName ?? '');
+            const evTime = new Date(ev.date ?? '').getTime();
+            if (!evTime) continue;
+
+            for (const [, fixture] of resultMap) {
+              if (fixture.homeScore !== undefined) continue;
+              const fixTime = new Date(fixture.kickoffAt).getTime();
+              if (Math.abs(fixTime - evTime) > 2 * 3_600_000) continue;
+              const nm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+              if ((nm(fixture.homeTeam) === nm(espnHome) && nm(fixture.awayTeam) === nm(espnAway)) ||
+                  (nm(fixture.homeTeam) === nm(espnAway) && nm(fixture.awayTeam) === nm(espnHome))) {
+                const reversed = nm(fixture.homeTeam) === nm(espnAway);
+                fixture.homeScore = reversed ? sa : sh;
+                fixture.awayScore = reversed ? sh : sa;
+                fixture.completed = true;
+              }
+            }
+          }
+        } catch { /* ESPN unavailable for this date */ }
+      }));
+    }
+
     const fixtures = Array.from(resultMap.values()).sort(
       (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime()
     );
