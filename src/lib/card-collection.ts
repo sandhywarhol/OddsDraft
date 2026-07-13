@@ -116,6 +116,8 @@ export interface CardCollection {
 const COLLECTION_KEY = 'oddsdraft_card_collection';
 const PACK_OPENED_PREFIX = 'oddsdraft_pack_opened_';
 const UPGRADE_COLLECTION_KEY = 'oddsdraft_upgrade_collection';
+const NEW_CARDS_KEY = 'oddsdraft_new_cards';
+const SOLD_ACKED_KEY = 'oddsdraft_sold_acked';
 
 export function getCollection(): CardCollection {
   if (typeof window === 'undefined') return { cards: [] };
@@ -153,6 +155,7 @@ export function addUpgradeCardToCollection(upgradeCardId: string): OwnedUpgradeC
   };
   col.cards.unshift(instance);
   saveUpgradeCollection(col);
+  markCardAsNew(instance.instanceId);
   return instance;
 }
 
@@ -200,10 +203,75 @@ export function upgradeSkillCard(
   };
 }
 
+// ── New-card tracking ─────────────────────────────────────────────────────────
+// instanceIds of cards the user hasn't clicked yet — cleared per-card on first click.
+
+export function getNewCardIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const stored = localStorage.getItem(NEW_CARDS_KEY);
+    return new Set(stored ? JSON.parse(stored) : []);
+  } catch { return new Set(); }
+}
+
+export function markCardAsNew(instanceId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const ids = Array.from(getNewCardIds());
+    if (!ids.includes(instanceId)) {
+      ids.push(instanceId);
+      localStorage.setItem(NEW_CARDS_KEY, JSON.stringify(ids));
+    }
+  } catch {}
+}
+
+export function dismissNewCard(instanceId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const ids = Array.from(getNewCardIds()).filter(id => id !== instanceId);
+    localStorage.setItem(NEW_CARDS_KEY, JSON.stringify(ids));
+  } catch {}
+}
+
+// ── Sold listing acknowledgment ───────────────────────────────────────────────
+// Listing PDAs the seller has acknowledged so the SOLD badge doesn't reappear.
+
+export function getSoldAcked(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const stored = localStorage.getItem(SOLD_ACKED_KEY);
+    return new Set(stored ? JSON.parse(stored) : []);
+  } catch { return new Set(); }
+}
+
+export function ackSoldListing(listingPda: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const pdas = Array.from(getSoldAcked());
+    if (!pdas.includes(listingPda)) {
+      pdas.push(listingPda);
+      localStorage.setItem(SOLD_ACKED_KEY, JSON.stringify(pdas));
+    }
+  } catch {}
+}
+
 export function addCardToCollection(card: OwnedCard): void {
   const col = getCollection();
   col.cards.unshift(card);
   saveCollection(col);
+  markCardAsNew(card.instanceId);
+}
+
+export function removeCardFromCollection(instanceId: string): void {
+  const col = getCollection();
+  col.cards = col.cards.filter(c => c.instanceId !== instanceId);
+  saveCollection(col);
+}
+
+export function removeUpgradeCardFromCollection(instanceId: string): void {
+  const col = getUpgradeCollection();
+  col.cards = col.cards.filter(c => c.instanceId !== instanceId);
+  saveUpgradeCollection(col);
 }
 
 export function rollRandomCard(): SkillCard {

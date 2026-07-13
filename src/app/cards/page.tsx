@@ -21,6 +21,12 @@ import {
   upgradeSkillCard,
   getCardById,
   makeInstanceId,
+  getNewCardIds,
+  dismissNewCard,
+  getSoldAcked,
+  ackSoldListing,
+  removeCardFromCollection,
+  removeUpgradeCardFromCollection,
   type OwnedCard,
   type OwnedUpgradeCard,
 } from '@/lib/card-collection';
@@ -1856,6 +1862,11 @@ export default function CardsPage() {
   const [listingPdas, setListingPdas] = useState<Record<string, string>>({}); // instanceId → listingPda
   const [listToast, setListToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
+  // ── New-card & sold-notification state ─────────────────────────────────────
+  const [newCardIds, setNewCardIds] = useState<Set<string>>(new Set());
+  // soldListings: listings the seller hasn't acknowledged yet (status = 'sold')
+  const [soldListings, setSoldListings] = useState<Array<{ listingPda: string; instanceId: string | null; cardId: string; cardType: string }>>([]);
+
   // ── Welcome Gift State ──────────────────────────────────────────────────────
   const { publicKey } = useWallet();
   const [welcomeGiftState, setWelcomeGiftState] = useState<'checking' | 'available' | 'opening' | 'done'>('checking');
@@ -1903,21 +1914,38 @@ export default function CardsPage() {
       .catch(() => buildGift());
   }, [connected, publicKey]);
 
-  // Fetch seller's active listings so we can show "Listed" badge per instance
+  // Load new-card IDs from localStorage on mount and after reload
   useEffect(() => {
-    if (!publicKey) { setListedCardIds(new Set()); return; }
-    fetch(`/api/marketplace/listings?seller=${publicKey.toString()}`)
+    setNewCardIds(getNewCardIds());
+  }, [allCards, upgradeCards]);
+
+  // Fetch seller's active + sold listings
+  useEffect(() => {
+    if (!publicKey) { setListedCardIds(new Set()); setSoldListings([]); return; }
+    fetch(`/api/marketplace/listings?seller=${publicKey.toString()}&include_sold=true`)
       .then(r => r.ok ? r.json() : { listings: [] })
       .then(data => {
         const ids = new Set<string>();
         const pdaMap: Record<string, string> = {};
-        // Old listings have instance_id = null and were keyed by card_id; new ones use instance_id
+        const acked = getSoldAcked();
+        const unackedSold: typeof soldListings = [];
+
         (data.listings ?? []).forEach((l: any) => {
-          const key = l.instance_id ?? l.card_id;
-          if (key) { ids.add(key); if (l.listing_pda) pdaMap[key] = l.listing_pda; }
+          if (l.status === 'sold') {
+            // Only show if not already acknowledged by this seller
+            if (l.listing_pda && !acked.has(l.listing_pda)) {
+              unackedSold.push({ listingPda: l.listing_pda, instanceId: l.instance_id ?? null, cardId: l.card_id, cardType: l.card_type ?? 'skill' });
+            }
+          } else {
+            // active listing
+            const key = l.instance_id ?? l.card_id;
+            if (key) { ids.add(key); if (l.listing_pda) pdaMap[key] = l.listing_pda; }
+          }
         });
+
         setListedCardIds(ids);
         setListingPdas(pdaMap);
+        setSoldListings(unackedSold);
       })
       .catch(() => {});
   }, [publicKey]);
@@ -2015,11 +2043,34 @@ export default function CardsPage() {
   };
 
   const handleCardClick = (instance: OwnedCard, card: SkillCard) => {
+    // Dismiss NEW badge on first click
+    if (newCardIds.has(instance.instanceId)) {
+      dismissNewCard(instance.instanceId);
+      setNewCardIds(prev => { const s = new Set(prev); s.delete(instance.instanceId); return s; });
+    }
     setShimmerIds(prev => new Set(prev).add(instance.instanceId));
     setTimeout(() => {
       setShimmerIds(prev => { const s = new Set(prev); s.delete(instance.instanceId); return s; });
       setViewTarget({ instance, card });
     }, 380);
+  };
+
+  // Seller acknowledges a SOLD listing — removes card from local inventory and hides the badge
+  const handleAcknowledgeSold = (listing: { listingPda: string; instanceId: string | null; cardId: string; cardType: string }) => {
+    ackSoldListing(listing.listingPda);
+    // Remove the card from localStorage (server already removed from Supabase)
+    if (listing.instanceId) {
+      if (listing.cardType === 'upgrade') {
+        removeUpgradeCardFromCollection(listing.instanceId);
+      } else {
+        removeCardFromCollection(listing.instanceId);
+      }
+    } else {
+      // Legacy listing without instanceId — remove first matching card by cardId
+      removeCardFromCollection(listing.cardId);
+    }
+    setSoldListings(prev => prev.filter(s => s.listingPda !== listing.listingPda));
+    reload();
   };
 
   const reload = useCallback(() => {
@@ -2560,6 +2611,10 @@ export default function CardsPage() {
                 80%  { opacity: 1; }
                 100% { transform: translateX(230%) skewX(-20deg); opacity: 0; }
               }
+              @keyframes new-badge-pulse {
+                0%, 100% { box-shadow: 0 0 6px 2px rgba(34,197,94,0.7); }
+                50%       { box-shadow: 0 0 14px 5px rgba(34,197,94,0.3); }
+              }
             `}</style>
             {groupedFiltered.map(({ instances, card }) => {
               const instance = instances[0];
@@ -2571,6 +2626,8 @@ export default function CardsPage() {
               const isMaxed = credits >= MAX_UPGRADE_CREDITS;
               const hasCompatibleUpgrade = !isMaxed && upgradeCards.some(u => u.card.position === card.position);
               const isListedInMarket = listedCardIds.has(instance.instanceId) || listedCardIds.has(instance.cardId);
+              const isNew = newCardIds.has(instance.instanceId);
+              const soldListing = soldListings.find(s => s.instanceId === instance.instanceId || (!s.instanceId && s.cardId === instance.cardId && s.cardType === 'skill'));
               return (
                 <div
                   className="card-responsive-wrapper"
@@ -2611,6 +2668,35 @@ export default function CardsPage() {
                       >
                         LISTED · Cancel
                       </button>
+                    )}
+                    {/* SOLD badge — seller hasn't acknowledged yet */}
+                    {soldListing && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleAcknowledgeSold(soldListing); }}
+                        style={{
+                          position: 'absolute', top: 8, left: 8, zIndex: 21,
+                          background: 'linear-gradient(135deg, #16a34a, #15803d)', border: '2px solid #4ade80',
+                          borderRadius: 10, color: '#fff', fontWeight: 900, fontSize: 11,
+                          padding: '5px 12px', cursor: 'pointer', letterSpacing: 0.4, whiteSpace: 'nowrap',
+                          boxShadow: '0 2px 10px rgba(22,163,74,0.6)',
+                        }}
+                      >
+                        ✅ SOLD · Claim
+                      </button>
+                    )}
+                    {/* NEW badge */}
+                    {isNew && !soldListing && (
+                      <div style={{
+                        position: 'absolute', top: 8, right: 8, zIndex: 21,
+                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                        border: '2px solid #fff', borderRadius: 10,
+                        color: '#fff', fontWeight: 900, fontSize: 10,
+                        padding: '3px 9px', letterSpacing: 0.5, whiteSpace: 'nowrap',
+                        animation: 'new-badge-pulse 2s ease-in-out infinite',
+                        pointerEvents: 'none',
+                      }}>
+                        ✨ NEW
+                      </div>
                     )}
                     {/* Upgrade badge */}
                     {hasCompatibleUpgrade && (
@@ -2787,8 +2873,9 @@ export default function CardsPage() {
                 {groupedUpgradeCards.map(({ instances, card }) => {
                   const instance = instances[0];
                   const count = instances.length;
-                  const rarityColor = UPGRADE_RARITY_COLOR[card.rarity];
                   const listedUpgradeInstance = instances.find(i => listedCardIds.has(i.instanceId) || listedCardIds.has(i.upgradeCardId));
+                  const isNewUpgrade = newCardIds.has(instance.instanceId);
+                  const soldUpgradeListing = soldListings.find(s => s.instanceId === instance.instanceId || (!s.instanceId && s.cardId === instance.upgradeCardId && s.cardType === 'upgrade'));
                   return (
                     <div
                       key={instance.instanceId}
@@ -2801,7 +2888,13 @@ export default function CardsPage() {
                       }}
                       onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
-                      onClick={() => setViewUpgradeTarget({ instance, card })}
+                      onClick={() => {
+                        if (isNewUpgrade) {
+                          dismissNewCard(instance.instanceId);
+                          setNewCardIds(prev => { const s = new Set(prev); s.delete(instance.instanceId); return s; });
+                        }
+                        setViewUpgradeTarget({ instance, card });
+                      }}
                     >
                       {/* Card image and stats */}
                       <div style={{ position: 'relative' }}>
@@ -2820,6 +2913,35 @@ export default function CardsPage() {
                           >
                             LISTED · Cancel
                           </button>
+                        )}
+                        {/* SOLD badge for upgrade cards */}
+                        {soldUpgradeListing && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handleAcknowledgeSold(soldUpgradeListing); }}
+                            style={{
+                              position: 'absolute', top: 8, left: 8, zIndex: 21,
+                              background: 'linear-gradient(135deg, #16a34a, #15803d)', border: '2px solid #4ade80',
+                              borderRadius: 10, color: '#fff', fontWeight: 900, fontSize: 11,
+                              padding: '5px 12px', cursor: 'pointer', letterSpacing: 0.4, whiteSpace: 'nowrap',
+                              boxShadow: '0 2px 10px rgba(22,163,74,0.6)',
+                            }}
+                          >
+                            ✅ SOLD · Claim
+                          </button>
+                        )}
+                        {/* NEW badge for upgrade cards */}
+                        {isNewUpgrade && !soldUpgradeListing && (
+                          <div style={{
+                            position: 'absolute', top: 8, right: 8, zIndex: 21,
+                            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                            border: '2px solid #fff', borderRadius: 10,
+                            color: '#fff', fontWeight: 900, fontSize: 10,
+                            padding: '3px 9px', letterSpacing: 0.5, whiteSpace: 'nowrap',
+                            animation: 'new-badge-pulse 2s ease-in-out infinite',
+                            pointerEvents: 'none',
+                          }}>
+                            ✨ NEW
+                          </div>
                         )}
                         
                         {/* Gaming Duplicates Badge */}
