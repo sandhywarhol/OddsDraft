@@ -8,8 +8,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
 const connection = new Connection(
-  process.env.SERVER_SOLANA_RPC ?? 'https://api.devnet.solana.com'
+  isDevnet ? 'https://api.devnet.solana.com' : (process.env.SERVER_SOLANA_RPC ?? 'https://api.mainnet-beta.solana.com')
 );
 
 // POST /api/marketplace/cancel
