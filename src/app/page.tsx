@@ -281,7 +281,7 @@ function StatsSection() {
   ];
 
   return (
-    <section style={{ padding: '40px 0 80px' }}>
+    <section style={{ padding: '0 0 80px' }}>
       <div style={{
         position: 'relative',
         padding: '54px 0',
