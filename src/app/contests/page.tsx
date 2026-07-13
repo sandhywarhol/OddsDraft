@@ -18,7 +18,7 @@ import FlagImage from '@/components/FlagImage';
 type FixtureScore = { home: number; away: number; completed?: boolean; penaltyHome?: number; penaltyAway?: number };
 
 export default function ContestsPage() {
-  const { connected } = useWallet();
+  const { connected, publicKey } = useWallet();
   const { appMode, liveFixtures, allFixtures } = useTxLine();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -74,6 +74,32 @@ export default function ContestsPage() {
     setEnteredContests(map);
   }, []);
 
+
+  // Sync entered contests from Supabase when wallet connects — ensures JOINED badges
+  // show correctly on a new device where localStorage is empty.
+  useEffect(() => {
+    if (isDemo || !publicKey) return;
+    const wallet = publicKey.toString();
+    const fixtureIds = scheduleFixtures.map(f => f.fixtureId);
+    Promise.all(
+      fixtureIds.map(fid =>
+        fetch(`/api/contest/check-entry?fixtureId=${fid}&walletAddress=${wallet}`)
+          .then(r => r.json())
+          .then(({ contestTypes }: { contestTypes?: string[] }) => ({ fid, contestTypes: contestTypes ?? [] }))
+          .catch(() => ({ fid, contestTypes: [] }))
+      )
+    ).then(results => {
+      setEnteredContests(prev => {
+        const next = { ...prev };
+        for (const { fid, contestTypes } of results) {
+          if (contestTypes.length === 0) continue;
+          const merged = Array.from(new Set([...(next[fid] ?? []), ...contestTypes]));
+          next[fid] = merged;
+        }
+        return next;
+      });
+    });
+  }, [publicKey, isDemo]);
 
   // Fetch real participant counts from Supabase for visible fixtures
   useEffect(() => {
