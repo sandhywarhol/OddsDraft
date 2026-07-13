@@ -2241,6 +2241,20 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             })}
           </div>
 
+          {/* Wallet popup hint — shown while waiting for wallet approval */}
+          {paySteps[2]?.status === 'loading' && (
+            <div style={{
+              marginTop: 16, padding: '10px 14px', borderRadius: 10,
+              background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.3)',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>👻</span>
+              <div style={{ fontSize: '0.78rem', color: '#fde047', lineHeight: 1.5 }}>
+                <strong>Check your Phantom wallet popup</strong> — it may appear behind your browser window or taskbar.
+              </div>
+            </div>
+          )}
+
           {payError && (
             <div style={{ marginTop: 20, padding: '12px 14px', borderRadius: 10, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)' }}>
               <div style={{ fontSize: '0.8rem', color: '#fca5a5', fontWeight: 600, marginBottom: 6 }}>Payment failed</div>
