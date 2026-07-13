@@ -641,6 +641,29 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     });
   };
 
+  // HTTP-poll for tx confirmation instead of WebSocket signatureSubscribe.
+  // signatureSubscribe errors flood the console and cause confirmTransaction to hang.
+  const pollConfirmation = async (
+    conn: typeof connection,
+    sig: string,
+    lastValidBlockHeight: number,
+    timeoutMs = 90_000
+  ): Promise<void> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2500));
+      const [statusRes, blockHeightRes] = await Promise.all([
+        conn.getSignatureStatuses([sig]),
+        conn.getBlockHeight('confirmed').catch(() => 0),
+      ]);
+      const st = statusRes?.value?.[0];
+      if (st?.err) throw new Error(`Transaction failed on-chain: ${JSON.stringify(st.err)}`);
+      if (st?.confirmationStatus === 'confirmed' || st?.confirmationStatus === 'finalized') return;
+      if (blockHeightRes > lastValidBlockHeight) throw new Error('block height exceeded');
+    }
+    throw new Error('Confirmation timeout — transaction may still land, check your wallet.');
+  };
+
   const handleSubmit = async () => {
     if (!isLineupFull || !captain) return;
 
@@ -764,10 +787,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           // Step 4: confirm
           setStep(4, { status: 'loading', detail: 'Waiting for network confirmation…' });
           try {
-            await connection.confirmTransaction(
-              { signature: sig, blockhash, lastValidBlockHeight },
-              'confirmed'
-            );
+            await pollConfirmation(connection, sig, lastValidBlockHeight);
             entryTxSig = sig;
             paid = true;
             setStep(4, { status: 'ok', detail: sig.slice(0, 8) + '…' + sig.slice(-6) });
@@ -866,10 +886,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             // Step 4: confirm
             setStep(4, { status: 'loading', detail: 'Waiting for network confirmation…' });
             try {
-              await connection.confirmTransaction(
-                { signature: sig, blockhash, lastValidBlockHeight },
-                'confirmed'
-              );
+              await pollConfirmation(connection, sig, lastValidBlockHeight);
               entryTxSig = sig;
               paid = true;
               setStep(4, { status: 'ok', detail: sig.slice(0, 8) + '…' + sig.slice(-6) });
