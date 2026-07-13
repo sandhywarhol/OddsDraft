@@ -153,7 +153,10 @@ export async function POST(req: NextRequest) {
     // Legacy mode: verify SOL transfer to treasury wallet.
     // No txSig = demo mode (wallet not connected) — allowed for testing.
     if (entryTxSig) {
-      const rpc = process.env.SERVER_SOLANA_RPC || process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+      const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
+      const rpc = isDevnet
+        ? 'https://api.devnet.solana.com'
+        : (process.env.SERVER_SOLANA_RPC || 'https://api.mainnet-beta.solana.com');
       const connection = new Connection(rpc, 'confirmed');
 
       // Nonce check — reject reused signatures
