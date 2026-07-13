@@ -201,15 +201,16 @@ export const WC2026_FIXTURES: WCFixture[] = [
   qf('18222446', 'Argentina',    'Switzerland',       2026, 7, 12,  1),   // real TxLINE ID
 
   // ── Semi-finals / Final ───────────────────────────────────────────────────────
-  // Placeholders — teams TBD, real fixtures provided by TxLINE once QFs are settled.
-  // The API route (/api/schedule/wc2026) replaces these with confirmed TxLINE data.
-  sf('18220001', 'TBD',          'TBD',               2026, 7, 14, 20),
-  sf('18220002', 'TBD',          'TBD',               2026, 7, 15, 20),
+  // QF results: France 2-0 Morocco, Spain beat Belgium, Norway beat England, Argentina beat Switzerland
+  sf('18220001', 'France',       'Spain',             2026, 7, 14, 20),
+  sf('18220002', 'Norway',       'Argentina',         2026, 7, 15, 20),
 
   // ── Third Place ──────────────────────────────────────────────────────────────
+  // Teams TBD — depends on SF results
   final('18230001', 'TBD',        'TBD',              2026, 7, 18, 20),
 
   // ── Final ────────────────────────────────────────────────────────────────────
+  // Teams TBD — depends on SF results
   final('18240001', 'TBD',        'TBD',              2026, 7, 19, 20),
 ];
 

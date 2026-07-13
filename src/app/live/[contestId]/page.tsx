@@ -774,12 +774,32 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
   // In live mode: NEVER fall back to demo fixtures — demo team names must not
   // appear on a real live page. Use a neutral placeholder so all hooks stay valid.
-  const fixture = wcFixture
+  const baseFixture = wcFixture
     ? { ...wcFixture, status: getFixtureStatus(wcFixture), homeScore: 0, awayScore: 0 }
     : persistedIsLive
       ? { fixtureId: contestId, homeTeam: '—', awayTeam: '—', homeFlag: '🏳️', awayFlag: '🏳️',
           kickoffAt: new Date().toISOString(), status: 'upcoming' as const, homeScore: 0, awayScore: 0 }
       : (DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0]);
+
+  // Resolve TBD team names from the live TxLINE schedule (for SF/final placeholders)
+  const [teamOverride, setTeamOverride] = useState<{ homeTeam: string; homeFlag: string; awayTeam: string; awayFlag: string } | null>(null);
+  useEffect(() => {
+    const isTbd = (t: string) => !t || t === 'TBD' || t === '—';
+    if (!isTbd(baseFixture.homeTeam) && !isTbd(baseFixture.awayTeam)) return;
+    fetch('/api/schedule/wc2026')
+      .then(r => r.json())
+      .then((fixtures: any[]) => {
+        if (!Array.isArray(fixtures)) return;
+        const liveMatch = fixtures.find((f: any) => f.fixtureId === contestId);
+        if (liveMatch && !isTbd(liveMatch.homeTeam) && !isTbd(liveMatch.awayTeam)) {
+          setTeamOverride({ homeTeam: liveMatch.homeTeam, homeFlag: liveMatch.homeFlag, awayTeam: liveMatch.awayTeam, awayFlag: liveMatch.awayFlag });
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contestId]);
+
+  const fixture = teamOverride ? { ...baseFixture, ...teamOverride } : baseFixture;
 
   const matchEvents = fixture.fixtureId === 'special-arg-ger'
     ? ARG_GER_EVENTS
