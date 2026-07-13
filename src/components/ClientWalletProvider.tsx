@@ -21,10 +21,12 @@ export default function ClientWalletProvider({ children }: { children: React.Rea
     return isDevnet ? 'https://api.devnet.solana.com' : 'https://solana-rpc.publicnode.com';
   }, [isDevnet]);
 
-  // WSS for transaction confirmation subscriptions — use Alchemy wss if configured
+  // WSS for transaction confirmation subscriptions (signatureSubscribe).
+  // NEXT_PUBLIC_SOLANA_WSS should be set to the Alchemy wss:// URL in Vercel.
+  // Falls back to Solana's official public WSS — more reliable than publicnode.
   const wsEndpoint = isDevnet
     ? 'wss://api.devnet.solana.com'
-    : (process.env.NEXT_PUBLIC_SOLANA_WSS ?? 'wss://solana-rpc.publicnode.com');
+    : (process.env.NEXT_PUBLIC_SOLANA_WSS ?? 'wss://api.mainnet-beta.solana.com');
 
   const wallets = useMemo(
     () => [
