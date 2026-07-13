@@ -1047,6 +1047,17 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               Back to Contests
             </Link>
           </div>
+          {alreadyEntered && (
+            <button
+              onClick={() => {
+                try { localStorage.removeItem(`txodds_user_lineup_${contestId}_${contestType}`); } catch { /* ignore */ }
+                setSubmitted(false);
+              }}
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', cursor: 'pointer', textDecoration: 'underline', marginTop: 4 }}
+            >
+              Re-enter this contest
+            </button>
+          )}
         </div>
       </div>
     );
