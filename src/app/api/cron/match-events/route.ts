@@ -441,11 +441,40 @@ export async function GET(req: NextRequest) {
                 pts = Math.round(pts * confMult * (isCaptain ? 2 : 1) * 10) / 10;
 
                 const ptsStr = pts > 0 ? `+${pts}` : `${pts}`;
-                const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤' };
+                const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤', penalty_won:'🎯' };
                 const emoji = evEmoji[eventType] ?? '📊';
                 const min = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
                 const capNote = isCaptain ? ' *(C) ×2*' : '';
                 msgs.push(`${emoji} *${playerName}* — ${eventType.replace(/_/g, ' ').toUpperCase()} (${min}')\n*${ptsStr} pts*${capNote}`);
+              }
+
+              // Penalty conceded: deduct points for GK/DEF in the team that conceded.
+              // TxLINE doesn't send this event, so we derive it from penalty_won.
+              for (const penEv of newEvents) {
+                const rt2 = (penEv.Action ?? penEv.type ?? penEv.action ?? '').toLowerCase().replace(/\s+/g, '_');
+                if ((ACTION_MAP[rt2] ?? rt2) !== 'penalty_won') continue;
+                const d2 = penEv.Data?.New ?? penEv.Data ?? {};
+                const scoringParticipant: number = (typeof d2 === 'object' ? (d2 as any).Participant : null) ?? penEv.Participant ?? 1;
+                const concedingTeam = scoringParticipant === 1 ? fixture.awayTeam : fixture.homeTeam;
+                const penMin = penEv.Clock?.Seconds ? Math.floor(penEv.Clock.Seconds / 60) : parseInt(penEv.minute) || 0;
+
+                for (const lp of entry.lineup.players) {
+                  const playerDef = WC2026_PLAYERS.find(p => p.id === lp.id);
+                  if (!playerDef || playerDef.team !== concedingTeam) continue;
+                  if (playerDef.position !== 'GK' && playerDef.position !== 'DEF') continue;
+
+                  let pts = calculateEventPoints('penalty_conceded', playerDef.position);
+                  if (pts === 0) continue;
+
+                  const isCaptain2 = entry.lineup.captain === lp.id;
+                  const stars2 = (entry.lineup.confidence ?? {})[lp.id] ?? 3;
+                  const confMult2 = [1, 1.1, 1.2, 1.35, 1.5][Math.min(stars2, 5) - 1] ?? 1.2;
+                  pts = Math.round(pts * confMult2 * (isCaptain2 ? 2 : 1) * 10) / 10;
+
+                  const ptsStr2 = `${pts}`;
+                  const capNote2 = isCaptain2 ? ' *(C) ×2*' : '';
+                  msgs.push(`🥅 *${playerDef.name}* — PENALTY CONCEDED (${penMin}')\n*${ptsStr2} pts*${capNote2}`);
+                }
               }
 
               if (msgs.length > 0) {
