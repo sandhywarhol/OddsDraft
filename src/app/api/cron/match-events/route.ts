@@ -124,6 +124,40 @@ export async function GET(req: NextRequest) {
       const scoreHome: number = (raw as any)?.Score?.Participant1?.Total?.Goals ?? 0;
       const scoreAway: number = (raw as any)?.Score?.Participant2?.Total?.Goals ?? 0;
 
+      // TxLINE doesn't send a goal event when an in-play penalty is converted — only the
+      // score updates and a kick_off follows. Detect the discrepancy and inject a synthetic
+      // penalty_goal event (mapped to 'goal') so the scorer gets attributed correctly.
+      const allGoalCount = allEvents.filter(ev => {
+        const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+        const mapped = ACTION_MAP[rt] ?? rt;
+        return mapped === 'goal' || mapped === 'own_goal';
+      }).length;
+
+      let ghostGoals = (scoreHome + scoreAway) - allGoalCount;
+      if (ghostGoals > 0) {
+        const confirmedPenWon = allEvents.filter(ev => {
+          if (ev.Confirmed === false) return false;
+          const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+          return (ACTION_MAP[rt] ?? rt) === 'penalty_won';
+        });
+        for (const penEv of confirmedPenWon) {
+          if (ghostGoals <= 0) break;
+          const d = penEv.Data?.New ?? penEv.Data ?? {};
+          const participant: number = (typeof d === 'object' ? (d as any).Participant : null) ?? penEv.Participant ?? 0;
+          // Skip if the same team has a penalty_missed — that penalty didn't go in
+          const wasMissed = allEvents.some(ev2 => {
+            const rt2 = (ev2.Action ?? ev2.type ?? ev2.action ?? '').toLowerCase().replace(/\s+/g, '_');
+            if ((ACTION_MAP[rt2] ?? rt2) !== 'penalty_missed') return false;
+            const d2 = ev2.Data?.New ?? ev2.Data ?? {};
+            const p2: number = (typeof d2 === 'object' ? (d2 as any).Participant : null) ?? ev2.Participant ?? 0;
+            return p2 === participant;
+          });
+          if (wasMissed) continue;
+          allEvents.push({ ...penEv, Action: 'penalty_goal' });
+          ghostGoals--;
+        }
+      }
+
       // Filter confirmed events only — TxLINE sends Confirmed=false first, then Confirmed=true.
       const confirmedEvents = allEvents.filter(ev => ev.Confirmed !== false);
 
