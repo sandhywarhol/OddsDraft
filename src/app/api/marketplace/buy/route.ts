@@ -21,11 +21,11 @@ function toCardArray(v: unknown): any[] {
 }
 
 // POST /api/marketplace/buy
-// Body: { txSignature, buyerWallet, sellerWallet, cardId }
-// Verifies the on-chain buy_card tx, transfers card ownership in Supabase.
+// Body: { txSignature, buyerWallet, sellerWallet, cardId, listingId? }
+// Verifies the on-chain SOL transfer tx, transfers card ownership in Supabase.
 export async function POST(req: NextRequest) {
   try {
-    const { txSignature, buyerWallet, sellerWallet, instanceId, cardId } = await req.json();
+    const { txSignature, buyerWallet, sellerWallet, instanceId, cardId, listingId } = await req.json();
 
     if (!txSignature || !buyerWallet || !sellerWallet || !cardId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -40,25 +40,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Transaction not confirmed or failed' }, { status: 400 });
     }
 
-    // PDA was keyed by instanceId (or cardId for old listings)
-    const pdaKey = instanceId ?? cardId;
-    const [listingPDA] = deriveListingPDA(new PublicKey(sellerWallet), pdaKey);
-    let pdaInfo = await connection.getAccountInfo(listingPDA, 'confirmed');
-    for (let attempt = 0; attempt < 3 && pdaInfo; attempt++) {
-      await new Promise(r => setTimeout(r, 2000));
-      pdaInfo = await connection.getAccountInfo(listingPDA, 'confirmed');
-    }
-    if (pdaInfo) {
-      return NextResponse.json({ error: 'Listing PDA still open — transaction may not have run buy_card' }, { status: 400 });
-    }
+    // Fetch the active listing from Supabase.
+    // Prefer lookup by listingId (direct, no PDA derivation needed for direct-transfer flow).
+    // Fall back to PDA-based lookup for legacy buy_card paths.
+    let listing: any = null;
+    let fetchErr: any = null;
 
-    // Fetch the active listing from Supabase
-    const { data: listing, error: fetchErr } = await supabase
-      .from('card_listings')
-      .select('*')
-      .eq('listing_pda', listingPDA.toString())
-      .eq('status', 'active')
-      .maybeSingle();
+    if (listingId) {
+      ({ data: listing, error: fetchErr } = await supabase
+        .from('card_listings')
+        .select('*')
+        .eq('id', listingId)
+        .eq('status', 'active')
+        .maybeSingle());
+    } else {
+      const pdaKey = instanceId ?? cardId;
+      const [listingPDA] = deriveListingPDA(new PublicKey(sellerWallet), pdaKey);
+      ({ data: listing, error: fetchErr } = await supabase
+        .from('card_listings')
+        .select('*')
+        .eq('listing_pda', listingPDA.toString())
+        .eq('status', 'active')
+        .maybeSingle());
+    }
 
     if (fetchErr || !listing) {
       return NextResponse.json({ error: 'Listing not found or already sold' }, { status: 404 });
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest) {
     await supabase
       .from('card_listings')
       .update({ status: 'sold', buyer_wallet: buyerWallet, sold_at: new Date().toISOString() })
-      .eq('listing_pda', listingPDA.toString());
+      .eq('id', listing.id);
 
     return NextResponse.json({ success: true, cardId, cardType: listing.card_type });
   } catch (err: any) {

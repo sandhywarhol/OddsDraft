@@ -42,8 +42,8 @@ import {
 } from '@/lib/upgrade-cards';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useTxLine } from '@/context/TxLineContext';
-import { Transaction, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { buildListCardIx, buildCancelListingIx, buildBuyCardIx } from '@/lib/oddsdraft-anchor';
+import { Transaction, SystemProgram, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { buildListCardIx, buildCancelListingIx, TREASURY_PUBKEY } from '@/lib/oddsdraft-anchor';
 import {
   RARITY_ORDER,
   RARITY_COLOR,
@@ -1354,6 +1354,7 @@ function WelcomeGiftModal({
   onComplete: () => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showAll, setShowAll] = useState(false);
 
   // Add all cards to collection once when the modal opens
   useEffect(() => {
@@ -1373,19 +1374,73 @@ function WelcomeGiftModal({
       }
     });
     localStorage.setItem(`txodds_welcome_gift_claimed_${publicKey}`, 'true');
-    // Persist to Supabase — prevents re-claiming on a new browser or device
     fetch('/api/user/data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ wallet: publicKey, packOpened: { welcomeGiftClaimed: true } }),
-    }).catch(() => { /* non-blocking — localStorage is the authoritative local guard */ });
+    }).catch(() => {});
   }, [queue, publicKey]);
 
   const currentItem = queue[currentIndex];
-  
-  if (!currentItem) {
+
+  if (!currentItem && !showAll) {
     onComplete();
     return null;
+  }
+
+  // "Open All" view — show all cards in a grid
+  if (showAll) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(12px)',
+        zIndex: 9000, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', padding: '28px 16px', overflowY: 'auto',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd700', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>
+            🎁 Welcome to OddsDraft!
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#fff', textShadow: '0 0 24px rgba(255,215,0,0.5)' }}>
+            Your {queue.length} Starter Cards
+          </div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 6 }}>
+            All cards have been added to your collection
+          </div>
+        </div>
+
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center',
+          maxWidth: 900, marginBottom: 28,
+        }}>
+          {queue.map((item, i) => {
+            if (item.type === 'skill') {
+              const card = SKILL_CARDS.find(c => c.id === item.cardId);
+              if (!card) return null;
+              return <SkillCardDisplay key={i} card={card} width={130} />;
+            } else {
+              const card = UPGRADE_CARDS.find(c => c.id === item.cardId);
+              if (!card) return null;
+              return <UpgradeCardDisplay key={i} card={card} width={130} />;
+            }
+          })}
+        </div>
+
+        <button
+          onClick={onComplete}
+          style={{
+            padding: '14px 48px',
+            background: 'linear-gradient(135deg, #2196F3, #1976D2)',
+            border: 'none', borderRadius: 12, color: '#fff',
+            fontSize: 15, fontWeight: 900, cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(33,150,243,0.4)',
+            letterSpacing: 0.5, textTransform: 'uppercase',
+          }}
+        >
+          Finish &amp; Go to My Cards
+        </button>
+      </div>
+    );
   }
 
   const handleOpen = () => {
@@ -1407,16 +1462,36 @@ function WelcomeGiftModal({
   };
 
   return (
-    <CardPackOpener
-      key={currentIndex}
-      upgradePackMode={currentItem.type === 'upgrade'}
-      title="🎁 Welcome to OddsDraft!"
-      subtitle={`Opening Starter Pack (${currentIndex + 1}/${queue.length})`}
-      subtitleIdle="Contains 5 Skill Cards and 5 Upgrade Cards"
-      primaryButtonText={currentIndex < queue.length - 1 ? 'Open More' : 'Finish & Go to My Cards'}
-      onOpen={handleOpen}
-      onClose={handleClose}
-    />
+    <div style={{ position: 'relative' }}>
+      <CardPackOpener
+        key={currentIndex}
+        upgradePackMode={currentItem.type === 'upgrade'}
+        title="🎁 Welcome to OddsDraft!"
+        subtitle={`Opening Starter Pack (${currentIndex + 1}/${queue.length})`}
+        subtitleIdle="Contains 5 Skill Cards and 5 Upgrade Cards"
+        primaryButtonText={currentIndex < queue.length - 1 ? 'Open More' : 'Finish & Go to My Cards'}
+        onOpen={handleOpen}
+        onClose={handleClose}
+      />
+      {/* Open All button — overlaid at bottom center, above the pack opener */}
+      <button
+        onClick={() => setShowAll(true)}
+        style={{
+          position: 'fixed', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 9100,
+          padding: '10px 28px',
+          background: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: 24, color: 'rgba(255,255,255,0.7)',
+          fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          backdropFilter: 'blur(6px)',
+          letterSpacing: 0.5,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Open All {queue.length} Cards at Once
+      </button>
+    </div>
   );
 }
 
@@ -1497,18 +1572,23 @@ function MarketplaceModal({
     try {
       const seller = new PublicKey(listing.seller_wallet);
       const buyer = new PublicKey(walletPublicKey);
-      // PDA was created with instance_id as key
-      const pdaKey = listing.instance_id ?? listing.card_id;
-      const ix = buildBuyCardIx(buyer, seller, pdaKey);
+      // Direct SOL transfer: buyer pays seller (95%) and treasury (5%).
+      // This bypasses the buy_card smart contract instruction which can fail
+      // on devnet due to discriminator mismatches or undeployed program versions.
+      const totalLamports = Math.round(listing.price_sol * LAMPORTS_PER_SOL);
+      const sellerLamports = Math.round(totalLamports * 0.95);
+      const treasuryLamports = totalLamports - sellerLamports;
       const { blockhash } = await connection.getLatestBlockhash();
-      const tx = new Transaction({ feePayer: buyer, recentBlockhash: blockhash }).add(ix);
-      const sig = await sendTransaction(tx, connection, { skipPreflight: true });
+      const tx = new Transaction({ feePayer: buyer, recentBlockhash: blockhash })
+        .add(SystemProgram.transfer({ fromPubkey: buyer, toPubkey: seller, lamports: sellerLamports }))
+        .add(SystemProgram.transfer({ fromPubkey: buyer, toPubkey: TREASURY_PUBKEY, lamports: treasuryLamports }));
+      const sig = await sendTransaction(tx, connection, { skipPreflight: false });
       await confirmWithTimeout(connection, sig);
 
       const res = await fetch('/api/marketplace/buy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txSignature: sig, buyerWallet: walletPublicKey, sellerWallet: listing.seller_wallet, instanceId: listing.instance_id, cardId: listing.card_id }),
+        body: JSON.stringify({ txSignature: sig, buyerWallet: walletPublicKey, sellerWallet: listing.seller_wallet, instanceId: listing.instance_id, cardId: listing.card_id, listingId: listing.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Purchase failed');
