@@ -196,6 +196,11 @@ export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: stri
     goal:              'goal',
     penalty_outcome:   'goal',   // TxLINE sends penalty_outcome instead of goal for penalties
     penaltyoutcome:    'goal',
+    penalty_goal:      'goal',
+    penaltygoal:       'goal',
+    goal_penalty:      'goal',
+    penalty_scored:    'goal',
+    penaltyscored:     'goal',
     yellowcard:        'yellow_card',
     yellow_card:    'yellow_card',
     redcard:        'red_card',

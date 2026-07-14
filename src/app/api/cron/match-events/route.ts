@@ -27,7 +27,10 @@ const SIGNIFICANT = new Set([
 const STATS_ONLY = new Set(['half_time', 'full_time', 'game_finalised']);
 
 const ACTION_MAP: Record<string, string> = {
-  goal: 'goal', scored: 'goal', penalty_outcome: 'goal', penaltyoutcome: 'goal',
+  goal: 'goal', scored: 'goal',
+  penalty_outcome: 'goal', penaltyoutcome: 'goal',
+  penalty_goal: 'goal', penaltygoal: 'goal', goal_penalty: 'goal',
+  penalty_scored: 'goal', penaltyscored: 'goal',
   own_goal: 'own_goal', owngoal: 'own_goal',
   yellowcard: 'yellow_card', yellow_card: 'yellow_card',
   redcard: 'red_card', red_card: 'red_card',
