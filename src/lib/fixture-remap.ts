@@ -62,7 +62,7 @@ export async function discoverAndSync(
   try {
     const kickoffMs = new Date(kickoffISO).getTime();
     if (!kickoffMs) return null;
-    const WINDOW = 40 * 60 * 1000; // ±40 min tolerance
+    const WINDOW = 90 * 60 * 1000; // ±90 min tolerance (SF kickoffs can be ≥1h off from our static time)
 
     const res = await fetch(`${appUrl}/api/txline/api/fixtures/snapshot`, { cache: 'no-store' });
     if (!res.ok) return null;

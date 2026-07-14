@@ -98,21 +98,24 @@ export async function GET(req: NextRequest) {
       // Proxy returns a raw SSE array; mergeEvents() merges it into a state object with _allEvents.
       let scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
       dbg.scoresStatus = scoreRes.status;
-      if (!scoreRes.ok) { dbg.skip = 'scores_not_ok'; continue; }
-      let scoreArr = await scoreRes.json();
-      let raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
+
+      // 403/404 means TxLINE doesn't know this fixture ID — our static ID is a placeholder.
+      // Also run discovery when events come back empty (ID known but no data yet).
+      const needsDiscovery = (!scoreRes.ok && (scoreRes.status === 403 || scoreRes.status === 404)) || scoreRes.ok;
+      let scoreArr: any = scoreRes.ok ? await scoreRes.json() : [];
+      let raw: any = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
       let allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
       dbg.allEvents = allEvents.length;
 
-      // If TxLINE returned nothing, our fixture ID may be a placeholder.
-      // Attempt auto-discovery by kickoff time and retry once with the real ID.
-      if (allEvents.length === 0 && fixture.kickoffAt) {
+      // Attempt auto-discovery by kickoff time when our ID is unrecognised or returns nothing.
+      if (needsDiscovery && allEvents.length === 0 && fixture.kickoffAt) {
         const discovered = await discoverAndSync(fixture.fixtureId, fixture.kickoffAt, appUrl);
         dbg.discovered = discovered;
         if (discovered && discovered !== txlineFixtureId) {
           txlineFixtureId = discovered;
           dbg.txlineId = txlineFixtureId;
           scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
+          dbg.scoresStatusAfterRemap = scoreRes.status;
           if (scoreRes.ok) {
             scoreArr = await scoreRes.json();
             raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
@@ -122,6 +125,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      if (!scoreRes.ok && allEvents.length === 0) { dbg.skip = 'scores_not_ok'; continue; }
       if (allEvents.length === 0) { dbg.skip = 'no_events'; continue; }
 
       // Score from authoritative TxLINE source
