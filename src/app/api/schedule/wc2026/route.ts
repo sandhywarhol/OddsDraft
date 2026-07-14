@@ -80,6 +80,9 @@ export async function GET() {
     // Track which fixture IDs and stages TxLINE confirms with real (non-TBD) teams
     const txLineIds = new Set<string>();
     const txLineStagesWithRealTeams = new Set<WCFixture['stage']>();
+    // Static IDs matched via team names (not ID) — must NOT be purged even though
+    // they're absent from txLineIds, because we enriched them with TxLINE's data.
+    const teamNameMatchedIds = new Set<string>();
     const isTbd = (t: string) => !t || t.toLowerCase() === 'tbd' || normStr(t).includes('winner') || normStr(t).includes('loser');
 
     // WC 2026 time window — only add new fixtures within this range
@@ -133,23 +136,15 @@ export async function GET() {
 
       if (match) {
         // Update the existing entry with live TxLINE data.
-        // If TxLINE uses a different ID (matched via team names, not ID), remap the entry
-        // to TxLINE's canonical ID so live score polling hits the correct endpoint and the
-        // purge step below doesn't remove it (it checks txLineIds which uses TxLINE's ID).
-        if (txId !== match.fixtureId) {
-          const old = resultMap.get(match.fixtureId)!;
-          resultMap.delete(match.fixtureId);
-          const remapped: WCFixture = { ...old, fixtureId: txId };
-          if (kickoffAt) remapped.kickoffAt = kickoffAt;
-          if (!isTbd(home)) { remapped.homeTeam = home; remapped.homeFlag = getFlag(home) || remapped.homeFlag; }
-          if (!isTbd(away)) { remapped.awayTeam = away; remapped.awayFlag = getFlag(away) || remapped.awayFlag; }
-          resultMap.set(txId, remapped);
-        } else {
-          const updated = resultMap.get(match.fixtureId)!;
-          if (kickoffAt) updated.kickoffAt = kickoffAt;
-          if (!isTbd(home)) { updated.homeTeam = home; updated.homeFlag = getFlag(home) || updated.homeFlag; }
-          if (!isTbd(away)) { updated.awayTeam = away; updated.awayFlag = getFlag(away) || updated.awayFlag; }
-        }
+        // Keep our static ID (e.g. 18220001) even if TxLINE uses a different ID — changing
+        // the ID here would orphan contest_entries already stored under the static ID in
+        // Supabase. The live page resolves TxLINE's real ID separately via allFixtures.
+        const updated = resultMap.get(match.fixtureId)!;
+        if (kickoffAt) updated.kickoffAt = kickoffAt;
+        if (!isTbd(home)) { updated.homeTeam = home; updated.homeFlag = getFlag(home) || updated.homeFlag; }
+        if (!isTbd(away)) { updated.awayTeam = away; updated.awayFlag = getFlag(away) || updated.awayFlag; }
+        // Mark as team-name-matched so the purge step below doesn't remove it.
+        if (txId !== match.fixtureId) teamNameMatchedIds.add(match.fixtureId);
       } else if (!isTbd(home) && !isTbd(away) && kickoffAt && isNewWC2026(tf, kickoffAt)) {
         // New WC 2026 fixture from TxLINE not in our static list (e.g. SF/Final once teams confirmed).
         // Non-WC fixtures are blocked by isNewWC2026 — competition name must include "world cup".
@@ -174,11 +169,11 @@ export async function GET() {
     }
 
     // Purge static placeholder entries for stages TxLINE has confirmed real fixtures for.
-    // Static entries with fake IDs (e.g. 18220001 for SF) have wrong/guessed team names —
-    // TxLINE's real fixtures for those stages were already added via the else branch above.
+    // Skip entries that were team-name-matched: they already have TxLINE-enriched data
+    // and their static ID must be preserved so existing contest_entries stay valid.
     const idsToRemove: string[] = [];
     for (const [id, fixture] of resultMap) {
-      if (!txLineIds.has(id) && txLineStagesWithRealTeams.has(fixture.stage)) {
+      if (!txLineIds.has(id) && txLineStagesWithRealTeams.has(fixture.stage) && !teamNameMatchedIds.has(id)) {
         idsToRemove.push(id);
       }
     }
