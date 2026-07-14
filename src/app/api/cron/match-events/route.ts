@@ -79,54 +79,43 @@ export async function GET(req: NextRequest) {
   }
 
   const results: Record<string, number> = {};
-  const debug: Record<string, any> = {};
 
   // Fetch once per cron run — result is cached server-side for 5 min
   const fixtureRemap = await getFixtureIdRemap();
 
   for (const fixture of liveFixtures) {
-    const dbg: Record<string, any> = { ourId: fixture.fixtureId, kickoffAt: fixture.kickoffAt };
-    debug[fixture.fixtureId] = dbg;
     try {
       // Remap our placeholder fixture IDs to the ones TxLINE actually uses.
       // DB operations (notified_events, contest_entries) keep using fixture.fixtureId.
       let txlineFixtureId = fixtureRemap[fixture.fixtureId] ?? fixture.fixtureId;
-      dbg.txlineId = txlineFixtureId;
 
       // Use server-side proxy — injects auth, no client token needed.
       // Path matches live page: /api/txline/api/scores/updates/{id}
       // Proxy returns a raw SSE array; mergeEvents() merges it into a state object with _allEvents.
       let scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
-      dbg.scoresStatus = scoreRes.status;
-
       // 403/404 means TxLINE doesn't know this fixture ID — our static ID is a placeholder.
       // Also run discovery when events come back empty (ID known but no data yet).
       const needsDiscovery = (!scoreRes.ok && (scoreRes.status === 403 || scoreRes.status === 404)) || scoreRes.ok;
       let scoreArr: any = scoreRes.ok ? await scoreRes.json() : [];
       let raw: any = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
       let allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
-      dbg.allEvents = allEvents.length;
 
       // Attempt auto-discovery by kickoff time when our ID is unrecognised or returns nothing.
       if (needsDiscovery && allEvents.length === 0 && fixture.kickoffAt) {
         const discovered = await discoverAndSync(fixture.fixtureId, fixture.kickoffAt, appUrl);
-        dbg.discovered = discovered;
         if (discovered && discovered !== txlineFixtureId) {
           txlineFixtureId = discovered;
-          dbg.txlineId = txlineFixtureId;
           scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
-          dbg.scoresStatusAfterRemap = scoreRes.status;
           if (scoreRes.ok) {
             scoreArr = await scoreRes.json();
             raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
             allEvents = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
-            dbg.allEventsAfterRemap = allEvents.length;
           }
         }
       }
 
-      if (!scoreRes.ok && allEvents.length === 0) { dbg.skip = 'scores_not_ok'; continue; }
-      if (allEvents.length === 0) { dbg.skip = 'no_events'; continue; }
+      if (!scoreRes.ok && allEvents.length === 0) continue;
+      if (allEvents.length === 0) continue;
 
       // Score from authoritative TxLINE source
       const scoreHome: number = (raw as any)?.Score?.Participant1?.Total?.Goals ?? 0;
@@ -142,9 +131,7 @@ export async function GET(req: NextRequest) {
         return SIGNIFICANT.has(mapped);
       });
 
-      dbg.confirmedEvents = confirmedEvents.length;
-      dbg.sigConfirmed = sigConfirmed.length;
-      if (sigConfirmed.length === 0) { dbg.skip = 'no_sig_confirmed'; continue; }
+      if (sigConfirmed.length === 0) continue;
 
       // TxLINE sometimes sends two Confirmed=true events for the same moment
       // (consecutive Seq numbers, same action/minute/participant). Deduplicate by
@@ -184,9 +171,7 @@ export async function GET(req: NextRequest) {
       const notifiedSet = new Set((alreadyNotified ?? []).map((r: { event_id: string }) => r.event_id));
       const newEvents = candidateEvents.filter((ev, i) => !notifiedSet.has(eventIds[i]));
 
-      dbg.newEvents = newEvents.length;
-      dbg.alreadyNotified = notifiedSet.size;
-      if (newEvents.length === 0) { dbg.skip = 'all_already_notified'; continue; }
+      if (newEvents.length === 0) continue;
 
       // Build TxLINE PlayerId → internal player ID map for name resolution
       const apiToken = process.env.TXODDS_API_TOKEN ?? process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
@@ -477,5 +462,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, liveFixtures: liveFixtures.length, results, debug });
+  return NextResponse.json({ ok: true, liveFixtures: liveFixtures.length, results });
 }
