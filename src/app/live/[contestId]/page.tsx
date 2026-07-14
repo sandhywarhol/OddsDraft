@@ -2670,6 +2670,34 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             continue;
           }
 
+          // goal_conceded / penalty_conceded: deduct points from all GK/DEF on the conceding team.
+          // goal_conceded is synthesized from goal events in txline-bridge (no playerId).
+          // retroComputed skips any player who already has a 'goal conceded' history entry,
+          // so applying it here real-time prevents double-counting at match end.
+          if (ev.type === 'goal_conceded' && !ev.playerId && ev.team) {
+            let gcTotal = 0;
+            for (const p of (players as any[])) {
+              if (!p?.id || (p.position !== 'GK' && p.position !== 'DEF')) continue;
+              if (p.team !== ev.team) continue;
+              let rawPts = calculateEventPoints('goal_conceded', p.position);
+              if (rawPts === 0) continue;
+              if (captain === p.id) rawPts *= 2;
+              const st = (confidence as Record<string, number>)?.[p.id] ?? 3;
+              rawPts *= st === 5 ? 1.5 : st === 4 ? 1.35 : st === 3 ? 1.2 : st === 2 ? 1.1 : 1.0;
+              rawPts = Math.round(rawPts * 100) / 100;
+              gcTotal += rawPts;
+              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + rawPts) * 100) / 100 }));
+              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'goal conceded', pts: rawPts, minute: ev.minute }] }));
+            }
+            if (gcTotal !== 0) {
+              setLeaderboard(prev => {
+                const next = prev.map(entry => entry.isUser ? { ...entry, points: Math.round((entry.points + gcTotal) * 100) / 100 } : entry);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+              });
+            }
+            continue;
+          }
+
           // penalty_conceded: deduct points from all GK/DEF on the conceding team.
           // Synthesized from penalty_won in txline-bridge — no playerId on the event.
           if (ev.type === 'penalty_conceded' && !ev.playerId && ev.team) {
