@@ -505,6 +505,24 @@ export function convertTxLineUpdates(
         });
       }
 
+      // Synthesize penalty_conceded for the opposing team when a penalty is won.
+      // TxLINE doesn't send this event; penalty_won is the only signal we have.
+      if (displayType === 'penalty_won') {
+        const oppTeam = isHome ? awayTeam : homeTeam;
+        const oppFlag = isHome ? awayFlag : homeFlag;
+        result.push({
+          id: `live-pen-concede-${update.seq ?? Date.now()}-${raw.minute}`,
+          minute: raw.minute,
+          team: oppTeam,
+          teamFlag: oppFlag,
+          player: '',
+          playerId: '',
+          type: 'penalty_conceded',
+          points: BASE_POINTS['penalty_conceded'],
+          description: describeEvent('penalty_conceded', '', oppTeam, raw.minute),
+        });
+      }
+
       // Synthesize goal_conceded for the opposing goalkeeper
       if (displayType === 'goal') {
         const oppTeam = isHome ? awayTeam : homeTeam;

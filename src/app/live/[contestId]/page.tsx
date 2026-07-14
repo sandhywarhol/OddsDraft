@@ -2670,6 +2670,32 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             continue;
           }
 
+          // penalty_conceded: deduct points from all GK/DEF on the conceding team.
+          // Synthesized from penalty_won in txline-bridge — no playerId on the event.
+          if (ev.type === 'penalty_conceded' && !ev.playerId && ev.team) {
+            let pcTotal = 0;
+            for (const p of (players as any[])) {
+              if (!p?.id || (p.position !== 'GK' && p.position !== 'DEF')) continue;
+              if (p.team !== ev.team) continue;
+              let rawPts = calculateEventPoints('penalty_conceded', p.position);
+              if (rawPts === 0) continue;
+              if (captain === p.id) rawPts *= 2;
+              const st = (confidence as Record<string, number>)?.[p.id] ?? 3;
+              rawPts *= st === 5 ? 1.5 : st === 4 ? 1.35 : st === 3 ? 1.2 : st === 2 ? 1.1 : 1.0;
+              rawPts = Math.round(rawPts * 100) / 100;
+              pcTotal += rawPts;
+              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + rawPts) * 100) / 100 }));
+              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'penalty conceded', pts: rawPts, minute: ev.minute }] }));
+            }
+            if (pcTotal !== 0) {
+              setLeaderboard(prev => {
+                const next = prev.map(entry => entry.isUser ? { ...entry, points: Math.round((entry.points + pcTotal) * 100) / 100 } : entry);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+              });
+            }
+            continue;
+          }
+
           // Skip scoring if PlayerStats already scored this player+event combo this poll.
           // Normalize penalty_scored → goal since PlayerStats tracks all goals as 'goals'.
           const _psType = ev.type === 'penalty_scored' ? 'goal' : ev.type;
@@ -2883,14 +2909,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
 
         // Goal conceded penalties — skip players who already have a goal_conceded entry
-        // but skip players who already have a goal_conceded entry in their history
-        // (meaning TxLINE already covered it for them).
+        // (meaning TxLINE already covered it for them). Also exclude penalty goals already
+        // handled real-time via penalty_conceded so we don't double-count.
+        const penConcededByTeam: Record<string, number> = {};
+        for (const e of events) {
+          if (e.type === 'penalty_conceded' && e.team) {
+            penConcededByTeam[e.team] = (penConcededByTeam[e.team] ?? 0) + 1;
+          }
+        }
         for (const p of (players as any[])) {
           if (!p?.id) continue;
           const alreadyHasGC = (playerHistory[p.id] ?? []).some(h => h.label.startsWith('goal conceded'));
           if (alreadyHasGC) continue;
           const isHome = p.team === fixture.homeTeam;
-          const goalsAgainst = isHome ? scoreRef.current.away : scoreRef.current.home;
+          const totalGoalsAgainst = isHome ? scoreRef.current.away : scoreRef.current.home;
+          const penGoals = penConcededByTeam[p.team] ?? 0;
+          const goalsAgainst = Math.max(0, totalGoalsAgainst - penGoals);
           if (goalsAgainst <= 0) continue;
           const gcBase = calculateEventPoints('goal_conceded', p.position);
           if (gcBase === 0) continue;
