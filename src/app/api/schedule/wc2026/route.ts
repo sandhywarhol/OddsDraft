@@ -132,11 +132,24 @@ export async function GET() {
       }
 
       if (match) {
-        // Update the existing entry with live TxLINE data
-        const updated = resultMap.get(match.fixtureId)!;
-        if (kickoffAt) updated.kickoffAt = kickoffAt;
-        if (!isTbd(home)) { updated.homeTeam = home; updated.homeFlag = getFlag(home) || updated.homeFlag; }
-        if (!isTbd(away)) { updated.awayTeam = away; updated.awayFlag = getFlag(away) || updated.awayFlag; }
+        // Update the existing entry with live TxLINE data.
+        // If TxLINE uses a different ID (matched via team names, not ID), remap the entry
+        // to TxLINE's canonical ID so live score polling hits the correct endpoint and the
+        // purge step below doesn't remove it (it checks txLineIds which uses TxLINE's ID).
+        if (txId !== match.fixtureId) {
+          const old = resultMap.get(match.fixtureId)!;
+          resultMap.delete(match.fixtureId);
+          const remapped: WCFixture = { ...old, fixtureId: txId };
+          if (kickoffAt) remapped.kickoffAt = kickoffAt;
+          if (!isTbd(home)) { remapped.homeTeam = home; remapped.homeFlag = getFlag(home) || remapped.homeFlag; }
+          if (!isTbd(away)) { remapped.awayTeam = away; remapped.awayFlag = getFlag(away) || remapped.awayFlag; }
+          resultMap.set(txId, remapped);
+        } else {
+          const updated = resultMap.get(match.fixtureId)!;
+          if (kickoffAt) updated.kickoffAt = kickoffAt;
+          if (!isTbd(home)) { updated.homeTeam = home; updated.homeFlag = getFlag(home) || updated.homeFlag; }
+          if (!isTbd(away)) { updated.awayTeam = away; updated.awayFlag = getFlag(away) || updated.awayFlag; }
+        }
       } else if (!isTbd(home) && !isTbd(away) && kickoffAt && isNewWC2026(tf, kickoffAt)) {
         // New WC 2026 fixture from TxLINE not in our static list (e.g. SF/Final once teams confirmed).
         // Non-WC fixtures are blocked by isNewWC2026 — competition name must include "world cup".
