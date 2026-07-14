@@ -13,11 +13,29 @@ const connection = new Connection(
   isDevnet ? 'https://api.devnet.solana.com' : (process.env.SERVER_SOLANA_RPC ?? 'https://api.mainnet-beta.solana.com')
 );
 
-// Supabase may return card_collection as a parsed array (jsonb) or a JSON string (text column).
+// Supabase stores card_collection as { cards: OwnedCard[], upgradeCards?: OwnedUpgradeCard[] }
+// but older code may have written a flat array. Handle both.
 function toCardArray(v: unknown): any[] {
-  if (Array.isArray(v)) return v;
-  if (typeof v === 'string') { try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; } }
+  const parse = (x: unknown): unknown => typeof x === 'string' ? JSON.parse(x) : x;
+  try {
+    const obj = parse(v);
+    if (Array.isArray(obj)) return obj;
+    if (obj && typeof obj === 'object' && Array.isArray((obj as any).cards)) return (obj as any).cards;
+  } catch {}
   return [];
+}
+
+function toUpgradeCardArray(v: unknown): any[] {
+  const parse = (x: unknown): unknown => typeof x === 'string' ? JSON.parse(x) : x;
+  try {
+    const obj = parse(v);
+    if (obj && typeof obj === 'object' && Array.isArray((obj as any).upgradeCards)) return (obj as any).upgradeCards;
+  } catch {}
+  return [];
+}
+
+function makeInstanceId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 // POST /api/marketplace/buy
@@ -68,44 +86,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Listing not found or already sold' }, { status: 404 });
     }
 
-    // Transfer card: remove from seller's collection, add to buyer's
+    // Transfer card: remove from seller's collection, add to buyer's.
+    // card_collection in Supabase is { cards: OwnedCard[], upgradeCards?: OwnedUpgradeCard[] }.
+    const isUpgrade = listing.card_type === 'upgrade';
 
     const { data: sellerData } = await supabase
       .from('user_data')
       .select('card_collection')
-      .eq('wallet_address', sellerWallet)
+      .eq('wallet_address', listing.seller_wallet)
       .maybeSingle();
 
-    const sellerCards: any[] = toCardArray(sellerData?.card_collection);
-    // Prefer exact instance match; fall back to first matching cardId+type
-    const cardIndex = instanceId
-      ? sellerCards.findIndex((c: any) => c.instanceId === instanceId)
-      : sellerCards.findIndex((c: any) => c.cardId === cardId && c.type === listing.card_type);
+    const raw = sellerData?.card_collection as any;
+    const sellerSkillCards: any[] = toCardArray(raw);
+    const sellerUpgradeCards: any[] = toUpgradeCardArray(raw);
 
-    if (cardIndex === -1) {
-      // Card may have already been transferred or was never in collection — still mark sold
-      console.warn('[marketplace/buy] card not found in seller collection', { sellerWallet, cardId });
+    if (isUpgrade) {
+      const idx = instanceId
+        ? sellerUpgradeCards.findIndex((c: any) => c.instanceId === instanceId)
+        : sellerUpgradeCards.findIndex((c: any) => c.upgradeCardId === cardId);
+      if (idx !== -1) sellerUpgradeCards.splice(idx, 1);
+      else console.warn('[marketplace/buy] upgrade card not found in seller collection', { sellerWallet: listing.seller_wallet, cardId });
     } else {
-      // Remove one copy from seller
-      const updatedSeller = [...sellerCards];
-      updatedSeller.splice(cardIndex, 1);
-      await supabase
-        .from('user_data')
-        .upsert({ wallet_address: sellerWallet, card_collection: updatedSeller }, { onConflict: 'wallet_address' });
+      const idx = instanceId
+        ? sellerSkillCards.findIndex((c: any) => c.instanceId === instanceId)
+        : sellerSkillCards.findIndex((c: any) => c.cardId === cardId);
+      if (idx !== -1) sellerSkillCards.splice(idx, 1);
+      else console.warn('[marketplace/buy] skill card not found in seller collection', { sellerWallet: listing.seller_wallet, cardId });
     }
 
-    // Add card to buyer's collection
+    const updatedSellerCollection = { cards: sellerSkillCards, upgradeCards: sellerUpgradeCards };
+    await supabase
+      .from('user_data')
+      .upsert({ wallet_address: listing.seller_wallet, card_collection: updatedSellerCollection }, { onConflict: 'wallet_address' });
+
+    // Add card to buyer's collection with correct schema
     const { data: buyerData } = await supabase
       .from('user_data')
       .select('card_collection')
       .eq('wallet_address', buyerWallet)
       .maybeSingle();
 
-    const buyerCards: any[] = toCardArray(buyerData?.card_collection);
-    buyerCards.push({ type: listing.card_type, cardId, acquiredAt: new Date().toISOString() });
+    const buyerRaw = buyerData?.card_collection as any;
+    const buyerSkillCards: any[] = toCardArray(buyerRaw);
+    const buyerUpgradeCards: any[] = toUpgradeCardArray(buyerRaw);
+    const now = new Date().toISOString();
+
+    if (isUpgrade) {
+      buyerUpgradeCards.push({ instanceId: makeInstanceId(), upgradeCardId: cardId, obtainedAt: now });
+    } else {
+      buyerSkillCards.push({ instanceId: makeInstanceId(), cardId, obtainedAt: now, upgradeCredits: listing.upgrade_credits ?? 0 });
+    }
+
+    const updatedBuyerCollection = { cards: buyerSkillCards, upgradeCards: buyerUpgradeCards };
     await supabase
       .from('user_data')
-      .upsert({ wallet_address: buyerWallet, card_collection: buyerCards }, { onConflict: 'wallet_address' });
+      .upsert({ wallet_address: buyerWallet, card_collection: updatedBuyerCollection }, { onConflict: 'wallet_address' });
 
     // Mark listing as sold
     await supabase

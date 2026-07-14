@@ -32,15 +32,20 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (userData?.card_collection) {
-      let cards: any[] = [];
+      // card_collection is stored as { cards: OwnedCard[], upgradeCards?: OwnedUpgradeCard[] }
+      const parseCol = (v: unknown): unknown => typeof v === 'string' ? JSON.parse(v) : v;
+      let allCards: any[] = [];
       try {
-        cards = Array.isArray(userData.card_collection)
-          ? userData.card_collection
-          : JSON.parse(userData.card_collection as string);
+        const obj = parseCol(userData.card_collection) as any;
+        if (Array.isArray(obj)) {
+          allCards = obj;
+        } else if (obj && typeof obj === 'object') {
+          allCards = [...(Array.isArray(obj.cards) ? obj.cards : []), ...(Array.isArray(obj.upgradeCards) ? obj.upgradeCards : [])];
+        }
       } catch {}
       const match = instanceId
-        ? cards.find((c: any) => c.instanceId === instanceId)
-        : cards.find((c: any) => c.cardId === cardId || c.upgradeCardId === cardId);
+        ? allCards.find((c: any) => c.instanceId === instanceId)
+        : allCards.find((c: any) => c.cardId === cardId || c.upgradeCardId === cardId);
       if (match?.soulbound) {
         return NextResponse.json({ error: 'This card is soulbound and cannot be sold' }, { status: 403 });
       }
