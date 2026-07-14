@@ -2075,6 +2075,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           setScore({ home: latestSnap.score.home ?? 0, away: latestSnap.score.away ?? 0 });
           scoreRef.current = { home: latestSnap.score.home ?? 0, away: latestSnap.score.away ?? 0 };
         }
+        // Cache period stats from snapshot so retroactive bonus logic can use them immediately.
+        if (latestSnap?.periodStats) {
+          setTxlinePeriodStats(latestSnap.periodStats);
+          txlinePeriodStatsRef.current = latestSnap.periodStats;
+        }
 
         // Apply historical events from snapshot
         const snapEvents = convertTxLineUpdates(
@@ -2215,6 +2220,56 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (latest?.periodStats) {
           setTxlinePeriodStats(latest.periodStats);
           txlinePeriodStatsRef.current = latest.periodStats;
+        }
+
+        // ── Retroactive stats bonuses: fire once if user joined after halftime/fulltime ──
+        // Normal path awards bonuses on the HalfTime/FullTime game-state transition.
+        // If the user opens the page mid-2nd-half or post-match, that transition was missed,
+        // so we apply here as soon as period stats AND lineup are both available.
+        {
+          const catchUpGs = lastGameStateRef.current;
+          const hasLineup = (userLineupRef.current?.players?.length ?? 0) > 0;
+          const ps = txlinePeriodStatsRef.current;
+          if (!halftimePossAwardedRef.current && hasLineup && ps && isMounted &&
+              ['HalfTime','SecondHalf','ExtraTime','Penalties','FullTime'].includes(catchUpGs ?? '')) {
+            halftimePossAwardedRef.current = true;
+            const p1c = possessionCountRef.current[1] ?? 0;
+            const p2c = possessionCountRef.current[2] ?? 0;
+            const totalPoss = p1c + p2c;
+            const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
+            const htStats: HalfStats = {
+              homeGoals:         ps.home.h1.goals   ?? scoreRef.current.home,
+              awayGoals:         ps.away.h1.goals   ?? scoreRef.current.away,
+              homeDangers:       halfDangerCountRef.current[1] ?? 0,
+              awayDangers:       halfDangerCountRef.current[2] ?? 0,
+              homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, ps.home.h1.corners ?? 0),
+              awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, ps.away.h1.corners ?? 0),
+              homePossessionPct: homePct,
+              awayPossessionPct: 100 - homePct,
+            };
+            applyStatsBonuses(htStats, 45);
+          }
+          if (!fulltimePossAwardedRef.current && hasLineup && ps && isMounted &&
+              ['FullTime','ExtraTime','Penalties'].includes(catchUpGs ?? '')) {
+            fulltimePossAwardedRef.current = true;
+            const h2HomeGoals = scoreRef.current.home - (htScoreRef.current?.home ?? 0);
+            const h2AwayGoals = scoreRef.current.away - (htScoreRef.current?.away ?? 0);
+            const p1c = possessionCountRef.current[1] ?? 0;
+            const p2c = possessionCountRef.current[2] ?? 0;
+            const totalPoss = p1c + p2c;
+            const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
+            const ftStats: HalfStats = {
+              homeGoals:         ps.home.h2.goals   ?? Math.max(0, h2HomeGoals),
+              awayGoals:         ps.away.h2.goals   ?? Math.max(0, h2AwayGoals),
+              homeDangers:       halfDangerCountRef.current[1] ?? 0,
+              awayDangers:       halfDangerCountRef.current[2] ?? 0,
+              homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, ps.home.h2.corners ?? 0),
+              awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, ps.away.h2.corners ?? 0),
+              homePossessionPct: homePct,
+              awayPossessionPct: 100 - homePct,
+            };
+            applyStatsBonuses(ftStats, 90);
+          }
         }
 
         // ── Clock tracking — update live minute display from TxLINE Clock.Seconds ──
