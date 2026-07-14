@@ -55,9 +55,20 @@ export async function GET(req: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
 
-  // Find matches that are currently live (started within last 4h to handle delays)
+  // Find matches that are currently live (started within last 4h to handle delays).
+  // Use TxLINE-enriched schedule as the source of truth for kickoff times so that
+  // placeholder dates in WC2026_FIXTURES never cause the cron to miss a live match.
   const now = Date.now();
-  const liveFixtures = WC2026_FIXTURES.filter(f => {
+  let fixtureSource = WC2026_FIXTURES as typeof WC2026_FIXTURES;
+  try {
+    const schedRes = await fetch(`${appUrl}/api/schedule/wc2026`, { cache: 'no-store' });
+    if (schedRes.ok) {
+      const enriched = await schedRes.json();
+      if (Array.isArray(enriched) && enriched.length > 0) fixtureSource = enriched;
+    }
+  } catch { /* fall through to static */ }
+
+  const liveFixtures = fixtureSource.filter(f => {
     if (!f.kickoffAt) return false;
     const ko = new Date(f.kickoffAt).getTime();
     return now > ko - 90 * 60 * 1000 && now < ko + 4 * 3600 * 1000;
