@@ -22,7 +22,9 @@ export const POSITION_SCORING: Record<string, PositionRow> = {
   own_goal:                  { GK: -6, DEF: -6, MID: -6, SWG: -6, ATT: -6 },
 
   // Penalties
-  penalty_won:               { GK:  6, DEF:  6, MID:  3, SWG:  4, ATT:  3 },
+  // TxLINE doesn't send a goal event for in-play penalty conversions, so penalty_won
+  // is treated as the scoring event — points reflect both winning and likely converting.
+  penalty_won:               { GK:  8, DEF:  8, MID:  8, SWG:  8, ATT:  8 },
   penalty_missed:            { GK: -3, DEF: -3, MID: -3, SWG: -3, ATT: -3 },
   penalty_conceded:          { GK: -3, DEF: -3, MID:  0, SWG:  0, ATT:  0 },
   penalty_missed_shootout:   { GK: -3, DEF: -3, MID: -3, SWG: -3, ATT: -3 },

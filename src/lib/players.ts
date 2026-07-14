@@ -1051,7 +1051,7 @@ export const ARG_GER_EVENTS = [
 
   { id: 'ag_var', minute: 57, team: '', teamFlag: '', player: '', playerId: '', type: 'var_review', points: 0, description: 'VAR checks the build-up to Musiala\'s goal for a foul on Mac Allister — the goal stands!' },
 
-  { id: 'ag_pw_mus', minute: 60, team: 'Germany', teamFlag: '🇩🇪', player: 'Musiala', playerId: 'ger-musiala', type: 'penalty_won', points: 3, description: 'Musiala is brought down in the box! Clear foul — the referee immediately points to the spot!' },
+  { id: 'ag_pw_mus', minute: 60, team: 'Germany', teamFlag: '🇩🇪', player: 'Musiala', playerId: 'ger-musiala', type: 'penalty_won', points: 8, description: 'Musiala is brought down in the box! Clear foul — the referee immediately points to the spot!' },
   { id: 'ag_pc_lma', minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lis. Martínez', playerId: 'arg-martinez', type: 'penalty_conceded', points: -3, description: 'Lisandro Martínez — late lunge on Musiala — concedes a penalty. Argentina in deep trouble!' },
   { id: 'ag_pm_hav', minute: 61, team: 'Germany', teamFlag: '🇩🇪', player: 'Havertz', playerId: 'ger-havertz', type: 'penalty_missed', points: -3, description: 'HAVERTZ MISSES THE PENALTY! He blazes it wide of the right post — an incredible reprieve for Argentina!' },
 
@@ -1065,7 +1065,7 @@ export const ARG_GER_EVENTS = [
   { id: 'ag_sub_hav', minute: 66, team: 'Germany', teamFlag: '🇩🇪', player: 'Woltemade', playerId: 'ger-woltemade', type: 'substitution', points: 0, playerOut: 'Havertz', description: 'Substitution: Woltemade replaces Havertz — Nagelsmann reacts after the missed penalty.' },
   { id: 'ag_app_wol', minute: 66, team: 'Germany', teamFlag: '🇩🇪', player: 'Woltemade', playerId: 'ger-woltemade', type: 'sub_appearance', points: 1, description: 'Nick Woltemade comes on — fresh legs and physicality to trouble the Argentine defence.' },
 
-  { id: 'ag_pw_wir', minute: 70, team: 'Germany', teamFlag: '🇩🇪', player: 'Wirtz', playerId: 'ger-wirtz', type: 'penalty_won', points: 3, description: 'Wirtz wins a penalty! He cuts inside and is clipped by Romero — the referee has no hesitation!' },
+  { id: 'ag_pw_wir', minute: 70, team: 'Germany', teamFlag: '🇩🇪', player: 'Wirtz', playerId: 'ger-wirtz', type: 'penalty_won', points: 8, description: 'Wirtz wins a penalty! He cuts inside and is clipped by Romero — the referee has no hesitation!' },
   { id: 'ag_pc_rom', minute: 70, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'penalty_conceded', points: -3, description: 'Romero clips Wirtz from behind — unavoidable penalty. Argentina on the ropes!' },
   { id: 'ag_pm_wir', minute: 71, team: 'Germany', teamFlag: '🇩🇪', player: 'Wirtz', playerId: 'ger-wirtz', type: 'penalty_missed', points: -3, description: 'WIRTZ MISSES! Emiliano Martínez dives to his left and SAVES IT! Unbelievable scenes!' },
   { id: 'ag_ps_ema', minute: 71, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-emartinez', type: 'penalty_save', points: 5, description: 'EMILIANO MARTÍNEZ SAVES THE PENALTY! Two German penalties missed — Argentina survive!' },

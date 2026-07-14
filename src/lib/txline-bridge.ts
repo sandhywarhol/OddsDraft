@@ -94,7 +94,7 @@ const BASE_POINTS: Record<string, number> = {
   goal: 10, own_goal: -6, assist: 6,
   goalkeeper_save: 1, penalty_save: 5,
   yellow_card: -2, red_card: -5,
-  penalty_won: 3, penalty_conceded: -3,
+  penalty_won: 8, penalty_conceded: -3,
   penalty_missed: -3, penalty_scored: 5,
   penalty_missed_shootout: -3,
   sub_appearance: 1, starting_xi: 2, extra_time: 2,
