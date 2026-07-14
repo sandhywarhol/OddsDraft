@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
   const liveFixtures = WC2026_FIXTURES.filter(f => {
     if (!f.kickoffAt) return false;
     const ko = new Date(f.kickoffAt).getTime();
-    return now > ko - 10 * 60 * 1000 && now < ko + 4 * 3600 * 1000;
+    return now > ko - 90 * 60 * 1000 && now < ko + 4 * 3600 * 1000;
   });
 
   if (liveFixtures.length === 0) {
