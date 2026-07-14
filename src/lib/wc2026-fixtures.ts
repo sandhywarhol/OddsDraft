@@ -208,8 +208,8 @@ export const WC2026_FIXTURES: WCFixture[] = [
 
   // ── Semi-finals / Final ───────────────────────────────────────────────────────
   // QF results: France 2-0 Morocco, Spain beat Belgium, Norway beat England, Argentina beat Switzerland
-  sf('18220001', 'France',       'Spain',             2026, 7, 14, 20),
-  sf('18220002', 'Norway',       'Argentina',         2026, 7, 15, 20),
+  sf('18220001', 'France',       'Spain',             2026, 7, 15, 20),
+  sf('18220002', 'Norway',       'Argentina',         2026, 7, 16, 20),
 
   // ── Third Place ──────────────────────────────────────────────────────────────
   // Teams TBD — depends on SF results

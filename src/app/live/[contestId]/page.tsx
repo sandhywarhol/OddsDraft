@@ -781,19 +781,25 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           kickoffAt: new Date().toISOString(), status: 'upcoming' as const, homeScore: 0, awayScore: 0 }
       : (DEMO_FIXTURES.find((f) => f.fixtureId === contestId) || DEMO_FIXTURES.find(f => f.status === 'live') || DEMO_FIXTURES[0]);
 
-  // Resolve TBD team names from the live TxLINE schedule (for SF/final placeholders)
-  const [teamOverride, setTeamOverride] = useState<{ homeTeam: string; homeFlag: string; awayTeam: string; awayFlag: string } | null>(null);
+  // Resolve TBD team names AND kickoffAt from the live TxLINE schedule.
+  // Always runs so the live page always has the correct kickoff time (static may be stale).
+  const [teamOverride, setTeamOverride] = useState<{ homeTeam: string; homeFlag: string; awayTeam: string; awayFlag: string; kickoffAt?: string } | null>(null);
   useEffect(() => {
     const isTbd = (t: string) => !t || t === 'TBD' || t === '—';
-    if (!isTbd(baseFixture.homeTeam) && !isTbd(baseFixture.awayTeam)) return;
     fetch('/api/schedule/wc2026')
       .then(r => r.json())
       .then((fixtures: any[]) => {
         if (!Array.isArray(fixtures)) return;
         const liveMatch = fixtures.find((f: any) => f.fixtureId === contestId);
-        if (liveMatch && !isTbd(liveMatch.homeTeam) && !isTbd(liveMatch.awayTeam)) {
-          setTeamOverride({ homeTeam: liveMatch.homeTeam, homeFlag: liveMatch.homeFlag, awayTeam: liveMatch.awayTeam, awayFlag: liveMatch.awayFlag });
-        }
+        if (!liveMatch) return;
+        const override: { homeTeam: string; homeFlag: string; awayTeam: string; awayFlag: string; kickoffAt?: string } = {
+          homeTeam: !isTbd(liveMatch.homeTeam) ? liveMatch.homeTeam : baseFixture.homeTeam,
+          homeFlag: !isTbd(liveMatch.homeTeam) ? liveMatch.homeFlag : baseFixture.homeFlag,
+          awayTeam: !isTbd(liveMatch.awayTeam) ? liveMatch.awayTeam : baseFixture.awayTeam,
+          awayFlag: !isTbd(liveMatch.awayTeam) ? liveMatch.awayFlag : baseFixture.awayFlag,
+        };
+        if (liveMatch.kickoffAt) override.kickoffAt = liveMatch.kickoffAt;
+        setTeamOverride(override);
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1373,9 +1379,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   }, [events, matchCompleted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (appMode !== 'live' || !wcFixture) return;
+    if (appMode !== 'live' || !fixture?.kickoffAt) return;
+    // Use fixture.kickoffAt (which includes TxLINE-enriched time via teamOverride)
+    // rather than wcFixture.kickoffAt (static) so the countdown stays in sync with
+    // the contests page when TxLINE has the correct kickoff time.
     const update = () => {
-      const diff = new Date(wcFixture.kickoffAt).getTime() - Date.now();
+      const diff = new Date(fixture.kickoffAt).getTime() - Date.now();
       if (diff > 0) {
         setMinutesToKickoff(Math.ceil(diff / 60000));
         setLiveClockMinute(0);
@@ -1392,16 +1401,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     update();
     const t = setInterval(update, 30000);
     return () => clearInterval(t);
-  }, [appMode, wcFixture]);
+  }, [appMode, fixture.kickoffAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Time-based matchCompleted fallback ────────────────────────────────────
   // For matches where TxLINE never fires the completion signal,
   // detect completion from elapsed time. Knockout stages get 3.5h to cover
   // 120 min ET + penalties before we force-complete.
   useEffect(() => {
-    if (appMode !== 'live' || !wcFixture?.kickoffAt) return;
-    const kickoffMs = new Date(wcFixture.kickoffAt).getTime();
-    const isKO = ['qf', 'sf', 'final'].includes(wcFixture?.stage ?? '');
+    if (appMode !== 'live' || !fixture?.kickoffAt) return;
+    const kickoffMs = new Date(fixture.kickoffAt).getTime();
+    const isKO = ['qf', 'sf', 'final'].includes((fixture as any)?.stage ?? '');
     const completedByMs = kickoffMs + (isKO ? 3.5 : 2.5) * 60 * 60 * 1000;
     const check = () => {
       // Only trigger time-based completion if TxLINE confirmed the match actually started.
@@ -1427,7 +1436,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       return () => clearTimeout(tid);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appMode, wcFixture]);
+  }, [appMode, fixture.kickoffAt]);
 
   // ── DB-based matchCompleted bootstrap ─────────────────────────────────────────
   // On page load, check live_match_events for a full_time event via the API. This fires
@@ -1436,7 +1445,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // time-based fallback (which requires lastGameStateRef to be set by TxLINE first).
   useEffect(() => {
     if (appMode !== 'live') return;
-    const kickoffMs = wcFixture?.kickoffAt ? new Date(wcFixture.kickoffAt).getTime() : 0;
+    const kickoffMs = fixture?.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
     // Don't mark completion for matches that haven't kicked off yet
     if (kickoffMs && kickoffMs > Date.now()) return;
     const fixtureIdStr = contestId;
@@ -2127,7 +2136,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             // Guard: only synthesize full_time if match has been running long enough.
             // Stale TxODDS snapshot data from a previous fixture or test can report
             // FullTime immediately at kickoff — this prevents that from triggering packs.
-            const koMs = wcFixture?.kickoffAt ? new Date(wcFixture.kickoffAt).getTime() : 0;
+            const koMs = fixture?.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
             if (!koMs || (Date.now() - koMs) >= 85 * 60 * 1000) {
               synthBootEvents.push({ id: 'synth-ft-boot', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'Full time! Match has ended.' });
             }
