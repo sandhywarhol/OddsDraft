@@ -2566,8 +2566,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               if (!userLineupRef.current) continue;
               const { players, captain, confidence } = userLineupRef.current;
               const matched = players.find((p: any) => p?.id === ev.playerId);
-              // Indirect contribution: MID/SWG from scoring team when scorer not in lineup
-              if (ev.type === 'goal' && ev.team && !matched) {
+              // Indirect contribution: MID/SWG from scoring team when scorer not in lineup.
+              // Keyed by team+type, not player identity — the scorer is frequently unmapped
+              // here, and this loop vs. the convertTxLineUpdates loop below can each resolve
+              // a *different* fallback display name for the same unmapped TxLINE player id,
+              // so a player-identity key would silently fail to dedup between them.
+              const indirectKeyPS = `indirect-${ev.team}-${ev.type}`;
+              if (ev.type === 'goal' && ev.team && !matched && !psScored.has(indirectKeyPS)) {
                 let tcTotal = 0;
                 for (const p of (players as any[])) {
                   if (!p?.id || p.id === ev.playerId) continue;
@@ -2590,7 +2595,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 // Mark this goal's indirect contribution as scored so the convertTxLineUpdates
                 // loop below (which sees the same goal via TxLINE's individual-event stream)
                 // doesn't award the same team-contribution bonus a second time.
-                if (ev.playerId) psScored.add(`${ev.playerId}-${ev.type}`);
+                psScored.add(indirectKeyPS);
               }
               if (!matched) continue;
               if (ev.type === 'goal' && matched.position === 'GK') continue;
@@ -2794,6 +2799,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
           // Skip scoring if PlayerStats already scored this player+event combo this poll.
           // Normalize penalty_scored → goal since PlayerStats tracks all goals as 'goals'.
+          // (Indirect/team-contribution dedup is handled separately below via indirectKey —
+          // this check only ever matters once `matched` resolves to a direct scorer.)
           const _psType = ev.type === 'penalty_scored' ? 'goal' : ev.type;
           if (ev.playerId && psScored.has(`${ev.playerId}-${_psType}`)) {
             notifiedEventsRef.current.add(ev.id); // prevent duplicate toast later
@@ -2806,8 +2813,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (!matched && (ev.type === 'goalkeeper_save' || ev.type === 'penalty_save') && !ev.playerId) {
             matched = (players as any[]).find((p: any) => p && p.position === 'GK' && p.team === ev.team);
           }
-          // Indirect contribution: MID/SWG from scoring team when scorer not in lineup
-          if (ev.type === 'goal' && ev.team && !matched) {
+          // Indirect contribution: MID/SWG from scoring team when scorer not in lineup.
+          // Keyed by team+type (not player identity) because the scorer is frequently
+          // unmapped here — the PlayerStats loop and this individual-event loop can each
+          // resolve a *different* display name for the same unmapped TxLINE player id
+          // (one falls back to "Player <rawId>", the other uses the raw event's own name),
+          // so a player-identity key silently fails to dedup between them.
+          const indirectKey = `indirect-${ev.team}-${ev.type}`;
+          if (ev.type === 'goal' && ev.team && !matched && !psScored.has(indirectKey)) {
             let tcTotal = 0;
             for (const p of (players as any[])) {
               if (!p?.id || p.id === ev.playerId) continue;
@@ -2827,6 +2840,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
               });
             }
+            psScored.add(indirectKey);
           }
           if (!matched) continue;
 
