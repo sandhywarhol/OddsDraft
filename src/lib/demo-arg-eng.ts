@@ -1,12 +1,35 @@
-// ── Guest Demo: Argentina vs England ────────────────────────────────────────
-// All demo-specific data lives here. Never import this into live-match paths.
-// Used exclusively when ?guest_demo=1 is present in the URL.
+// ═══════════════════════════════════════════════════════════════════════════
+// [GUEST_DEMO] — Configuration file for the guest demo mode (?guest_demo=1)
+//
+// Search keyword: [GUEST_DEMO]
+//   grep -rn "\[GUEST_DEMO\]" src/   ← finds every config point in one shot
+//
+// HOW THE DEMO WORKS (never touches live code paths):
+//   1. URL param ?guest_demo=1 activates guestDemoMode in lineup + live pages
+//   2. lineup page  → skips wallet/payment, saves lineup to localStorage only
+//   3. live page    → skips ALL TxLINE API calls, injects static lineup below,
+//                     runs the event script (ARG_ENG_EVENTS) at 30× speed
+//   4. Changing anything in THIS file ONLY affects the demo — live is untouched
+//
+// ENTRY POINTS (where "Try Demo" buttons link to):
+//   src/app/page.tsx           line ~112   [GUEST_DEMO]
+//   src/app/contests/page.tsx  line ~382   [GUEST_DEMO]
+//   URL: /lineup/special-arg-eng?guest_demo=1&contestType=top3
+//
+// CONFIGURABLE ITEMS IN THIS FILE:
+//   DEMO_ARG_ENG_FIXTURE  — match teams, fixture ID, kickoff time
+//   ARG_ENG_EVENTS        — full match event script (goals, cards, subs…)
+//   DEMO_PRIZE_SOL        — fake SOL prize shown after full time
+//   DEMO_ARG_ENG_HOME_LINEUP / AWAY_LINEUP — squad rosters (starters + bench)
+// ═══════════════════════════════════════════════════════════════════════════
 
 import type { DemoFixture } from './players';
 import type { FormationPlayer } from '@/components/LiveLineupFormation';
 
-// kickoffAt set 1 hour in the past so the live page shows a live score widget,
-// not a "KICK OFF IN Xh" countdown.
+// [GUEST_DEMO] Match fixture — change homeTeam/awayTeam/flags to swap the demo match.
+// fixtureId must be unique and must NOT match any real WC2026 fixture ID.
+// kickoffAt is set 1 hour in the past so the live page shows the score widget
+// (not a "KICK OFF IN Xh" countdown). Keep status: 'live'.
 export const DEMO_ARG_ENG_FIXTURE: DemoFixture = {
   fixtureId: 'special-arg-eng',
   homeTeam: 'Argentina',
@@ -18,10 +41,11 @@ export const DEMO_ARG_ENG_FIXTURE: DemoFixture = {
   isNonDemo: true,
 };
 
-// ── Event script: Argentina 2-1 England ─────────────────────────────────────
-// Starting XI uses 1 summary dialog per team + silent awards for the rest,
-// so hackathon judges only click through 2 dialogs instead of 15.
-// `silent: true` = event fires and awards points but does NOT open the NPC popup.
+// [GUEST_DEMO] Match event script — Argentina 2-1 England.
+// Edit this array to change what happens during the demo match.
+// Events fire in array order, one per ~2 real seconds at 30× speed.
+// silent: true  → event fires + awards points but does NOT open the NPC dialog popup.
+// silent: false (or omitted) → opens the NPC popup; user must click to dismiss.
 
 export const ARG_ENG_EVENTS: Array<{
   id: string; minute: number; team: string; teamFlag: string;
@@ -162,12 +186,13 @@ export const ARG_ENG_EVENTS: Array<{
     description: 'FULL TIME! Argentina 2–1 England! MESSI LIFTS THE WORLD CUP AGAIN! La Albiceleste are World Champions!' },
 ];
 
-// Fake demo prize shown in SOL claim overlay after full time
+// [GUEST_DEMO] Prize displayed in the SOL claim overlay after full time.
+// This is cosmetic only — no real SOL is transferred in demo mode.
 export const DEMO_PRIZE_SOL = 2.5;
 
-// ── Static team lineups injected into realLineup for guest demo ───────────
-// Injected by bootstrap() when guestDemoMode is true, bypassing TxLINE API.
-// Bench players (starter: false) appear in the SUBSTITUTES panel.
+// [GUEST_DEMO] Static squad rosters — injected by bootstrap() when guestDemoMode is true,
+// bypassing TxLINE entirely. starter: true = starting XI; starter: false = bench panel.
+// Add/remove players here to change what appears in the Team Lineups section.
 
 export const DEMO_ARG_ENG_HOME_LINEUP: FormationPlayer[] = [
   // Starters — Argentina 4-3-3

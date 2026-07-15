@@ -108,6 +108,7 @@ function HeroSection() {
           <Link href="/contests" className="btn-hero-play" id="hero-play-btn">
             Play Now
           </Link>
+          {/* [GUEST_DEMO] Try Demo entry point — change fixtureId here if you swap the demo match */}
           <Link
             href="/lineup/special-arg-eng?guest_demo=1&contestType=top3"
             id="hero-demo-btn"

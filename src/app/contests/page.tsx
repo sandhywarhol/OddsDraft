@@ -378,6 +378,7 @@ export default function ContestsPage() {
 
           {/* Replay Tutorial + Try Demo */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: -8 }}>
+            {/* [GUEST_DEMO] Try Demo entry point — change fixtureId here if you swap the demo match */}
             <a
               href="/lineup/special-arg-eng?guest_demo=1&contestType=top3"
               style={{
