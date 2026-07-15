@@ -6,7 +6,7 @@ Fantasy football meets collectible cards — live, on-chain, during FIFA World C
 
 ---
 
-![Homepage](public/homepage.webp)
+![Homepage](public/Github%20Pitcture/homepage.svg)
 
 Pick five players before kickoff, pay **0.1 SOL**, and watch your points move in real time as TxLINE streams goals, saves, cards, and substitutions from the actual match. The manager with the most points takes the prize pool. Everything — entry, leaderboard, payout — runs on-chain.
 
