@@ -413,6 +413,22 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     }
   }, [isReplayTutorial]);
 
+  // Guest demo: seed demo cards unconditionally so the equip panel always has cards available,
+  // even for users who've previously seen the tutorial (and thus won't hit the step-4 seed path).
+  useEffect(() => {
+    if (!isGuestDemo) return;
+    const existing = JSON.parse(localStorage.getItem('oddsdraft_card_collection') || '{"cards":[]}');
+    let changed = false;
+    for (const c of DEMO_CARDS) {
+      if (!existing.cards.find((x: OwnedCard) => x.instanceId === c.instanceId)) {
+        existing.cards.push(c);
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem('oddsdraft_card_collection', JSON.stringify(existing));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGuestDemo]);
+
   const handleNextTutorialStep = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isTransitioning) return;
