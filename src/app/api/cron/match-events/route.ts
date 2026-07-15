@@ -207,11 +207,13 @@ export async function GET(req: NextRequest) {
 
       if (sigConfirmed.length === 0) continue;
 
-      // TxLINE sometimes sends two Confirmed=true events for the same moment
-      // (consecutive Seq numbers, same action/minute/participant). Deduplicate by
-      // content key before hitting the notified_events table so we never send twice.
-      const seenContentKeys = new Set<string>();
-      const candidateEvents: typeof sigConfirmed = [];
+      // TxLINE sends the same logical event multiple times as it gets progressively
+      // enriched (consecutive Seq numbers, same action/minute/participant) — first
+      // with an empty Data payload, then with type info, and only in the LAST
+      // message with the actual PlayerId. Deduplicate by content key but keep the
+      // LAST (richest) version of each key, not the first — otherwise we permanently
+      // store player-less events and fantasy points can never be attributed.
+      const contentMap = new Map<string, typeof sigConfirmed[number]>();
       for (const ev of sigConfirmed) {
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const mapped = ACTION_MAP[rawType] ?? rawType;
@@ -219,22 +221,13 @@ export async function GET(req: NextRequest) {
         const d = ev.Data?.New ?? ev.Data ?? {};
         const participant: number = (typeof d === 'object' ? (d as any).Participant : null) ?? ev.Participant ?? 0;
         const contentKey = `${mapped}-${min}-${participant}`;
-        if (!seenContentKeys.has(contentKey)) {
-          seenContentKeys.add(contentKey);
-          candidateEvents.push(ev);
-        }
+        contentMap.set(contentKey, ev);
       }
+      const candidateEvents = Array.from(contentMap.values());
 
       // Event IDs use content key (not raw Seq) so that TxLINE double-sends of the
       // same logical event always map to the same ID in notified_events.
-      const eventIds = candidateEvents.map(ev => {
-        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-        const mapped = ACTION_MAP[rawType] ?? rawType;
-        const min = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
-        const d = ev.Data?.New ?? ev.Data ?? {};
-        const participant: number = (typeof d === 'object' ? (d as any).Participant : null) ?? ev.Participant ?? 0;
-        return `${mapped}-${min}-${participant}`;
-      });
+      const eventIds = Array.from(contentMap.keys());
 
       const { data: alreadyNotified } = await supabase
         .from('notified_events')
