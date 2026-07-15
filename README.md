@@ -16,7 +16,7 @@ That's the base game. The part we're actually excited about is the card system.
 
 ## Skill Cards
 
-![Cards](public/card_skill.webp)
+![Skill Cards](public/Github%20Pitcture/skill%20cards.svg)
 
 After every match you open a card pack. What drops is random:
 
@@ -35,7 +35,7 @@ Cards are tradeable on-chain. The marketplace is built and live — list any car
 
 ## Schedule
 
-![Schedule](public/schedule.webp)
+![Schedule](public/Github%20Pitcture/schedule.svg)
 
 The full FIFA World Cup 2026 fixture schedule is shown in real time, sourced entirely from TxLINE. Upcoming and recently finished results appear on the homepage.
 
@@ -98,7 +98,7 @@ All point values live in a single file: `src/lib/scoring-bank.ts`. No hardcoded 
 
 ## Lineup builder
 
-![Lineup](public/lineup.jpg)
+![Lineup Builder](public/Github%20Pitcture/lineup%20builder.svg)
 
 Build your five-player squad before kickoff. Equip skill cards to boost individual players. Set your captain and confidence ratings, then pay the 0.1 SOL entry fee to lock in.
 
@@ -121,7 +121,7 @@ Telegram bot sends live alerts too — goal notifications with who scored and wh
 
 ## Leaderboard
 
-![Leaderboard](public/leaderboard.webp)
+![Leaderboard](public/Github%20Pitcture/global%20leaderboard.svg)
 
 Global leaderboard tracks total points, wins, and SOL earned across all contests. Updated after every match.
 
