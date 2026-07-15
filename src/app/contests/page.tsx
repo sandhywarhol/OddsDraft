@@ -376,8 +376,27 @@ export default function ContestsPage() {
             />
           </div>
 
-          {/* Replay Tutorial */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, marginTop: -8 }}>
+          {/* Replay Tutorial + Try Demo */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: -8 }}>
+            <a
+              href="/lineup/special-arg-eng?guest_demo=1&contestType=top3"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px',
+                fontSize: '0.72rem', fontWeight: 700,
+                color: '#fff',
+                background: 'linear-gradient(135deg, #e53e3e 0%, #c53030 100%)',
+                border: '1px solid rgba(255,255,255,0.18)',
+                borderRadius: 20,
+                cursor: 'pointer',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                textDecoration: 'none',
+                boxShadow: '0 2px 10px rgba(229,62,62,0.4)',
+              }}
+            >
+              🎮 Try Demo
+            </a>
             <button
               onClick={handleReplayTutorial}
               style={{
