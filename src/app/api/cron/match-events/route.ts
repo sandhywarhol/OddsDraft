@@ -19,6 +19,7 @@ const SIGNIFICANT = new Set([
   'half_time', 'full_time', 'game_finalised',
   'yellow_card', 'substitution', 'corner_kick', 'var_review', 'extra_time',
   'penalty_won', 'penalty_missed', 'kick_off',
+  'shot', 'danger_attack',
 ]);
 
 // These events are stored in live_match_events and marked as notified,
@@ -26,6 +27,11 @@ const SIGNIFICANT = new Set([
 // sent by the cron instead (same dedup key as /api/telegram/stats).
 // game_finalised = true end for knockout matches (after ET/pens).
 const STATS_ONLY = new Set(['half_time', 'full_time', 'game_finalised']);
+
+// Recorded to live_match_events (so /api/match/result's Shots/Danger Attacks
+// stats aren't stuck at 0) but never sent as individual Telegram messages —
+// these fire far too often per match to be worth a ping each time.
+const SILENT_DB_ONLY = new Set(['shot', 'danger_attack']);
 
 // Contest types users can enter (mirrors VALID_CONTEST_TYPES in api/contest/enter).
 // Used to compute rewards for every contest type once a match is confirmed
@@ -51,6 +57,8 @@ const ACTION_MAP: Record<string, string> = {
   corner: 'corner_kick', corner_kick: 'corner_kick',
   var: 'var_review', var_review: 'var_review',
   penalty: 'penalty_won', penaltymiss: 'penalty_missed', penalty_miss: 'penalty_missed',
+  shot: 'shot',
+  high_danger_possession: 'danger_attack', danger_possession: 'danger_attack',
 };
 
 // GET /api/cron/match-events?secret=<CRON_SECRET>
@@ -298,6 +306,10 @@ export async function GET(req: NextRequest) {
         const ev = newEvents[i];
         const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
         const eventType = ACTION_MAP[rawType] ?? rawType;
+
+        // Already written to live_match_events above (for Shots/Danger Attacks stats) —
+        // too frequent to be worth an individual Telegram message per occurrence.
+        if (SILENT_DB_ONLY.has(eventType)) continue;
 
         // HT/FT stats: send rich stats block even when no browser tab is open.
         // For knockout matches (QF/SF/Final), TxLINE sends full_time at 90 min

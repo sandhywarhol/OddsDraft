@@ -967,8 +967,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const shotCountRef = useRef<{home: {total: number, onTarget: number}, away: {total: number, onTarget: number}}>({ home: {total: 0, onTarget: 0}, away: {total: 0, onTarget: 0} });
   // Score snapshot at half-time (to compute second-half goals separately)
   const htScoreRef = useRef<{ home: number; away: number } | null>(null);
-  // Throttle danger_attack events: track last timestamp (ms) per participant to avoid spam
+  // Throttle danger_attack events: track last timestamp (ms) per participant to avoid spam.
+  // Only applies during live polling — bootstrap() replays historical events synchronously,
+  // where consecutive events that really happened many match-minutes apart would otherwise
+  // all land within the same wall-clock cooldown window and get suppressed.
   const lastDangerEventRef = useRef<Record<number, number>>({ 1: 0, 2: 0 });
+  const isReplayingRef = useRef(false);
   const halftimePossAwardedRef = useRef(false);
   const fulltimePossAwardedRef = useRef(false);
   const extraTimeBonusAwardedRef = useRef(false);
@@ -1714,37 +1718,31 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           possessionCountRef.current[pNum] = (possessionCountRef.current[pNum] ?? 0) + 1;
         }
 
-        // Convert high_danger_possession / danger_possession → danger_attack feed event
-        // Rate-limited to max 1 per team per 90 seconds to avoid spam
+        // Convert high_danger_possession / danger_possession → danger_attack feed event.
+        // Rate-limited to max 1 per team per 90/150s during LIVE polling to avoid spam —
+        // but NOT during bootstrap's historical replay, where events that really happened
+        // many match-minutes apart get processed within milliseconds of each other and
+        // would otherwise all fall inside the same wall-clock cooldown window and vanish.
+        // Returns a raw TxLineRawEvent-shaped object (participant/playerId/playerName) —
+        // NOT a pre-built LiveEvent — so convertTxLineUpdates() can attribute it to the
+        // correct team via `participant` (previously missing here, so every danger_attack
+        // silently defaulted to the home team and was then dropped as an unattributed
+        // 0-point event).
         if (action === 'high_danger_possession' || action === 'danger_possession') {
           const pd = u.Data?.New ?? u.Data ?? {};
           const pNum: number = pd.Participant ?? u.Participant ?? 1;
-          const now = Date.now();
-          const cooldownMs = action === 'high_danger_possession' ? 90_000 : 150_000;
-          if (now - (lastDangerEventRef.current[pNum] ?? 0) >= cooldownMs) {
+          if (!isReplayingRef.current) {
+            const now = Date.now();
+            const cooldownMs = action === 'high_danger_possession' ? 90_000 : 150_000;
+            if (now - (lastDangerEventRef.current[pNum] ?? 0) < cooldownMs) return [];
             lastDangerEventRef.current[pNum] = now;
-            halfDangerCountRef.current[pNum] = (halfDangerCountRef.current[pNum] ?? 0) + 1;
-            const clkSec = u.Clock?.Seconds ?? pd.Clock?.Seconds ?? 0;
-            const dangerMin = Math.max(0, Math.floor(clkSec / 60));
-            const isHome = pNum === 1;
-            const dangerTeam = isHome ? fixture.homeTeam : fixture.awayTeam;
-            const dangerFlag = isHome ? fixture.homeFlag : fixture.awayFlag;
-            const isHighDanger = action === 'high_danger_possession';
-            return [{
-              id: `danger-${pNum}-${dangerMin}-${now}`,
-              minute: dangerMin,
-              team: dangerTeam,
-              teamFlag: dangerFlag,
-              player: '',
-              playerId: '',
-              type: 'danger_attack' as const,
-              points: 0,
-              description: isHighDanger
-                ? `${dangerTeam} in a highly dangerous position! TxLINE data signals a HIGH DANGER zone — a goal could come at any moment!`
-                : `${dangerTeam} pressing forward with purpose — TxLINE data shows an attack building in the danger zone.`,
-            }];
           }
-          return [];
+          halfDangerCountRef.current[pNum] = (halfDangerCountRef.current[pNum] ?? 0) + 1;
+          const clkSec = u.Clock?.Seconds ?? pd.Clock?.Seconds ?? 0;
+          const dangerMin = Math.max(0, Math.floor(clkSec / 60));
+          return [{ type: 'danger_attack', minute: dangerMin, period: '', participant: pNum,
+            playerId: undefined, playerName: undefined,
+            assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
         }
 
         // Parse lineup SSE push (sent ~1hr before kickoff) to update formation view
@@ -1840,24 +1838,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           return events;
         }
 
-        // Track all shots for the stats panel
+        // Track all shots for the stats panel. Outcome casing isn't reliable across TxLINE
+        // payloads (seen as 'Saved', 'saved', etc.) — always compare lowercased.
         if (action === 'shot') {
           const sSide = participant === 1 ? 'home' : 'away';
           shotCountRef.current[sSide].total++;
           const oc = (rawData.Outcome ?? '').toLowerCase();
           if (oc === 'saved' || oc === 'ontarget') shotCountRef.current[sSide].onTarget++;
-        }
 
-        // Shot saved → synthesize goalkeeper_save for the opposing team's GK
-        if (action === 'shot' && rawData.Outcome === 'Saved') {
-          return [{ type: 'goalkeeper_save', minute, period: '',
-            participant: participant === 1 ? 2 : 1,
-            playerId: undefined, playerName: undefined,
-            assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
+          // Shot saved → synthesize goalkeeper_save for the opposing team's GK
+          if (oc === 'saved') {
+            return [{ type: 'goalkeeper_save', minute, period: '',
+              participant: participant === 1 ? 2 : 1,
+              playerId: undefined, playerName: undefined,
+              assistPlayerId: undefined, assistPlayerName: undefined, goalType: undefined }];
+          }
+          // Non-saved shots: tracked above for stats but not shown in the event feed
+          return [];
         }
-
-        // Non-saved shots: tracked above for stats but not shown in the event feed
-        if (action === 'shot') return [];
 
         // penalty_outcome: TxLINE sends Data.Outcome = "Missed" | "Saved" | "Scored"
         if (action === 'penalty_outcome' || action === 'penaltyoutcome') {
@@ -2085,7 +2083,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       const snap = Array.isArray(snapRawArr) && snapRawArr.length > 0 ? mergeEvents(snapRawArr) : snapRawArr;
       if (snap && isMounted) {
         const snapRaw = Array.isArray(snap) ? snap : [snap];
+        // Historical replay — see isReplayingRef declaration for why this must bypass
+        // the live-only danger_attack wall-clock cooldown.
+        isReplayingRef.current = true;
         const snapUpdates = snapRaw.map(normalizeUpdate);
+        isReplayingRef.current = false;
         console.log('[LivePage] Snapshot — gameState:', snapUpdates[snapUpdates.length-1]?.gameState, '| events:', snapUpdates.flatMap(u => u.events ?? []).length, '| score:', JSON.stringify(snapUpdates[snapUpdates.length-1]?.score));
 
         // Apply score from snapshot
@@ -2181,6 +2183,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
     const poll = async () => {
       if (!txlineFixtureIdRef.current) return;
+      // Once the match is confirmed complete, stop pulling further updates — TxLINE's feed
+      // can keep emitting/correcting data long after full time, which otherwise makes stats
+      // like Shots/Danger Attacks/Goalkeeper Saves silently drift upward for as long as the
+      // tab stays open instead of staying frozen at the final result.
+      if (matchCompletedRef.current) return;
       try {
         // Route through server-side Edge proxy — bypasses browser token/IP limitations
         const updatesRes = await fetch(`/api/txline/api/scores/updates/${txlineFixtureIdRef.current}`);
@@ -4907,7 +4914,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           home: events.filter(e => e.type === type && e.team === home).length,
           away: events.filter(e => e.type === type && e.team === away).length,
         });
-        const goals     = countByTeam('goal');
+        // Goals use the authoritative score state (same source as the header score bug),
+        // not a count of 'goal'-type events — own goals are tracked as a separate 'own_goal'
+        // event type but still count toward the scoreline, so deriving Goals purely from
+        // countByTeam('goal') under-counts whenever an own goal contributed to the score,
+        // making this stat disagree with the actual score shown at the top of the page.
+        const goals     = { home: score.home, away: score.away };
         const corners   = countByTeam('corner_kick');
         const yellows   = countByTeam('yellow_card');
         const reds      = countByTeam('red_card');

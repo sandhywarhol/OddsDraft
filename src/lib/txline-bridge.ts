@@ -454,7 +454,8 @@ export function convertTxLineUpdates(
       const isTeamAction = displayType === 'corner_kick' || displayType === 'var_review'
         || displayType === 'kick_off' || displayType === 'half_time' || displayType === 'full_time'
         || displayType === 'substitution' || displayType === 'sub_appearance'
-        || displayType === 'free_kick' || displayType === 'offside';
+        || displayType === 'free_kick' || displayType === 'offside'
+        || displayType === 'danger_attack' || displayType === 'goalkeeper_save';
       const player = raw.playerName
         || (playerInfo?.name ?? '')
         || (txPlayerId ? (txPlayerNames[txPlayerId] ?? '') : '')

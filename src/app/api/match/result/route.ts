@@ -351,8 +351,10 @@ export async function GET(req: NextRequest) {
     if (backupHomeTeam) {
       if (base.total.homeShots   === 0) base.total.homeShots   = backupStat(backupHomeTeam, 'totalShots');
       if (base.total.awayShots   === 0) base.total.awayShots   = backupStat(backupAwayTeam, 'totalShots');
-      if (base.total.homeCorners === 0) base.total.homeCorners = backupStat(backupHomeTeam, 'cornerKicks');
-      if (base.total.awayCorners === 0) base.total.awayCorners = backupStat(backupAwayTeam, 'cornerKicks');
+      // ESPN's soccer boxscore stat is named 'wonCorners', not 'cornerKicks' — the wrong
+      // name silently meant this fallback never matched and always contributed 0.
+      if (base.total.homeCorners === 0) base.total.homeCorners = backupStat(backupHomeTeam, 'wonCorners');
+      if (base.total.awayCorners === 0) base.total.awayCorners = backupStat(backupAwayTeam, 'wonCorners');
       if (base.total.homeYellows === 0) base.total.homeYellows = backupStat(backupHomeTeam, 'yellowCards');
       if (base.total.awayYellows === 0) base.total.awayYellows = backupStat(backupAwayTeam, 'yellowCards');
       if (base.total.homeReds    === 0) base.total.homeReds    = backupStat(backupHomeTeam, 'redCards');
