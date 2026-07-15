@@ -111,6 +111,28 @@ function HeroSection() {
           <Link href="/how-it-works" className="btn-hero-learn" id="hero-learn-btn">
             How It Works
           </Link>
+          <Link
+            href="/lineup/special-arg-eng?guest_demo=1&contestType=top3"
+            id="hero-demo-btn"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '14px 28px',
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #e53e3e 0%, #c53030 100%)',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 15,
+              letterSpacing: 0.3,
+              textDecoration: 'none',
+              border: '2px solid rgba(255,255,255,0.18)',
+              boxShadow: '0 4px 16px rgba(229,62,62,0.45)',
+              transition: 'transform 0.15s, box-shadow 0.15s',
+            }}
+          >
+            🎮 Try Demo
+          </Link>
         </div>
 
         {/* Trust indicators */}

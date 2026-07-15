@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
+import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS, ARG_ENG_EVENTS } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { calculateEventPoints, POINT_MAP, getPrizeForRank, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
@@ -762,9 +762,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt, liveFixtures, allFixtures, isAdmin } = useTxLine();
 
-  // ?mode=demo is admin-only — ignored for regular users so the URL can't be
-  // shared to expose fake leaderboard/event data to real visitors.
-  const forceDemoMode = searchParamsObj.mode === 'demo' && isAdmin;
+  // ?mode=demo is admin-only. ?guest_demo=1 is open to everyone — it routes the
+  // guest demo flow (special-arg-eng fixture) without touching the appMode system.
+  const guestDemoMode = searchParamsObj.guest_demo === '1';
+  const forceDemoMode = (searchParamsObj.mode === 'demo' && isAdmin) || guestDemoMode;
 
   const persistedIsLive = !forceDemoMode
     && typeof window !== 'undefined'
@@ -809,7 +810,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   const matchEvents = fixture.fixtureId === 'special-arg-ger'
     ? ARG_GER_EVENTS
-    : getDynamicEvents(fixture, LIVE_EVENTS);
+    : fixture.fixtureId === 'special-arg-eng'
+      ? ARG_ENG_EVENTS
+      : getDynamicEvents(fixture, LIVE_EVENTS);
 
   const [initialState] = useState(() => {
     // Live mode: always start clean — API provides score/events/minute

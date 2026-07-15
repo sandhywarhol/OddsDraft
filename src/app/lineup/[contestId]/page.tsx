@@ -136,12 +136,14 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const searchParamsObj = use(searchParams);
   const contestType = (searchParamsObj.contestType as string) || 'top3';
   const isReplayTutorial = searchParamsObj.replay === '1';
+  const isGuestDemo = searchParamsObj.guest_demo === '1';
   const { appMode, liveFixtures } = useTxLine();
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const router = useRouter();
 
-  const isDemo = appMode === 'demo';
+  // isGuestDemo: URL-based demo for non-admin users accessing the guest demo flow
+  const isDemo = appMode === 'demo' || isGuestDemo;
   const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
 
   // Always prefer WC2026 real fixture; fall back to demo fixtures, then placeholder
@@ -1015,7 +1017,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     setSubmitting(false);
 
     setTimeout(() => {
-      const demoParam = isDemo ? '&mode=demo' : '';
+      const demoParam = isGuestDemo ? '&guest_demo=1' : isDemo ? '&mode=demo' : '';
       router.push(`/live/${contestId}?contestType=${contestType}${demoParam}`);
     }, 1500);
   };

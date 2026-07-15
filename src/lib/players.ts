@@ -738,6 +738,16 @@ export const DEMO_FIXTURES: DemoFixture[] = [
     isNonDemo: true,
   },
   {
+    fixtureId: 'special-arg-eng',
+    homeTeam: 'Argentina',
+    awayTeam: 'England',
+    homeFlag: '🇦🇷',
+    awayFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+    kickoffAt: new Date(Date.now() + 86400000).toISOString(),
+    status: 'upcoming',
+    isNonDemo: true,
+  },
+  {
     fixtureId: 'wc2026-arg-fra',
     homeTeam: 'Argentina',
     awayTeam: 'France',
@@ -1093,4 +1103,110 @@ export const ARG_GER_EVENTS = [
   { id: 'ag_poss_gor', minute: 88, team: 'Germany', teamFlag: '🇩🇪', player: 'Goretzka', playerId: 'ger-goretzka', type: 'possession_bonus', points: 1, description: 'Goretzka covered every blade of grass for Germany tonight — a tireless performance.' },
 
   { id: 'ag_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'FULL TIME! Argentina 3–2 Germany! La Albiceleste are heading to the World Cup Final!' },
+];
+
+// Dedicated Argentina vs England event script for the 'special-arg-eng' guest demo fixture.
+// Uses standard player IDs from WORLD_CUP_PLAYERS — correct IDs, no remapping needed.
+// Narrative: Argentina 2-1 England (England lead at half, Argentina comeback in second half)
+export const ARG_ENG_EVENTS = [
+  // KICK OFF
+  { id: 'ae_e0', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'KICK OFF! Argentina vs England — World Cup 2026 Final! Both teams desperate for glory!' },
+
+  // Starting XI — Argentina
+  { id: 'ae_xi_ama', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'starting_xi', points: 2, description: 'Emiliano Martínez starts in goal for Argentina — the 2022 penalty shootout hero is ready!' },
+  { id: 'ae_xi_rom', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'starting_xi', points: 2, description: 'Cristian Romero leads the Argentine defence — physical, aggressive, commanding.' },
+  { id: 'ae_xi_mol', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Molina', playerId: 'arg-molina', type: 'starting_xi', points: 2, description: 'Nahuel Molina at right-back — a constant attacking threat from deep for Argentina.' },
+  { id: 'ae_xi_all', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister', type: 'starting_xi', points: 2, description: 'Alexis Mac Allister in midfield — composed, incisive, Liverpool\'s engine transferred to the Pampas.' },
+  { id: 'ae_xi_mes', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 2, description: 'LIONEL MESSI — the greatest of all time, starts in his third World Cup Final. Can he do it again?' },
+  { id: 'ae_xi_lau', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro', playerId: 'arg-lautaro', type: 'starting_xi', points: 2, description: 'Lautaro Martínez leads the Argentine attack — in devastating form all tournament.' },
+  { id: 'ae_xi_alv', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'starting_xi', points: 2, description: 'Julián Álvarez alongside Lautaro — tireless, intelligent, a constant menace.' },
+
+  // Starting XI — England
+  { id: 'ae_xi_pic', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford', playerId: 'eng-pickford', type: 'starting_xi', points: 2, description: 'Jordan Pickford between the posts for England — emotionally ready, technically sharp.' },
+  { id: 'ae_xi_sto', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones', playerId: 'eng-stones', type: 'starting_xi', points: 2, description: 'John Stones — composed ball-playing centre-back, key to England\'s defensive shape.' },
+  { id: 'ae_xi_wal', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Walker', playerId: 'eng-walker', type: 'starting_xi', points: 2, description: 'Kyle Walker at right-back — pace to track Messi, experience for the biggest stage.' },
+  { id: 'ae_xi_tri', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier', playerId: 'eng-trippier', type: 'starting_xi', points: 2, description: 'Kieran Trippier at left-back — dangerous from set pieces, the set-piece specialist.' },
+  { id: 'ae_xi_bel', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'starting_xi', points: 2, description: 'Jude Bellingham — England\'s heartbeat and talisman, the player the nation believes in.' },
+  { id: 'ae_xi_ric', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rice', playerId: 'eng-rice', type: 'starting_xi', points: 2, description: 'Declan Rice holds England\'s midfield together — the defensive anchor, the shield.' },
+  { id: 'ae_xi_sak', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka', playerId: 'eng-saka', type: 'starting_xi', points: 2, description: 'Bukayo Saka on the right wing — electric pace, selfless work rate, creative spark.' },
+  { id: 'ae_xi_kan', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'starting_xi', points: 2, description: 'Harry Kane leads England\'s attack — the captain, the record scorer, this is his moment.' },
+
+  // FIRST HALF
+  { id: 'ae_d1', minute: 7, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Messi drifts inside from the left and plays a one-two with Álvarez! Argentina first to threaten.' },
+
+  { id: 'ae_ck1', minute: 12, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier', playerId: 'eng-trippier', type: 'corner_kick', points: 0, description: 'CORNER! Trippier wins England their first corner — drifting delivery curling in towards Kane!' },
+  { id: 'ae_save1', minute: 12, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez punches the corner clear! Strong from the Argentine goalkeeper under pressure.' },
+
+  { id: 'ae_d2', minute: 18, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'danger_attack', points: 0, description: 'Kane drops deep, turns sharply and finds Bellingham charging into the box!' },
+
+  { id: 'ae_asst1', minute: 22, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka', playerId: 'eng-saka', type: 'assist', points: 6, description: 'Saka cuts inside onto his left foot and whips a perfect ball across the six-yard box for Kane!' },
+  { id: 'ae_goal1', minute: 22, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'goal', points: 10, goalType: 'Header', description: 'GOAL! KANE! A towering header at the back post — England lead in the World Cup Final!' },
+  { id: 'ae_conc1_ama', minute: 22, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goal_conceded', points: -1, description: 'E. Martínez had no chance — Kane\'s header was perfectly placed into the bottom corner.' },
+  { id: 'ae_conc1_rom', minute: 22, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'goal_conceded', points: -1, description: 'Romero failed to track Kane\'s run to the back post — England punish the Argentine defence.' },
+
+  { id: 'ae_var1', minute: 24, team: '', teamFlag: '', player: '', playerId: '', type: 'var_review', points: 0, description: 'VAR checks Kane\'s goal for offside... The line confirms Kane was onside. The goal stands!' },
+
+  { id: 'ae_yc1', minute: 29, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rice', playerId: 'eng-rice', type: 'yellow_card', points: -2, description: 'Yellow card for Rice — clips Mac Allister late as Argentina tried to build through midfield.' },
+
+  { id: 'ae_d3', minute: 33, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'danger_attack', points: 0, description: 'ARGENTINA PRESSING! Álvarez bursting into the box — England under severe pressure!' },
+
+  { id: 'ae_ck2', minute: 35, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'corner_kick', points: 0, description: 'Corner for Argentina! Messi to take — the whole stadium holds its breath.' },
+  { id: 'ae_save2', minute: 36, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford', playerId: 'eng-pickford', type: 'goalkeeper_save', points: 1, description: 'PICKFORD! Incredible reflex save from Romero\'s glancing header off the corner — world class!' },
+
+  { id: 'ae_d4', minute: 41, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Messi receives on the edge of the box and curls just wide of the far post — so close!' },
+
+  { id: 'ae_poss1_mes', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'possession_bonus', points: 1, description: 'Messi dominated possession in the first half — pulling England out of shape with every touch.' },
+  { id: 'ae_poss1_bel', minute: 44, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'possession_bonus', points: 1, description: 'Bellingham covered immense ground — winning headers, driving forward, a box-to-box masterclass.' },
+
+  { id: 'ae_ht', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'HALF TIME! England 1–0 Argentina — Kane\'s header gives England the lead at the break. Can Argentina respond?' },
+
+  // SECOND HALF
+  { id: 'ae_ko2', minute: 46, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway! Argentina need a response — Messi and Lautaro leading the charge!' },
+
+  { id: 'ae_d5', minute: 50, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'danger_attack', points: 0, description: 'England pressing high — Bellingham breaks forward and forces a corner off Romero!' },
+
+  { id: 'ae_ck3', minute: 54, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'corner_kick', points: 0, description: 'Corner for Argentina! Messi circles the flag — dangerous delivery coming in!' },
+  { id: 'ae_save3', minute: 54, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford', playerId: 'eng-pickford', type: 'goalkeeper_save', points: 1, description: 'Pickford claws Lautaro\'s flicked header off the line! Unbelievable from the England keeper!' },
+
+  { id: 'ae_yc2', minute: 57, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'yellow_card', points: -2, description: 'Yellow card for Romero — frustration boiling over as Argentina struggle to break England down.' },
+
+  { id: 'ae_asst2', minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister', type: 'assist', points: 6, description: 'Mac Allister plays Messi in behind the England line with a disguised through ball — perfect weight!' },
+  { id: 'ae_goal2', minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'goal', points: 11, goalType: 'Shot', description: 'GOOOOAL! MESSI! A curling left-footed finish into the far corner — Pickford had no chance! 1–1!' },
+  { id: 'ae_conc2_pic', minute: 60, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford', playerId: 'eng-pickford', type: 'goal_conceded', points: -1, description: 'Pickford got a fingertip to Messi\'s curler but couldn\'t keep it out — unstoppable finish.' },
+  { id: 'ae_conc2_sto', minute: 60, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones', playerId: 'eng-stones', type: 'goal_conceded', points: -1, description: 'Stones caught flat-footed by Mac Allister\'s pass — Messi needs no second invitation.' },
+
+  { id: 'ae_var2', minute: 62, team: '', teamFlag: '', player: '', playerId: '', type: 'var_review', points: 0, description: 'VAR checks Messi\'s goal for a foul in the build-up... After a long review, the goal stands!' },
+
+  { id: 'ae_sub1', minute: 65, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rashford', playerId: 'eng-rashford', type: 'substitution', points: 0, playerOut: 'Saka', description: 'Substitution: Rashford on for Saka — England looking for fresh pace to stretch Argentina.' },
+  { id: 'ae_app1', minute: 65, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rashford', playerId: 'eng-rashford', type: 'sub_appearance', points: 1, description: 'Marcus Rashford enters at the biggest moment of his career — can he be England\'s match-winner?' },
+
+  { id: 'ae_pw1', minute: 66, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'penalty_won', points: 8, description: 'Messi is tripped in the box by Walker! Stonewall penalty — the referee points to the spot!' },
+  { id: 'ae_pc1', minute: 66, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Walker', playerId: 'eng-walker', type: 'penalty_conceded', points: -3, description: 'Walker clips Messi\'s heels — reckless challenge and a clear penalty. England in danger!' },
+  { id: 'ae_pm1', minute: 67, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'penalty_missed', points: -3, description: 'ÁLVAREZ BLAZES THE PENALTY OVER THE BAR! Unbelievable miss — Argentina fail to take the lead!' },
+
+  { id: 'ae_d6', minute: 70, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro', playerId: 'arg-lautaro', type: 'danger_attack', points: 0, description: 'Argentina keep coming! Lautaro brushes off Stones and drives into the penalty area!' },
+
+  { id: 'ae_asst3', minute: 72, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'Messi floats a delicate chip over the England defensive line — perfectly weighted for Lautaro!' },
+  { id: 'ae_goal3', minute: 73, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro', playerId: 'arg-lautaro', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! LAUTARO! A first-time volley into the roof of the net — ARGENTINA LEAD 2–1!' },
+  { id: 'ae_conc3_pic', minute: 73, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford', playerId: 'eng-pickford', type: 'goal_conceded', points: -1, description: 'Pickford had no chance — Lautaro\'s volley was absolute perfection. England trail.' },
+  { id: 'ae_conc3_sto', minute: 73, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones', playerId: 'eng-stones', type: 'goal_conceded', points: -1, description: 'Stones caught under Messi\'s chip — Lautaro\'s composure finishing was extraordinary.' },
+
+  { id: 'ae_sub2', minute: 75, team: 'Argentina', teamFlag: '🇦🇷', player: 'Di María', playerId: 'arg-dimaria', type: 'substitution', points: 0, playerOut: 'Álvarez', description: 'Substitution: Di María on for Álvarez — the veteran winger entering to help protect Argentina\'s lead.' },
+  { id: 'ae_app2', minute: 75, team: 'Argentina', teamFlag: '🇦🇷', player: 'Di María', playerId: 'arg-dimaria', type: 'sub_appearance', points: 1, description: 'Ángel Di María enters — a World Cup winner\'s experience to help Argentina see this out.' },
+
+  { id: 'ae_sub3', minute: 78, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Foden', playerId: 'eng-foden', type: 'substitution', points: 0, playerOut: 'Rice', description: 'Substitution: Foden on for Rice — England throw caution to the wind in search of the equaliser.' },
+  { id: 'ae_app3', minute: 78, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Foden', playerId: 'eng-foden', type: 'sub_appearance', points: 1, description: 'Phil Foden enters — England\'s most creative player now free to attack with abandon.' },
+
+  { id: 'ae_d7', minute: 81, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'danger_attack', points: 0, description: 'England throwing everything forward! Bellingham surges through and tests E. Martínez!' },
+  { id: 'ae_save4', minute: 81, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. MARTÍNEZ! Spreads himself brilliantly to deny Bellingham a one-on-one — Argentina survive!' },
+
+  { id: 'ae_ck4', minute: 85, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier', playerId: 'eng-trippier', type: 'corner_kick', points: 0, description: 'Corner for England! Last throw of the dice — Trippier to deliver, Kane waiting at the back post!' },
+  { id: 'ae_save5', minute: 85, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez punches clear with two fists — commanding in the box when England needed the most!' },
+
+  { id: 'ae_d8', minute: 87, team: 'Argentina', teamFlag: '🇦🇷', player: 'Di María', playerId: 'arg-dimaria', type: 'danger_attack', points: 0, description: 'Di María breaking on the counter! Argentina stretching England on their desperate push forward.' },
+
+  { id: 'ae_poss2_mes', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'possession_bonus', points: 1, description: 'Messi controlled this game from start to finish — a goal, two assists, and pure magic throughout.' },
+  { id: 'ae_poss2_bel', minute: 88, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'possession_bonus', points: 1, description: 'Bellingham gave everything in a losing cause — a performance of immense quality and heart.' },
+
+  { id: 'ae_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'FULL TIME! Argentina 2–1 England! MESSI LIFTS THE WORLD CUP AGAIN! La Albiceleste are World Champions!' },
 ];
