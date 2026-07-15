@@ -155,6 +155,25 @@ export default function ContestsPage() {
       .catch(() => {});
   }, []);
 
+  // Authoritative finish signal from our own DB (live_match_events.game_finalised),
+  // written by the cron/ESPN fallback. Wins over ESPN's public completed flag and
+  // wall-clock time — those don't know about matches that finished on TxLINE's own
+  // (e.g. devnet) timeline decoupled from our static schedule, which otherwise
+  // leaves a genuinely-finished match stuck under "Upcoming" forever.
+  useEffect(() => {
+    fetch('/api/live/finished')
+      .then(r => r.ok ? r.json() : {})
+      .then((data: Record<string, { home: number; away: number }>) => {
+        if (!data || Object.keys(data).length === 0) return;
+        const mapped: Record<string, FixtureScore> = {};
+        for (const [fid, s] of Object.entries(data)) {
+          mapped[fid] = { home: s.home, away: s.away, completed: true };
+        }
+        setFinishedScores(prev => ({ ...prev, ...mapped }));
+      })
+      .catch(() => {});
+  }, []);
+
   // Always show real WC2026 fixture schedule (demo mode = simulated gameplay, live mode = real data)
   // Status computed from current time; live scores overlaid from TxLINE API when available
   const mappedFixtures: DemoFixture[] = scheduleFixtures.map(f => {
