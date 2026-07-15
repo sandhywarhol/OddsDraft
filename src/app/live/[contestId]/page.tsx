@@ -1490,7 +1490,24 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (isCompleted && matchOldEnoughForFullTime) {
           const lastWithScore = [...rows].reverse().find(r => r.home_score !== undefined);
           markCompleted(lastWithScore?.home_score, lastWithScore?.away_score);
+          return true;
         }
+        return false;
+      })
+      .then((completedFromDb) => {
+        // ESPN fallback: TxLINE sometimes never reports full_time/game_finalised
+        // (seen on the devnet feed) — without this the match would look "live"
+        // forever and users could never claim rewards. Only runs once the match
+        // is old enough and DB events didn't already confirm completion; the
+        // 60s cron already does this same check server-side, this just avoids
+        // making a stuck user wait for the next tick.
+        if (completedFromDb || !matchOldEnoughForFullTime || !fixture?.homeTeam || !fixture?.awayTeam) return;
+        fetch(`/api/espn/status?fixtureId=${encodeURIComponent(fixtureIdStr)}&homeTeam=${encodeURIComponent(fixture.homeTeam)}&awayTeam=${encodeURIComponent(fixture.awayTeam)}&kickoffAt=${encodeURIComponent(fixture.kickoffAt)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then((status: { completed?: boolean; scoreHome?: number; scoreAway?: number } | null) => {
+            if (status?.completed) markCompleted(status.scoreHome, status.scoreAway);
+          })
+          .catch(() => {});
       })
       .catch(() => {});
 

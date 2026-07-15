@@ -7,6 +7,7 @@ import { calculateEventPoints } from '@/lib/fantasy-engine';
 import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { getFixtureIdRemap, discoverAndSync } from '@/lib/fixture-remap';
+import { checkEspnMatchStatus } from '@/lib/espn';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,6 +26,11 @@ const SIGNIFICANT = new Set([
 // sent by the cron instead (same dedup key as /api/telegram/stats).
 // game_finalised = true end for knockout matches (after ET/pens).
 const STATS_ONLY = new Set(['half_time', 'full_time', 'game_finalised']);
+
+// Contest types users can enter (mirrors VALID_CONTEST_TYPES in api/contest/enter).
+// Used to compute rewards for every contest type once a match is confirmed
+// finished, so claiming doesn't depend on someone having the live page open.
+const CONTEST_TYPES = ['top3', '5050', 'wta'] as const;
 
 const ACTION_MAP: Record<string, string> = {
   goal: 'goal', scored: 'goal',
@@ -115,6 +121,63 @@ export async function GET(req: NextRequest) {
             allEvents = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
           }
         }
+      }
+
+      // ── ESPN fallback: detect match completion when TxLINE stays silent ──────
+      // TxLINE (esp. on the devnet feed) sometimes never sends full_time/
+      // game_finalised for a fixture, which otherwise blocks matchCompleted on
+      // the live page forever and users can never claim SOL/card rewards.
+      // Once the match should reasonably be over, cross-check ESPN and, if it
+      // confirms completion, synthesize the finish signal ourselves.
+      try {
+        const kickoffMsF = fixture.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
+        const isKnockoutStageF = ['qf', 'sf', 'final'].includes(fixture.stage as string);
+        const expectedEndMs = kickoffMsF + (isKnockoutStageF ? 3 : 2) * 3600 * 1000;
+
+        const txlineReportsFinish = allEvents.some(ev => {
+          const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
+          const mapped = ACTION_MAP[rt] ?? rt;
+          return mapped === 'full_time' || mapped === 'game_finalised';
+        });
+
+        if (!txlineReportsFinish && kickoffMsF && now >= expectedEndMs) {
+          const { data: existingFinal } = await supabase
+            .from('live_match_events')
+            .select('event_id')
+            .eq('fixture_id', fixture.fixtureId)
+            .eq('event_type', 'game_finalised')
+            .limit(1);
+
+          if (!existingFinal?.length) {
+            const espn = await checkEspnMatchStatus(fixture.homeTeam, fixture.awayTeam, fixture.kickoffAt);
+            if (espn?.completed) {
+              await supabase.from('live_match_events').upsert({
+                fixture_id: fixture.fixtureId,
+                event_id: 'espn-game_finalised',
+                minute: 90,
+                event_type: 'game_finalised',
+                player_name: '',
+                team_name: '',
+                home_score: espn.scoreHome,
+                away_score: espn.scoreAway,
+              }, { onConflict: 'fixture_id,event_id' });
+
+              console.log(`[CronMatchEvents] ESPN fallback: ${fixture.homeTeam} vs ${fixture.awayTeam} (${fixture.fixtureId}) marked finished — TxLINE never reported it.`);
+
+              // Compute rewards server-side for every contest type so claims
+              // don't depend on any user having the live page open.
+              for (const ct of CONTEST_TYPES) {
+                fetch(`${appUrl}/api/prize/submit`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ fixtureId: fixture.fixtureId, contestType: ct }),
+                }).catch(e => console.error('[CronMatchEvents] ESPN fallback prize/submit failed:', e));
+              }
+            }
+          }
+        }
+      } catch (espnErr) {
+        console.error(`[CronMatchEvents] ESPN fallback check failed for ${fixture.fixtureId}:`, espnErr);
       }
 
       if (!scoreRes.ok && allEvents.length === 0) continue;
