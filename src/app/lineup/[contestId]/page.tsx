@@ -197,7 +197,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const [lineup, setLineup] = useState<(LineupPlayer | null)[]>([null, null, null, null, null]);
   const [activeSlot, setActiveSlot] = useState<number | null>(null);
   const [captain, setCaptain] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
+    if (typeof window === 'undefined' || isGuestDemo) return '';
     try {
       const raw = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
         ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
@@ -207,7 +207,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   });
   // Saved players — used to display captain name on the Already Entered / Submitted screen
   const [savedLineupPlayers] = useState<LineupPlayer[]>(() => {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined' || isGuestDemo) return [];
     try {
       const raw = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestType}`)
         ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
@@ -267,7 +267,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const alreadyEntered = typeof window !== 'undefined'
     ? (JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]') as string[]).includes(contestType)
     : false;
-  const [submitted, setSubmitted] = useState(isReplayTutorial ? false : alreadyEntered);
+  const [submitted, setSubmitted] = useState(isReplayTutorial ? false : (isGuestDemo ? false : alreadyEntered));
   const [submitting, setSubmitting] = useState(false);
 
   type PayStep = { label: string; status: 'pending' | 'loading' | 'ok' | 'error'; detail?: string };
@@ -1137,7 +1137,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <Link href={`/live/${fixture.fixtureId}?contestType=${contestType}${isDemo ? '&mode=demo' : ''}`} className="btn btn--primary btn--lg">
+            <Link href={`/live/${fixture.fixtureId}?contestType=${contestType}${isGuestDemo ? '&guest_demo=1' : isDemo ? '&mode=demo' : ''}`} className="btn btn--primary btn--lg">
               🔴 Watch Live
             </Link>
             <Link href="/contests" className="btn btn--secondary btn--lg">

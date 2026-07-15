@@ -2927,6 +2927,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       isMounted = false;
       clearInterval(interval as ReturnType<typeof setInterval>);
       if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
+      if (guestDemoMode) {
+        try {
+          localStorage.removeItem(`txodds_user_lineup_${contestId}_${contestType}`);
+          localStorage.removeItem(`txodds_user_lineup_${contestId}`);
+          localStorage.removeItem(`txodds_entered_contests_${contestId}`);
+        } catch { /* ignore */ }
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
