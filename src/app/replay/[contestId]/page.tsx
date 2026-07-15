@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { REPLAY_EVENTS } from '@/lib/replay-events';
-import { calculateEventPoints, POINT_MAP } from '@/lib/fantasy-engine';
+import { calculateEventPoints, POINT_MAP, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
 import FantasyToast, { type FantasyNotificationItem } from '@/components/FantasyToast';
@@ -752,6 +752,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const [activeToasts, setActiveToasts] = useState<FantasyNotificationItem[]>([]);
   const prevRankRef = useRef<number>(2);
   const notifiedEventsRef = useRef<Set<string>>(new Set());
+  const appearedPlayersRef = useRef<Set<string>>(new Set());
   const leaderboardRef = useRef(leaderboard);
   const userLineupRef = useRef<any>(null);
 
@@ -932,19 +933,15 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         const matchedPlayer = players.find((p: any) => p && p.id === event.playerId);
         
         if (matchedPlayer) {
-          delta = calculateEventPoints(event.type, matchedPlayer.position);
-          if (captain === event.playerId) {
-            delta *= 2;
-            isCap = true;
+          const basePts = calculateEventPoints(event.type, matchedPlayer.position);
+          let appearanceBonus = 0;
+          if (!appearedPlayersRef.current.has(event.playerId)) {
+            appearanceBonus = 2;
+            appearedPlayersRef.current.add(event.playerId);
           }
+          isCap = captain === event.playerId;
           const stars = confidence?.[event.playerId] ?? 3;
-          let confidenceMultiplier = 1;
-          if (delta >= 0) {
-            confidenceMultiplier = stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-          } else {
-            confidenceMultiplier = stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-          }
-          delta = delta * confidenceMultiplier;
+          delta = resolvePlayerDelta(basePts, { isCaptain: isCap, confidenceStars: stars, appearanceBonus });
         }
       }
 

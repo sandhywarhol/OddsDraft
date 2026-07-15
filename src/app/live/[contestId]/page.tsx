@@ -5,7 +5,7 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
-import { calculateEventPoints, POINT_MAP, getPrizeForRank } from '@/lib/fantasy-engine';
+import { calculateEventPoints, POINT_MAP, getPrizeForRank, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
@@ -1546,21 +1546,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const basePts = getPositionScore(bonus.eventType, p.position);
         if (basePts === 0) continue;
 
-        let pts = basePts;
+        let cardBonus = 0;
         const equippedCardIdStat = ((userLineupRef.current as any)?.equippedCards ?? {})[p.id];
         if (equippedCardIdStat) {
           const cardDefStat = getCardDefByInstanceId(equippedCardIdStat);
           const cardInstStat = getCardInstanceById(equippedCardIdStat);
-          if (cardDefStat) pts += getCardBonusForEvent(cardDefStat, bonus.eventType, cardInstStat?.upgradeCredits || 0);
+          if (cardDefStat) cardBonus = getCardBonusForEvent(cardDefStat, bonus.eventType, cardInstStat?.upgradeCredits || 0);
         }
-        if (!appearedPlayersRef.current.has(p.id) && pts > 0) {
-          pts += 2; // implicit appearance
+        let appearanceBonus = 0;
+        if (!appearedPlayersRef.current.has(p.id) && basePts + cardBonus > 0) {
+          appearanceBonus = 2; // implicit appearance
           appearedPlayersRef.current.add(p.id);
         }
-        if (captain === p.id) pts *= 2;
         const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-        pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-        pts = Math.round(pts * 100) / 100;
+        const pts = resolvePlayerDelta(basePts, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus, cardBonus });
         if (pts === 0) continue;
 
         totalDelta += pts;
@@ -2129,11 +2128,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             for (const p of (players as any[])) {
               if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
               if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
-              let pts = 2;
               const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-              if (captain === p.id) pts *= 2;
-              pts = Math.round(pts * 100) / 100;
+              const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
               totalBonus += pts;
               appearedPlayersRef.current.add(p.id);
               setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
@@ -2361,11 +2357,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             for (const p of (players as any[])) {
               if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
               if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
-              let pts = 2;
               const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-              if (captain === p.id) pts *= 2;
-              pts = Math.round(pts * 100) / 100;
+              const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
               totalBonus += pts;
               appearedPlayersRef.current.add(p.id); // prevent double-counting from appearance bonus
               setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
@@ -2428,11 +2421,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               let etBonus = 0;
               for (const p of (etP as any[])) {
                 if (!p?.id) continue;
-                let pts = 2;
-                if (etCap === p.id) pts *= 2;
                 const stars = (etConf as Record<string, number>)?.[p.id] ?? 3;
-                pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-                pts = Math.round(pts * 100) / 100;
+                const pts = resolvePlayerDelta(0, { isCaptain: etCap === p.id, confidenceStars: stars, appearanceBonus: 2 });
                 etBonus += pts;
                 setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
                 setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'extra time', pts, minute: 90 }] }));
@@ -2497,11 +2487,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             let totalBonus = 0;
             for (const p of (players as any[])) {
               if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
-              let pts = 2;
               const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-              if (captain === p.id) pts *= 2;
-              pts = Math.round(pts * 100) / 100;
+              const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
               totalBonus += pts;
               appearedPlayersRef.current.add(p.id);
               setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
@@ -2579,12 +2566,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   if (!p?.id || p.id === ev.playerId) continue;
                   if (p.team !== ev.team) continue;
                   if (p.position !== 'MID' && p.position !== 'SWG') continue;
-                  let pts = 1;
-                  if (!appearedPlayersRef.current.has(p.id)) { pts += 2; appearedPlayersRef.current.add(p.id); }
-                  if (captain === p.id) pts *= 2;
+                  let appearanceBonus = 0;
+                  if (!appearedPlayersRef.current.has(p.id)) { appearanceBonus = 2; appearedPlayersRef.current.add(p.id); }
                   const tcSt = (confidence as Record<string, number>)?.[p.id] ?? 3;
-                  pts *= tcSt === 5 ? 1.5 : tcSt === 4 ? 1.35 : tcSt === 3 ? 1.2 : tcSt === 2 ? 1.1 : 1.0;
-                  pts = Math.round(pts * 100) / 100;
+                  const pts = resolvePlayerDelta(1, { isCaptain: captain === p.id, confidenceStars: tcSt, appearanceBonus });
                   tcTotal += pts;
                   setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
                   setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'team contribution', pts, minute: ev.minute }] }));
@@ -2595,19 +2580,21 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
                   });
                 }
+                // Mark this goal's indirect contribution as scored so the convertTxLineUpdates
+                // loop below (which sees the same goal via TxLINE's individual-event stream)
+                // doesn't award the same team-contribution bonus a second time.
+                if (ev.playerId) psScored.add(`${ev.playerId}-${ev.type}`);
               }
               if (!matched) continue;
               if (ev.type === 'goal' && matched.position === 'GK') continue;
-              let rawPts = calculateEventPoints(ev.type, matched.position);
-              if (!appearedPlayersRef.current.has(ev.playerId)) { rawPts += 2; appearedPlayersRef.current.add(ev.playerId); }
+              const basePts = calculateEventPoints(ev.type, matched.position);
+              let appearanceBonus = 0;
+              if (!appearedPlayersRef.current.has(ev.playerId)) { appearanceBonus = 2; appearedPlayersRef.current.add(ev.playerId); }
               const cardDef = equippedCardDefsRef.current[ev.playerId];
               const cardInst = equippedCardInstancesRef.current[ev.playerId];
-              if (cardDef) rawPts += getCardBonusForEvent(cardDef, ev.type, cardInst?.upgradeCredits || 0);
-              let delta = rawPts;
-              if (captain === ev.playerId) delta *= 2;
+              const cardBonus = cardDef ? getCardBonusForEvent(cardDef, ev.type, cardInst?.upgradeCredits || 0) : 0;
               const stars = confidence?.[ev.playerId] ?? 3;
-              delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-              delta = Math.round(delta * 100) / 100;
+              const delta = resolvePlayerDelta(basePts, { isCaptain: captain === ev.playerId, confidenceStars: stars, appearanceBonus, cardBonus });
               if (delta === 0) continue;
               setPlayerPoints(prev => ({ ...prev, [ev.playerId]: Math.round(((prev[ev.playerId] ?? 0) + delta) * 100) / 100 }));
               setPlayerHistory(prev => ({ ...prev, [ev.playerId]: [...(prev[ev.playerId] ?? []), { label: ev.type.replace(/_/g,' '), pts: delta, minute: ev.minute }] }));
@@ -2725,11 +2712,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               let etBonus = 0;
               for (const p of (players as any[])) {
                 if (!p?.id) continue;
-                let pts = 2;
-                if (captain === p.id) pts *= 2;
                 const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-                pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-                pts = Math.round(pts * 100) / 100;
+                const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
                 etBonus += pts;
                 setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
                 setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'extra time', pts, minute: ev.minute }] }));
@@ -2754,12 +2738,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             for (const p of (players as any[])) {
               if (!p?.id || (p.position !== 'GK' && p.position !== 'DEF')) continue;
               if (p.team !== ev.team) continue;
-              let rawPts = calculateEventPoints('goal_conceded', p.position);
-              if (rawPts === 0) continue;
-              if (captain === p.id) rawPts *= 2;
+              const basePts = calculateEventPoints('goal_conceded', p.position);
+              if (basePts === 0) continue;
+              const cardDef = equippedCardDefsRef.current[p.id];
+              const cardInst = equippedCardInstancesRef.current[p.id];
+              const cardBonus = cardDef ? getCardBonusForEvent(cardDef, 'goal_conceded', cardInst?.upgradeCredits || 0) : 0;
               const st = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              rawPts *= st === 5 ? 1.5 : st === 4 ? 1.35 : st === 3 ? 1.2 : st === 2 ? 1.1 : 1.0;
-              rawPts = Math.round(rawPts * 100) / 100;
+              const rawPts = resolvePlayerDelta(basePts, { isCaptain: captain === p.id, confidenceStars: st, cardBonus });
               gcTotal += rawPts;
               setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + rawPts) * 100) / 100 }));
               setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'goal conceded', pts: rawPts, minute: ev.minute }] }));
@@ -2780,12 +2765,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             for (const p of (players as any[])) {
               if (!p?.id || (p.position !== 'GK' && p.position !== 'DEF')) continue;
               if (p.team !== ev.team) continue;
-              let rawPts = calculateEventPoints('penalty_conceded', p.position);
-              if (rawPts === 0) continue;
-              if (captain === p.id) rawPts *= 2;
+              const basePts = calculateEventPoints('penalty_conceded', p.position);
+              if (basePts === 0) continue;
+              const cardDef = equippedCardDefsRef.current[p.id];
+              const cardInst = equippedCardInstancesRef.current[p.id];
+              const cardBonus = cardDef ? getCardBonusForEvent(cardDef, 'penalty_conceded', cardInst?.upgradeCredits || 0) : 0;
               const st = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              rawPts *= st === 5 ? 1.5 : st === 4 ? 1.35 : st === 3 ? 1.2 : st === 2 ? 1.1 : 1.0;
-              rawPts = Math.round(rawPts * 100) / 100;
+              const rawPts = resolvePlayerDelta(basePts, { isCaptain: captain === p.id, confidenceStars: st, cardBonus });
               pcTotal += rawPts;
               setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + rawPts) * 100) / 100 }));
               setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'penalty conceded', pts: rawPts, minute: ev.minute }] }));
@@ -2820,12 +2806,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               if (!p?.id || p.id === ev.playerId) continue;
               if (p.team !== ev.team) continue;
               if (p.position !== 'MID' && p.position !== 'SWG') continue;
-              let pts = 1;
-              if (!appearedPlayersRef.current.has(p.id)) { pts += 2; appearedPlayersRef.current.add(p.id); }
-              if (captain === p.id) pts *= 2;
+              let appearanceBonus = 0;
+              if (!appearedPlayersRef.current.has(p.id)) { appearanceBonus = 2; appearedPlayersRef.current.add(p.id); }
               const tcSt = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              pts *= tcSt === 5 ? 1.5 : tcSt === 4 ? 1.35 : tcSt === 3 ? 1.2 : tcSt === 2 ? 1.1 : 1.0;
-              pts = Math.round(pts * 100) / 100;
+              const pts = resolvePlayerDelta(1, { isCaptain: captain === p.id, confidenceStars: tcSt, appearanceBonus });
               tcTotal += pts;
               setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
               setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'team contribution', pts, minute: ev.minute }] }));
@@ -2842,21 +2826,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           // GKs cannot score regular goals — only penalty shootout goals are valid
           if (ev.type === 'goal' && matched.position === 'GK') continue;
 
-          let rawPts = calculateEventPoints(ev.type, matched.position);
+          const basePts = calculateEventPoints(ev.type, matched.position);
           const isAppearanceEv = ev.type === 'starting_xi' || ev.type === 'sub_appearance';
+          let appearanceBonus = 0;
           if (!isAppearanceEv && !appearedPlayersRef.current.has(ev.playerId)) {
-            rawPts += 2;
+            appearanceBonus = 2;
           }
           appearedPlayersRef.current.add(ev.playerId);
           // Apply equipped skill card bonus before captain/confidence multipliers
           const cardDefLive = equippedCardDefsRef.current[ev.playerId];
           const cardInstLive = equippedCardInstancesRef.current[ev.playerId];
-          if (cardDefLive) rawPts += getCardBonusForEvent(cardDefLive, ev.type, cardInstLive?.upgradeCredits || 0);
-          let delta = rawPts;
-          let isCap = false;
-          if (captain === ev.playerId) { delta *= 2; isCap = true; }
+          const cardBonus = cardDefLive ? getCardBonusForEvent(cardDefLive, ev.type, cardInstLive?.upgradeCredits || 0) : 0;
+          const isCap = captain === ev.playerId;
           const stars = confidence?.[ev.playerId] ?? 3;
-          delta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
+          const delta = resolvePlayerDelta(basePts, { isCaptain: isCap, confidenceStars: stars, appearanceBonus, cardBonus });
 
           setLeaderboard(prev => {
             const next = prev.map(entry =>
@@ -2954,11 +2937,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       for (const p of (players as any[])) {
         if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
         if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
-        let pts = 2;
         const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-        pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-        if (captain === p.id) pts *= 2;
-        pts = Math.round(pts * 100) / 100;
+        const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
         totalBonus += pts;
         appearedPlayersRef.current.add(p.id);
         setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
@@ -3000,11 +2980,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         for (const p of (players as any[])) {
           if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
           if (realStarters && !realStarters.has(p.id)) continue; // didn't actually play
-          let pts = 2;
           const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-          pts *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-          if (captain === p.id) pts *= 2;
-          pts = Math.round(pts * 100) / 100;
+          const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
           totalBonus += pts;
           appearedPlayersRef.current.add(p.id);
           setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
@@ -3022,23 +2999,26 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
         for (const p of (players as any[])) {
           if (!p?.id) continue;
-          const alreadyHasGC = (playerHistory[p.id] ?? []).some(h => h.label.startsWith('goal conceded'));
-          if (alreadyHasGC) continue;
+          // Count already-credited goal_conceded awards (from real-time synthesis) instead of
+          // an all-or-nothing skip, so a later own goal isn't silently missed just because an
+          // earlier regular goal against was already awarded in real time.
+          const realtimeGC = (playerHistory[p.id] ?? []).filter(h => h.label === 'goal conceded').length;
           const isHome = p.team === fixture.homeTeam;
           const totalGoalsAgainst = isHome ? scoreRef.current.away : scoreRef.current.home;
           const penGoals = penConcededByTeam[p.team] ?? 0;
-          const goalsAgainst = Math.max(0, totalGoalsAgainst - penGoals);
+          const goalsAgainst = Math.max(0, totalGoalsAgainst - penGoals - realtimeGC);
           if (goalsAgainst <= 0) continue;
           const gcBase = calculateEventPoints('goal_conceded', p.position);
           if (gcBase === 0) continue;
-          let gcDelta = gcBase * goalsAgainst;
           const cardDef = equippedCardDefsRef.current[p.id];
           const cardInst = equippedCardInstancesRef.current[p.id];
-          if (cardDef) gcDelta += getCardBonusForEvent(cardDef, 'goal_conceded', cardInst?.upgradeCredits || 0) * goalsAgainst;
-          if (captain === p.id) gcDelta *= 2;
+          const cardBonusPerGoal = cardDef ? getCardBonusForEvent(cardDef, 'goal_conceded', cardInst?.upgradeCredits || 0) : 0;
           const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-          gcDelta *= stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-          gcDelta = Math.round(gcDelta * 100) / 100;
+          const gcDelta = resolvePlayerDelta(gcBase * goalsAgainst, {
+            isCaptain: captain === p.id,
+            confidenceStars: stars,
+            cardBonus: cardBonusPerGoal * goalsAgainst,
+          });
           if (gcDelta !== 0) {
             totalBonus += gcDelta;
             setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + gcDelta) * 100) / 100 }));
@@ -3054,15 +3034,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           if (!p?.id || !cleanSheetTeams.includes(p.team)) continue;
           const alreadyHasCS = (playerHistory[p.id] ?? []).some(h => h.label === 'clean sheet');
           if (alreadyHasCS) continue;
-          let csBase = calculateEventPoints('clean_sheet', p.position);
+          const csBase = calculateEventPoints('clean_sheet', p.position);
           const cardDef = equippedCardDefsRef.current[p.id];
           const cardInst = equippedCardInstancesRef.current[p.id];
-          if (cardDef) csBase += getCardBonusForEvent(cardDef, 'clean_sheet', cardInst?.upgradeCredits || 0);
-          if (csBase <= 0) continue;
-          let csDelta = captain === p.id ? csBase * 2 : csBase;
+          const csCardBonus = cardDef ? getCardBonusForEvent(cardDef, 'clean_sheet', cardInst?.upgradeCredits || 0) : 0;
+          if (csBase + csCardBonus <= 0) continue;
           const csStars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-          csDelta *= csStars === 5 ? 1.5 : csStars === 4 ? 1.35 : csStars === 3 ? 1.2 : csStars === 2 ? 1.1 : 1.0;
-          csDelta = Math.round(csDelta * 100) / 100;
+          const csDelta = resolvePlayerDelta(csBase, { isCaptain: captain === p.id, confidenceStars: csStars, cardBonus: csCardBonus });
           totalBonus += csDelta;
           setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + csDelta) * 100) / 100 }));
           setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'clean sheet', pts: csDelta, minute: 90 }] }));
@@ -3241,25 +3219,21 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const { players, captain, confidence } = userLineupRef.current;
         const matchedPlayer = players.find((p: any) => p && p.id === event.playerId);
         if (matchedPlayer) {
-          let rawPoints = calculateEventPoints(event.type, matchedPlayer.position);
+          const basePoints = calculateEventPoints(event.type, matchedPlayer.position);
           const isAppearanceEvt = event.type === 'starting_xi' || event.type === 'sub_appearance';
+          let appearanceBonus = 0;
           if (!isAppearanceEvt && !appearedPlayersRef.current.has(event.playerId)) {
-            rawPoints += 2;
+            appearanceBonus = 2;
           }
           appearedPlayersRef.current.add(event.playerId);
           // Apply equipped skill card bonus before captain/confidence multipliers
           const cardDefDemo = equippedCardDefsRef.current[event.playerId];
           const cardInstDemo = equippedCardInstancesRef.current[event.playerId];
-          if (cardDefDemo) rawPoints += getCardBonusForEvent(cardDefDemo, event.type, cardInstDemo?.upgradeCredits || 0);
-          delta = rawPoints;
+          const cardBonus = cardDefDemo ? getCardBonusForEvent(cardDefDemo, event.type, cardInstDemo?.upgradeCredits || 0) : 0;
 
-          if (captain === event.playerId) {
-            delta *= 2;
-            isCap = true;
-          }
+          isCap = captain === event.playerId;
           const stars = confidence?.[event.playerId] ?? 3;
-          const confidenceMultiplier = stars === 5 ? 1.5 : stars === 4 ? 1.35 : stars === 3 ? 1.2 : stars === 2 ? 1.1 : 1.0;
-          delta = delta * confidenceMultiplier;
+          delta = resolvePlayerDelta(basePoints, { isCaptain: isCap, confidenceStars: stars, appearanceBonus, cardBonus });
         }
       }
 
@@ -3329,15 +3303,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           }
 
           if (basePts === 0) continue;
-          let pts = basePts;
+          let appearanceBonus = 0;
           if (basePts > 0 && !appearedPlayersRef.current.has(p.id)) {
-            pts += 2;
+            appearanceBonus = 2;
             appearedPlayersRef.current.add(p.id);
           }
-          if (lpCap === p.id) pts *= 2;
           const indSt = (lpConf as Record<string, number>)?.[p.id] ?? 3;
-          pts *= indSt === 5 ? 1.5 : indSt === 4 ? 1.35 : indSt === 3 ? 1.2 : indSt === 2 ? 1.1 : 1.0;
-          pts = Math.round(pts * 100) / 100;
+          const pts = resolvePlayerDelta(basePts, { isCaptain: lpCap === p.id, confidenceStars: indSt, appearanceBonus });
           indirectTotal += pts;
           setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
           setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label, pts, minute: event.minute }] }));

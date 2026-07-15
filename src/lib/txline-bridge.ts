@@ -539,6 +539,23 @@ export function convertTxLineUpdates(
           description: describeEvent('goal_conceded', 'Goalkeeper', oppTeam, raw.minute),
         });
       }
+
+      // Synthesize goal_conceded for an own goal too — the own-goal scorer's own team (`team`,
+      // not `oppTeam`) is the one that concedes on the scoreboard, so their GK/DEF must still
+      // take the goal_conceded penalty even though no opposing player actually scored.
+      if (displayType === 'own_goal') {
+        result.push({
+          id: `live-concede-og-${update.seq ?? Date.now()}-${raw.minute}`,
+          minute: raw.minute,
+          team,
+          teamFlag,
+          player: '',
+          playerId: '',
+          type: 'goal_conceded',
+          points: BASE_POINTS['goal_conceded'],
+          description: describeEvent('goal_conceded', 'Goalkeeper', team, raw.minute),
+        });
+      }
     }
   }
 

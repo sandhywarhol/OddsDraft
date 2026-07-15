@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendMessage, formatMatchEvent, formatMatchStats } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
-import { calculateEventPoints } from '@/lib/fantasy-engine';
+import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { getFixtureIdRemap, discoverAndSync } from '@/lib/fixture-remap';
@@ -495,13 +495,12 @@ export async function GET(req: NextRequest) {
                 if (!matched) continue;
                 const playerName = displayName;
 
-                let pts = calculateEventPoints(eventType, matched.position ?? 'ATT');
-                if (pts === 0) continue;
+                const basePts = calculateEventPoints(eventType, matched.position ?? 'ATT');
+                if (basePts === 0) continue;
 
                 const isCaptain = entry.lineup.captain === matched.id;
                 const stars = (entry.lineup.confidence ?? {})[matched.id] ?? 3;
-                const confMult = [1, 1.1, 1.2, 1.35, 1.5][Math.min(stars, 5) - 1] ?? 1.2;
-                pts = Math.round(pts * confMult * (isCaptain ? 2 : 1) * 10) / 10;
+                const pts = resolvePlayerDelta(basePts, { isCaptain, confidenceStars: stars });
 
                 const ptsStr = pts > 0 ? `+${pts}` : `${pts}`;
                 const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤', penalty_won:'🎯' };
@@ -526,13 +525,12 @@ export async function GET(req: NextRequest) {
                   if (!playerDef || playerDef.team !== concedingTeam) continue;
                   if (playerDef.position !== 'GK' && playerDef.position !== 'DEF') continue;
 
-                  let pts = calculateEventPoints('penalty_conceded', playerDef.position);
-                  if (pts === 0) continue;
+                  const basePts2 = calculateEventPoints('penalty_conceded', playerDef.position);
+                  if (basePts2 === 0) continue;
 
                   const isCaptain2 = entry.lineup.captain === lp.id;
                   const stars2 = (entry.lineup.confidence ?? {})[lp.id] ?? 3;
-                  const confMult2 = [1, 1.1, 1.2, 1.35, 1.5][Math.min(stars2, 5) - 1] ?? 1.2;
-                  pts = Math.round(pts * confMult2 * (isCaptain2 ? 2 : 1) * 10) / 10;
+                  const pts = resolvePlayerDelta(basePts2, { isCaptain: isCaptain2, confidenceStars: stars2 });
 
                   const ptsStr2 = `${pts}`;
                   const capNote2 = isCaptain2 ? ' *(C) ×2*' : '';

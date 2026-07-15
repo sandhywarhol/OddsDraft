@@ -22,9 +22,8 @@ export const POINT_MAP: Record<string, number> = {
   extra_time:               2,
 };
 
-// Confidence multiplier: 1★ to 5★
-// Positive points get a bonus; negative points get amplified penalty
-const CONFIDENCE_BONUS: Record<number, number> = {
+// Confidence multiplier: 1★ to 5★ — applies equally to positive and negative totals.
+export const CONFIDENCE_MULTIPLIER: Record<number, number> = {
   1: 1.0,
   2: 1.1,
   3: 1.2,
@@ -32,13 +31,22 @@ const CONFIDENCE_BONUS: Record<number, number> = {
   5: 1.5,
 };
 
-const CONFIDENCE_PENALTY: Record<number, number> = {
-  1: 1.0,
-  2: 1.1,
-  3: 1.2,
-  4: 1.35,
-  5: 1.5,
-};
+export interface DeltaContext {
+  isCaptain: boolean;
+  confidenceStars: number; // 1-5
+  appearanceBonus?: number; // pass 2 when this delta includes a first-appearance award
+  cardBonus?: number;       // precomputed via getCardBonusForEvent, added pre-multiplier
+}
+
+// Single source of truth for turning a raw event's base points into the final
+// per-player delta. Every scoring call site (live page, replay, cron notifications,
+// admin tools) must go through this so captain/confidence/rounding never drift.
+export function resolvePlayerDelta(rawPoints: number, ctx: DeltaContext): number {
+  let pts = rawPoints + (ctx.appearanceBonus ?? 0) + (ctx.cardBonus ?? 0);
+  if (ctx.isCaptain) pts *= 2;
+  pts *= CONFIDENCE_MULTIPLIER[ctx.confidenceStars] ?? 1;
+  return Math.round(pts * 100) / 100;
+}
 
 export interface PlayerEvent {
   playerId: string;
@@ -165,20 +173,13 @@ export function calculateFantasyPoints(
     const afterCaptain = isCaptain ? basePoints * 2 : basePoints;
     const captainBonus = afterCaptain - basePoints;
 
-    // Confidence: applies to the after-captain total
-    let confidenceMultiplier: number;
-    if (afterCaptain >= 0) {
-      confidenceMultiplier = CONFIDENCE_BONUS[stars] ?? 1;
-    } else {
-      confidenceMultiplier = CONFIDENCE_PENALTY[stars] ?? 1;
-    }
-
-    const finalPoints = afterCaptain * confidenceMultiplier;
+    const confidenceMultiplier = CONFIDENCE_MULTIPLIER[stars] ?? 1;
+    const finalPoints = resolvePlayerDelta(basePoints, { isCaptain, confidenceStars: stars });
     const confidenceBonus = finalPoints - afterCaptain;
 
     score.captainBonus = captainBonus;
     score.confidenceMultiplier = confidenceMultiplier;
-    score.finalPoints = Math.round(finalPoints * 100) / 100;
+    score.finalPoints = finalPoints;
 
     totalBase += basePoints;
     totalCaptainBonus += captainBonus;
