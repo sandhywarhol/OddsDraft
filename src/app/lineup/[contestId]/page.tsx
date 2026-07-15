@@ -1037,15 +1037,19 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       } catch { /* ignore */ }
 
     } else {
-      // Demo mode — no payment, just show a brief loading animation
-      setPaySteps([{ label: 'Saving demo lineup…', status: 'loading' }]);
+      // Demo mode — save immediately, guest demo skips the loading animation entirely
       setPayError(null);
       setSubmitting(true);
-      await new Promise(r => setTimeout(r, 900));
       try {
         localStorage.setItem(`txodds_user_lineup_${contestId}_${contestType}`, JSON.stringify(lineupData));
       } catch { /* ignore */ }
-      setPaySteps([{ label: 'Demo lineup saved', status: 'ok' }]);
+      if (!isGuestDemo) {
+        setPaySteps([{ label: 'Saving demo lineup…', status: 'loading' }]);
+        await new Promise(r => setTimeout(r, 900));
+        setPaySteps([{ label: 'Demo lineup saved', status: 'ok' }]);
+      } else {
+        setPaySteps([{ label: '✓ Lineup locked — entering match…', status: 'ok' }]);
+      }
     }
 
     // Ensure localStorage is set
@@ -1054,14 +1058,17 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       if (!entered.includes(contestType)) { entered.push(contestType); localStorage.setItem(enteredContestsKey, JSON.stringify(entered)); }
     } catch { /* ignore */ }
 
-    await new Promise(r => setTimeout(r, 700)); // brief pause so user sees all steps complete
+    // Guest demo redirects fast — no lingering "complete" screen
+    const pauseMs = isGuestDemo ? 200 : 700;
+    await new Promise(r => setTimeout(r, pauseMs));
     setSubmitted(true);
     setSubmitting(false);
 
+    const redirectDelay = isGuestDemo ? 400 : 1500;
     setTimeout(() => {
       const demoParam = isGuestDemo ? '&guest_demo=1' : isDemo ? '&mode=demo' : '';
       router.push(`/live/${contestId}?contestType=${contestType}${demoParam}`);
-    }, 1500);
+    }, redirectDelay);
   };
 
   const [countdown, setCountdown] = useState('');
