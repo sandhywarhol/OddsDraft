@@ -25,11 +25,17 @@ Common → Uncommon → Rare → Epic → Legendary → Mythic → SSR → SSSR
  50%        25%       12%    6.5%     4%         1.5%    0.7%  0.3%
 ```
 
-Cards are position-specific and give flat point bonuses — a Legendary Striker card adds +5 pts on every goal your forward scores. You equip one card per player slot before kickoff.
+Cards are position-specific and act as point modifiers — each card targets a specific event type for its position. A Legendary Striker card boosts goal points from +10 to +11.50; a Mythic Goalkeeper card doubles save points from +1 to +2; a Rare Defender card amplifies clean sheet rewards. Every position has its own modifier abilities, so a card useful for a goalkeeper does nothing for a striker.
+
+Cards are upgradeable. Spend upgrade cards on a skill card to amplify its modifier — up to 10 upgrade credits per card. The stronger the base rarity, the bigger the ceiling.
+
+One card per player slot. Equip before kickoff — no changes once the match starts.
 
 The interesting mechanic: **collect two copies of the same card and you can fuse them into the next rarity**. So there's a real reason to keep playing — you're building toward a SSSR card that might not exist anywhere else.
 
-Cards are tradeable on-chain. The marketplace is built and live — list any card for SOL, and other players can buy directly from their collection page.
+New players receive a welcome gift of 5 skill cards + 5 upgrade cards on first wallet connection (soulbound — not tradeable). After that, every contest you complete earns another card pack.
+
+Cards earned in-game are tradeable on-chain. The marketplace is live — list any card for SOL, and other players can buy directly from the collection page.
 
 ---
 
@@ -176,4 +182,4 @@ NEXT_PUBLIC_APP_URL=https://oddsdraft.fun
 npm run dev
 ```
 
-Connect a Solana wallet (Phantom / Backpack) to enter contests and open card packs. New users receive a welcome gift of 5 skill cards + 5 upgrade cards automatically on first connection.
+Connect a Solana wallet (Phantom / Backpack) to enter contests and open card packs. New players receive a welcome gift of 5 skill cards + 5 upgrade cards (soulbound) on first connection, then earn a new pack after every contest.
