@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getPrizeForRank, calculateEventPoints } from '@/lib/fantasy-engine';
+import { getPrizeForRank, calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { matchPlayerName } from '@/lib/txline-bridge';
 
 const supabase = createClient(
@@ -8,7 +8,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const CONFIDENCE_MULT: Record<number, number> = { 1: 1.0, 2: 1.1, 3: 1.2, 4: 1.35, 5: 1.5 };
 const SCORING_EVENTS = new Set([
   'goal', 'own_goal', 'red_card', 'yellow_card', 'penalty_save',
   'assist', 'penalty_won', 'penalty_missed', 'goalkeeper_save',
@@ -71,17 +70,15 @@ export async function POST(req: NextRequest) {
         }
         if (!matched) continue;
 
-        let pts = calculateEventPoints(ev.event_type, matched.position ?? 'ATT');
-        if (pts === 0) continue;
+        const basePts = calculateEventPoints(ev.event_type, matched.position ?? 'ATT');
+        if (basePts === 0) continue;
 
         const isCaptain = lineup.captain === matched.id;
         const stars = (lineup.confidence ?? {})[matched.id] ?? 3;
-        const mult = CONFIDENCE_MULT[Math.min(stars, 5)] ?? 1.2;
-        pts = Math.round(pts * mult * (isCaptain ? 2 : 1) * 10) / 10;
-        total += pts;
+        total += resolvePlayerDelta(basePts, { isCaptain, confidenceStars: stars });
       }
 
-      return { walletAddress: entry.wallet_address, points: Math.round(total * 10) / 10 };
+      return { walletAddress: entry.wallet_address, points: Math.round(total * 100) / 100 };
     });
 
     // 4. Sort descending, assign ranks (ties share the higher rank)

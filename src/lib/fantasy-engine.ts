@@ -24,10 +24,10 @@ export const POINT_MAP: Record<string, number> = {
 
 // Confidence multiplier: 1★ to 5★ — applies equally to positive and negative totals.
 export const CONFIDENCE_MULTIPLIER: Record<number, number> = {
-  1: 1.0,
-  2: 1.1,
-  3: 1.2,
-  4: 1.35,
+  1: 1.1,
+  2: 1.2,
+  3: 1.3,
+  4: 1.4,
   5: 1.5,
 };
 

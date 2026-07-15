@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendMessage, answerCallbackQuery, formatKickoff } from '@/lib/telegram-bot';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
-import { calculateEventPoints } from '@/lib/fantasy-engine';
+import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
@@ -281,13 +281,12 @@ async function fetchAndSendPoints(chatId: number, contestId: string, walletAddre
       }
       if (!matched) continue;
 
-      let pts = calculateEventPoints(ev.event_type, matched.position ?? 'ATT');
-      if (pts === 0) continue;
+      const basePts = calculateEventPoints(ev.event_type, matched.position ?? 'ATT');
+      if (basePts === 0) continue;
 
       const isCaptain = lineup.captain === matched.id;
       const stars = (lineup.confidence ?? {})[matched.id] ?? 3;
-      const confMult = [1, 1.1, 1.2, 1.35, 1.5][Math.min(stars, 5) - 1] ?? 1.2;
-      pts = Math.round(pts * confMult * (isCaptain ? 2 : 1) * 10) / 10;
+      const pts = resolvePlayerDelta(basePts, { isCaptain, confidenceStars: stars });
       totalPts += pts;
 
       const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤', assist:'🎯', penalty_won:'🎯', penalty_missed:'❌', goalkeeper_save:'🧤' };

@@ -701,7 +701,7 @@ export default function TutorialPage() {
                           <span style={{ color: '#ffd700', fontWeight: 700 }}>⭐ Confidence Multiplier:</span>{' '}
                           Rate your confidence in each player (1–5 stars). The higher the rating, the more points you earn — but also the bigger the penalty if the player underperforms.
                           <br />
-                          <span style={{ color: '#94a3b8' }}>1★ = ×1.0 &nbsp;|&nbsp; 3★ = ×1.2 &nbsp;|&nbsp; 5★ = ×1.5</span>
+                          <span style={{ color: '#94a3b8' }}>1★ = ×1.1 &nbsp;|&nbsp; 3★ = ×1.3 &nbsp;|&nbsp; 5★ = ×1.5</span>
                         </div>
                         {TUTORIAL_PLAYERS.map(p => (
                           <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

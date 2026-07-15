@@ -9,33 +9,33 @@ import {
 
 describe('resolvePlayerDelta', () => {
   test('applies each confidence tier to a positive raw total', () => {
-    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 1 })).toBe(10);
-    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 2 })).toBe(11);
-    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 3 })).toBe(12);
-    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 4 })).toBe(13.5);
+    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 1 })).toBe(11);
+    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 2 })).toBe(12);
+    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 3 })).toBe(13);
+    expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 4 })).toBe(14);
     expect(resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 5 })).toBe(15);
   });
 
   test('applies each confidence tier to a negative raw total (amplifies the penalty)', () => {
-    expect(resolvePlayerDelta(-10, { isCaptain: false, confidenceStars: 1 })).toBe(-10);
+    expect(resolvePlayerDelta(-10, { isCaptain: false, confidenceStars: 1 })).toBe(-11);
     expect(resolvePlayerDelta(-10, { isCaptain: false, confidenceStars: 5 })).toBe(-15);
   });
 
   test('captain doubles points before the confidence multiplier is applied', () => {
-    // 10 * 2 (captain) * 1.2 (3-star) = 24
-    expect(resolvePlayerDelta(10, { isCaptain: true, confidenceStars: 3 })).toBe(24);
+    // 10 * 2 (captain) * 1.3 (3-star) = 26
+    expect(resolvePlayerDelta(10, { isCaptain: true, confidenceStars: 3 })).toBe(26);
   });
 
   test('appearance bonus and card bonus are added pre-multiplier', () => {
-    // (10 + 2 appearance + 3 card) * 1.1 (2-star) = 16.5
+    // (10 + 2 appearance + 3 card) * 1.2 (2-star) = 18
     expect(
       resolvePlayerDelta(10, { isCaptain: false, confidenceStars: 2, appearanceBonus: 2, cardBonus: 3 })
-    ).toBe(16.5);
+    ).toBe(18);
   });
 
   test('rounds to 2 decimal places', () => {
-    // 7 * 1.35 = 9.45
-    expect(resolvePlayerDelta(7, { isCaptain: false, confidenceStars: 4 })).toBe(9.45);
+    // 7 * 1.4 = 9.8
+    expect(resolvePlayerDelta(7, { isCaptain: false, confidenceStars: 4 })).toBe(9.8);
   });
 
   test('out-of-range confidence stars fall back to a 1x multiplier', () => {
@@ -44,7 +44,7 @@ describe('resolvePlayerDelta', () => {
   });
 
   test('CONFIDENCE_MULTIPLIER exposes the full 1-5 star table', () => {
-    expect(CONFIDENCE_MULTIPLIER).toEqual({ 1: 1.0, 2: 1.1, 3: 1.2, 4: 1.35, 5: 1.5 });
+    expect(CONFIDENCE_MULTIPLIER).toEqual({ 1: 1.1, 2: 1.2, 3: 1.3, 4: 1.4, 5: 1.5 });
   });
 });
 
@@ -77,10 +77,10 @@ describe('calculateFantasyPoints', () => {
     );
 
     // base = 10 (goal, ATT) + 2 (implicit appearance) = 12
-    // captain: 12 * 2 = 24; confidence 3-star: 24 * 1.2 = 28.8
-    expect(result.playerScores.p1.finalPoints).toBe(28.8);
+    // captain: 12 * 2 = 24; confidence 3-star: 24 * 1.3 = 31.2
+    expect(result.playerScores.p1.finalPoints).toBe(31.2);
     expect(result.playerScores.p2.finalPoints).toBe(0);
-    expect(result.totalPoints).toBe(28.8);
+    expect(result.totalPoints).toBe(31.2);
   });
 
   test('does not double-count appearance when starting_xi event precedes match events', () => {
