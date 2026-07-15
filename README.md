@@ -53,7 +53,7 @@ Goals are worth more for riskier positions — a goalkeeper scoring is rare so i
 | --- | --- | --- | --- | --- | --- | --- |
 | ⚽ Goal | **20** | **15** | **12** | **11** | **10** | Higher for unlikely scorers |
 | 🎯 Assist | 6 | 6 | 6 | 6 | 6 | Uniform across positions |
-| 🎯 Penalty Won | 8 | 8 | 8 | 8 | 8 | Replaces goal event — TxLINE doesn't send a goal for converted pens |
+| 🎯 Penalty Won | 8 | 8 | 8 | 8 | 8 | Awarded when a penalty is won; scoring is handled separately from the goal event |
 | 🧤 Penalty Save | **5** | 0 | 0 | 0 | 0 | GK only |
 | 🟨 Yellow Card | −2 | −2 | −2 | −2 | −2 | |
 | 🟥 Red Card | −5 | −5 | −5 | −5 | −5 | |
@@ -140,7 +140,7 @@ POST /auth/guest/start                — guest JWT
 POST /api/token/activate              — token activation
 ```
 
-One thing we learned: TxLINE often sends goal events with a valid `PlayerId` but empty `PlayerName`. So we built a second detection path using the `PlayerStats` cumulative snapshot — compare each poll's per-player goal count against the previous poll, and any delta means a goal just happened regardless of whether the individual event had a name attached. This made the scoring reliable.
+To maximise scoring accuracy, we built a dual detection path alongside TxLINE's event stream: we also compare each poll's `PlayerStats` cumulative snapshot against the previous one. Any delta in a player's goal count confirms a goal independently of the event payload, ensuring every score is captured reliably.
 
 Half-time and full-time stats use a strict source priority: TxLINE period data (goals, corners, cards) → Supabase event counts (shots, danger attacks). No stat is ever sourced from two providers simultaneously.
 
