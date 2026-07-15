@@ -1446,8 +1446,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   useEffect(() => {
     if (appMode !== 'live') return;
     const kickoffMs = fixture?.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
-    // Don't mark completion for matches that haven't kicked off yet
-    if (kickoffMs && kickoffMs > Date.now()) return;
+    // NOTE: we deliberately do NOT bail out just because the scheduled kickoffAt
+    // is still in the future. TxLINE (esp. on devnet) can run/finish a match on
+    // its own timeline that's decoupled from our static schedule — if it already
+    // reported the match as finished (game_finalised), that's trusted over the
+    // schedule, otherwise the match would be stuck "PRE-MATCH" forever with no
+    // way to claim even though it genuinely finished.
     const fixtureIdStr = contestId;
 
     const markCompleted = (homeScore?: number, awayScore?: number) => {
@@ -1463,9 +1467,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
     };
 
-    // A full_time event is only valid if at least 85 minutes have elapsed since kickoff.
-    // This prevents stale simulate-match test data from immediately completing a match
-    // the moment kickoff arrives.
+    // A full_time-only signal (no game_finalised) is ambiguous for knockout
+    // matches — TxLINE sends full_time at 90 min but the match may continue to
+    // ET/pens — so it additionally requires 85+ min elapsed since the scheduled
+    // kickoff before being trusted. game_finalised is always the definitive end
+    // signal and is trusted immediately regardless of the scheduled kickoff —
+    // it's only ever written by our own server-side event processing (real
+    // TxLINE data or the ESPN fallback), never by test tooling on a real fixture.
     const minMatchElapsedMs = 85 * 60 * 1000;
     const matchOldEnoughForFullTime = !kickoffMs || (Date.now() - kickoffMs) >= minMatchElapsedMs;
 
@@ -1485,9 +1493,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const hasFullTime = types.includes('full_time');
         const elapsedMs = kickoffMs ? Date.now() - kickoffMs : Infinity;
         const fullTimeIsDefinitive = !isKnockoutStage || elapsedMs >= 3 * 60 * 60 * 1000;
-        const isCompleted = hasGameFinalised || (hasFullTime && fullTimeIsDefinitive);
-        // Guard: ignore completion signals if the match hasn't been running long enough
-        if (isCompleted && matchOldEnoughForFullTime) {
+        const isCompleted = hasGameFinalised || (hasFullTime && fullTimeIsDefinitive && matchOldEnoughForFullTime);
+        if (isCompleted) {
           const lastWithScore = [...rows].reverse().find(r => r.home_score !== undefined);
           markCompleted(lastWithScore?.home_score, lastWithScore?.away_score);
           return true;
@@ -1497,11 +1504,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       .then((completedFromDb) => {
         // ESPN fallback: TxLINE sometimes never reports full_time/game_finalised
         // (seen on the devnet feed) — without this the match would look "live"
-        // forever and users could never claim rewards. Only runs once the match
-        // is old enough and DB events didn't already confirm completion; the
-        // 60s cron already does this same check server-side, this just avoids
-        // making a stuck user wait for the next tick.
-        if (completedFromDb || !matchOldEnoughForFullTime || !fixture?.homeTeam || !fixture?.awayTeam) return;
+        // forever and users could never claim rewards. Trusted immediately, same
+        // as game_finalised above; the 60s cron already does this same check
+        // server-side, this just avoids making a stuck user wait for the next tick.
+        if (completedFromDb || !fixture?.homeTeam || !fixture?.awayTeam) return;
         fetch(`/api/espn/status?fixtureId=${encodeURIComponent(fixtureIdStr)}&homeTeam=${encodeURIComponent(fixture.homeTeam)}&awayTeam=${encodeURIComponent(fixture.awayTeam)}&kickoffAt=${encodeURIComponent(fixture.kickoffAt)}`)
           .then(r => r.ok ? r.json() : null)
           .then((status: { completed?: boolean; scoreHome?: number; scoreAway?: number } | null) => {
@@ -1512,9 +1518,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       .catch(() => {});
 
     // Fallback: if contest_results exist for this wallet, match is over.
-    // Only check this after the match has been running long enough to avoid
-    // leftover test results from simulate-match triggering immediate completion.
-    if (!matchOldEnoughForFullTime) return;
     const walletAddr = publicKey?.toBase58() ?? '';
     if (!walletAddr) return;
     fetch(`/api/prize/status?fixtureId=${fixtureIdStr}&contestType=${contestType}&wallet=${encodeURIComponent(walletAddr)}`)
@@ -3783,7 +3786,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           {/* Score Bug — suppressHydrationWarning because minute/score are initialised from
               localStorage (persistedIsLive) which is unavailable on the server */}
           {(() => {
-            const isPreMatch = appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0;
+            const isPreMatch = appMode === 'live' && !matchCompleted && minutesToKickoff !== null && minutesToKickoff > 0;
             const fixtureStatus = wcFixture ? getFixtureStatus(wcFixture) : 'live';
             const isFinished = fixtureStatus === 'finished' && score.home === 0 && score.away === 0 && events.length === 0;
             return (
@@ -4268,7 +4271,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 <div className="ro-window__body" style={{ padding: 12 }}>
                   {events.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
+                      {appMode === 'live' && !matchCompleted && minutesToKickoff !== null && minutesToKickoff > 0 ? (
                         <>
                           <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
                           <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>{fixture.homeTeam} vs {fixture.awayTeam}</div>
@@ -4474,7 +4477,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 <div className="ro-window__body" style={{ padding: 12, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                   {events.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      {appMode === 'live' && minutesToKickoff !== null && minutesToKickoff > 0 ? (
+                      {appMode === 'live' && !matchCompleted && minutesToKickoff !== null && minutesToKickoff > 0 ? (
                         <>
                           <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🏟️</div>
                           <div style={{ fontWeight: 700, color: '#ffd700', marginBottom: 4 }}>{fixture.homeTeam} vs {fixture.awayTeam}</div>
