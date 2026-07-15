@@ -1544,6 +1544,8 @@ function MarketplaceModal({
   const [loading, setLoading] = useState(true);
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  // Mobile: tap a listing row to reveal the Buy button
+  const [expandedListingId, setExpandedListingId] = useState<string | null>(null);
 
   // Filters
   const [filterType, setFilterType] = useState<'all' | 'skill' | 'upgrade'>('all');
@@ -1721,13 +1723,13 @@ function MarketplaceModal({
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden' }}>
             {/* Header row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr 100px 90px 100px 90px', alignItems: 'center', padding: '8px 16px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="marketplace-listing-header" style={{ display: 'grid', gridTemplateColumns: '64px 1fr 100px 90px 100px 90px', alignItems: 'center', padding: '8px 16px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <span />
               <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Card</span>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Position</span>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Upgrade</span>
+              <span className="mp-col-position" style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Position</span>
+              <span className="mp-col-upgrade" style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Upgrade</span>
               <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Price</span>
-              <span />
+              <span className="mp-col-buy-header" />
             </div>
 
             {displayed.map((listing, idx) => {
@@ -1747,22 +1749,28 @@ function MarketplaceModal({
                 ? rc
                 : credits > 0 ? '#ffd700' : 'rgba(255,255,255,0.25)';
 
+              const isExpanded = expandedListingId === listing.id;
+
               return (
                 <div
                   key={listing.id}
+                  className="marketplace-listing-row"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '64px 1fr 100px 90px 100px 90px',
                     alignItems: 'center',
                     padding: '8px 16px',
                     borderBottom: idx < displayed.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                    background: 'rgba(255,255,255,0.02)',
+                    background: isExpanded ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)',
                     transition: 'background 0.15s',
                     gap: 0,
                     minHeight: 64,
+                    cursor: 'pointer',
+                    position: 'relative',
                   }}
                   onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
-                  onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)'; }}
+                  onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.background = isExpanded ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)'; }}
+                  onClick={() => setExpandedListingId(isExpanded ? null : listing.id)}
                 >
                   {/* Thumbnail */}
                   <div style={{ width: 48, height: 60, borderRadius: 6, overflow: 'hidden', background: rb, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1791,12 +1799,12 @@ function MarketplaceModal({
                   </div>
 
                   {/* Position */}
-                  <div style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+                  <div className="mp-col-position" style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
                     {skillDef?.position ?? upgDef?.position ?? '—'}
                   </div>
 
                   {/* Upgrade status */}
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: upgradeColor }}>
+                  <div className="mp-col-upgrade" style={{ fontSize: '0.8rem', fontWeight: 700, color: upgradeColor }}>
                     {upgradeLabel}
                   </div>
 
@@ -1805,13 +1813,14 @@ function MarketplaceModal({
                     {listing.price_sol} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'rgba(0,232,122,0.6)' }}>SOL</span>
                   </div>
 
-                  {/* Buy button */}
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  {/* Buy button — always visible on desktop; tap-reveal on mobile */}
+                  <div className="mp-col-buy" style={{ display: 'flex', justifyContent: 'flex-end' }}>
                     {isOwn ? (
                       <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.2)', fontWeight: 600, padding: '7px 14px' }}>Yours</span>
                     ) : (
                       <button
-                        onClick={() => handleBuy(listing)}
+                        className="mp-buy-btn"
+                        onClick={e => { e.stopPropagation(); handleBuy(listing); }}
                         disabled={isBuying || !walletPublicKey}
                         style={{
                           padding: '7px 18px',
@@ -1830,6 +1839,37 @@ function MarketplaceModal({
                       </button>
                     )}
                   </div>
+
+                  {/* Mobile expanded buy panel — shown when row is tapped */}
+                  {!isOwn && (
+                    <div
+                      className={`mp-mobile-buy-panel${isExpanded ? ' expanded' : ''}`}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <span style={{ fontSize: '0.82rem', color: '#fff', fontWeight: 700 }}>
+                        {listing.price_sol} <span style={{ color: '#00e87a' }}>SOL</span>
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleBuy(listing); }}
+                        disabled={isBuying || !walletPublicKey}
+                        style={{
+                          padding: '10px 28px',
+                          borderRadius: 10,
+                          fontSize: '0.9rem',
+                          fontWeight: 800,
+                          cursor: isBuying || !walletPublicKey ? 'not-allowed' : 'pointer',
+                          background: isBuying ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #00e87a, #00b85e)',
+                          color: isBuying ? 'rgba(255,255,255,0.3)' : '#111',
+                          border: 'none',
+                          opacity: !walletPublicKey ? 0.4 : 1,
+                          flex: 1,
+                          maxWidth: 160,
+                        }}
+                      >
+                        {isBuying ? 'Buying…' : '🛒 Buy Now'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -2385,8 +2425,8 @@ export default function CardsPage() {
 
         {/* ── Tab switcher + Marketplace button ── */}
         {connected && (
-          <div style={{ display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap', alignItems: 'center' }}>
-            {([{ key: 'skill', label: '🎴 Skill Cards', count: allCards.length }, { key: 'upgrade', label: '⬆ Upgrade Cards', count: upgradeCards.length }] as const).map(tab => (
+          <div className="cards-tab-row" style={{ display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap', alignItems: 'center' }}>
+            {([{ key: 'skill', icon: '🎴', label: 'Skill Cards', count: allCards.length }, { key: 'upgrade', icon: '⬆', label: 'Upgrade Cards', count: upgradeCards.length }] as const).map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
@@ -2404,7 +2444,7 @@ export default function CardsPage() {
                   boxShadow: activeTab === tab.key ? '0 4px 12px rgba(255,215,0,0.3)' : 'none',
                 }}
               >
-                {tab.label} {tab.count > 0 && <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>({tab.count})</span>}
+                <span className="tab-icon">{tab.icon}</span> {tab.label} {tab.count > 0 && <span style={{ fontSize: 11, opacity: 0.8, marginLeft: 6 }}>({tab.count})</span>}
               </button>
             ))}
             <button
@@ -2421,7 +2461,7 @@ export default function CardsPage() {
               onMouseOver={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,215,0,0.18)'; }}
               onMouseOut={e => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,215,0,0.06))'; }}
             >
-              🏪 Marketplace
+              <span className="tab-icon">🏪</span> Marketplace
             </button>
           </div>
         )}

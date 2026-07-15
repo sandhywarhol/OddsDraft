@@ -2258,8 +2258,119 @@ a {
     display: flex !important;
     flex-direction: column !important;
   }
+
+  /* ── My Cards: hide emoji icons from tab buttons on mobile ─── */
+  .tab-icon {
+    display: none;
+  }
+
+  /* ── My Cards: Tab row — 2 tabs top, Marketplace below ─────── */
+  .cards-tab-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  /* Skill Cards + Upgrade Cards: share row 1 equally */
+  .cards-tab-row > button:not(:last-child) {
+    flex: 1 1 calc(50% - 4px);
+    padding: 12px 8px !important;
+    font-size: 13px !important;
+    white-space: nowrap;
+    min-width: 0;
+    text-align: center;
+  }
+
+  /* Marketplace button: baris kedua, rata tengah */
+  .cards-tab-row > button:last-child {
+    flex: 0 0 auto;
+    margin: 0 auto !important;
+    padding: 10px 28px !important;
+    font-size: 13px !important;
+    white-space: nowrap;
+  }
+
+  /* ── Marketplace listing table: compact mobile layout ───────── */
+
+  /* Reduce outer padding on mobile */
+  .marketplace-listing-header,
+  .marketplace-listing-row {
+    grid-template-columns: 56px 1fr 80px 0px 0px 0px !important;
+    padding: 8px 10px !important;
+    gap: 0 !important;
+  }
+
+  /* Hide Position and Upgrade columns on mobile (too narrow) */
+  .mp-col-position,
+  .mp-col-upgrade,
+  .mp-col-buy,
+  .mp-col-buy-header {
+    display: none !important;
+  }
+
+  /* Price column gets a bit more breathing room */
+  .marketplace-listing-row > div:nth-child(6),
+  .marketplace-listing-header > span:nth-child(5) {
+    font-size: 0.82rem !important;
+  }
+
+  /* Subtle tap-to-expand indicator: small chevron at bottom-right */
+  .marketplace-listing-row::after {
+    content: '›';
+    position: absolute;
+    right: 10px;
+    bottom: 6px;
+    font-size: 0.75rem;
+    color: rgba(0, 232, 122, 0.35);
+    font-weight: 900;
+    pointer-events: none;
+    line-height: 1;
+  }
+
+  /* ── Mobile buy panel (revealed on tap) ───────────────────── */
+  .mp-mobile-buy-panel {
+    /* Hidden by default on mobile */
+    display: none;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    animation: mp-buy-panel-in 0.2s ease both;
+  }
+
+  .mp-mobile-buy-panel.expanded {
+    display: flex !important;
+  }
+
+  @keyframes mp-buy-panel-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Remove the tap hint once row is expanded */
+  .marketplace-listing-row:has(.mp-mobile-buy-panel.expanded)::after {
+    display: none;
+  }
+
+  /* Expanded row needs extra height for the buy panel */
+  .marketplace-listing-row:has(.mp-mobile-buy-panel.expanded) {
+    grid-template-rows: auto auto !important;
+    align-items: start !important;
+    padding-bottom: 10px !important;
+  }
+
+  /* Desktop buy button hidden on mobile (use the panel instead) */
+  .mp-buy-btn {
+    display: none !important;
+  }
 }
 
+
+/* ── My Cards mobile elements — hidden on desktop ───────────── */
+@media (min-width: 769px) {
+  .mp-mobile-buy-panel { display: none !important; }
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    ██████  LOCKED LAYOUT — DO NOT CHANGE WITHOUT EXPLICIT USER APPROVAL  ██████
