@@ -207,9 +207,11 @@ export const WC2026_FIXTURES: WCFixture[] = [
   qf('18222446', 'Argentina',    'Switzerland',       2026, 7, 12,  1),   // real TxLINE ID
 
   // ── Semi-finals / Final ───────────────────────────────────────────────────────
-  // QF results: France 2-0 Morocco, Spain beat Belgium, Norway beat England, Argentina beat Switzerland
+  // QF results: France 2-0 Morocco, Spain beat Belgium, England beat Norway 2-1
+  // (fixture 18213979: Norway 1-2 England — confirmed by recorded match data),
+  // Argentina beat Switzerland. England advances, not Norway.
   sf('18220001', 'France',       'Spain',             2026, 7, 15, 20),
-  sf('18220002', 'Norway',       'Argentina',         2026, 7, 16, 20),
+  sf('18220002', 'England',      'Argentina',         2026, 7, 16, 20),
 
   // ── Third Place ──────────────────────────────────────────────────────────────
   // Teams TBD — depends on SF results
