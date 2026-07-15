@@ -47,6 +47,53 @@ Five positions: **GK · DEF · MID · SWG (winger) · ATT**
 
 Goals are worth more for riskier positions — a goalkeeper scoring is rare so it pays 20 pts, a striker scoring pays 10. Choose a captain for 2× and set a confidence rating (1–5 ⭐) that multiplies every point that player earns. Five stars is high variance: massive upside, but a red card at 5 stars really hurts.
 
+### Point table
+
+| Event | GK | DEF | MID | SWG | ATT | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| ⚽ Goal | **20** | **15** | **12** | **11** | **10** | Higher for unlikely scorers |
+| 🎯 Assist | 6 | 6 | 6 | 6 | 6 | Uniform across positions |
+| 🎯 Penalty Won | 8 | 8 | 8 | 8 | 8 | Replaces goal event — TxLINE doesn't send a goal for converted pens |
+| 🧤 Penalty Save | **5** | 0 | 0 | 0 | 0 | GK only |
+| 🟨 Yellow Card | −2 | −2 | −2 | −2 | −2 | |
+| 🟥 Red Card | −5 | −5 | −5 | −5 | −5 | |
+| 😰 Own Goal | −6 | −6 | −6 | −6 | −6 | |
+| 🛡 Clean Sheet | **5** | **5** | 1 | 1 | 0 | Applied at full-time retrocompute |
+| 😬 Goal Conceded | −1 | −1 | 0 | 0 | 0 | Applied real-time to GK/DEF |
+| 🥅 Penalty Conceded | −3 | −3 | 0 | 0 | 0 | Synthesized from penalty_won on the opposing team |
+| ⚠️ Penalty Missed | −3 | −3 | −3 | −3 | −3 | |
+| 📋 Starting XI | 2 | 2 | 2 | 2 | 2 | Awarded once on match start |
+| 🔄 Sub Appearance | 1 | 1 | 1 | 1 | 1 | |
+| ⏱ Extra Time | 2 | 2 | 2 | 2 | 2 | All lineup players if match goes to ET |
+
+### Halftime & full-time stat bonuses
+
+At the end of each half, OddsDraft evaluates team-level statistics from TxLINE's per-period data (`Score.Period1` / `Score.Period2`) and awards bonuses automatically:
+
+| Bonus | Triggers when… | GK | DEF | MID | SWG | ATT |
+| --- | --- | --- | --- | --- | --- | --- |
+| Possession Dominant | Team held ≥ 55% possession | +1 | +1 | **+2** | +1 | +1 |
+| Possession Edge | Team held 50–54% possession | 0 | 0 | +1 | 0 | 0 |
+| Attack Pressure | Team generated ≥ 5 danger attacks | 0 | 0 | +1 | +1 | +1 |
+| Defensive Solid | Opponent generated ≤ 2 danger attacks | **+2** | +1 | 0 | 0 | 0 |
+| Corner Threat | Team earned ≥ 4 corners | 0 | 0 | 0 | +1 | 0 |
+| Team Goal Bonus | Team scored ≥ 1 goal in the half | 0 | 0 | 0 | +1 | +1 |
+| Clean Half | Team conceded 0 goals in the half | +1 | +1 | 0 | 0 | 0 |
+
+### Multipliers
+
+| Multiplier | Effect |
+| --- | --- |
+| **Captain (2×)** | Designate one captain — all their points are doubled |
+| **Confidence 1 ⭐** | 1.0× (no change) |
+| **Confidence 2 ⭐** | 1.1× |
+| **Confidence 3 ⭐** | 1.2× |
+| **Confidence 4 ⭐** | 1.35× |
+| **Confidence 5 ⭐** | 1.5× — high risk, high reward |
+| **Equipped skill card** | Flat bonus pts for specific event types (card-dependent) |
+
+All point values live in a single file: `src/lib/scoring-bank.ts`. No hardcoded numbers anywhere else.
+
 ---
 
 ## Lineup builder
