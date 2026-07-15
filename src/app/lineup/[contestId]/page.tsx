@@ -62,11 +62,24 @@ const DEMO_EVENTS = [
 
 // Demo skill cards equipped on the tutorial squad
 const DEMO_CARDS: OwnedCard[] = [
-  { instanceId: 'tutorial-demo-gk',  cardId: 'gk-common',     obtainedAt: new Date().toISOString() },
-  { instanceId: 'tutorial-demo-def', cardId: 'def-uncommon',  obtainedAt: new Date().toISOString() },
-  { instanceId: 'tutorial-demo-mid', cardId: 'mid-rare',      obtainedAt: new Date().toISOString() },
-  { instanceId: 'tutorial-demo-swg', cardId: 'win-epic',      obtainedAt: new Date().toISOString() },
-  { instanceId: 'tutorial-demo-att', cardId: 'str-legendary', obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-gk',   cardId: 'gk-common',     obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-def',  cardId: 'def-uncommon',  obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-mid',  cardId: 'mid-rare',      obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-swg',  cardId: 'win-epic',      obtainedAt: new Date().toISOString() },
+  { instanceId: 'tutorial-demo-att',  cardId: 'str-legendary', obtainedAt: new Date().toISOString() },
+  // Duplicates so judges can test the Combine feature (2 of same cardId → next rarity)
+  { instanceId: 'demo-gk-2',          cardId: 'gk-common',     obtainedAt: new Date().toISOString() },
+  { instanceId: 'demo-def-2',         cardId: 'def-uncommon',  obtainedAt: new Date().toISOString() },
+  { instanceId: 'demo-mid-2',         cardId: 'mid-rare',      obtainedAt: new Date().toISOString() },
+];
+
+// Upgrade cards seeded for demo mode (stored separately in oddsdraft_upgrade_collection)
+const DEMO_UPGRADE_CARDS = [
+  { instanceId: 'demo-upg-gk-1',   upgradeCardId: 'upg-gk-1',  obtainedAt: new Date().toISOString() },
+  { instanceId: 'demo-upg-def-1',  upgradeCardId: 'upg-def-1', obtainedAt: new Date().toISOString() },
+  { instanceId: 'demo-upg-mid-1',  upgradeCardId: 'upg-mid-1', obtainedAt: new Date().toISOString() },
+  { instanceId: 'demo-upg-win-1',  upgradeCardId: 'upg-win-1', obtainedAt: new Date().toISOString() },
+  { instanceId: 'demo-upg-str-1',  upgradeCardId: 'upg-str-1', obtainedAt: new Date().toISOString() },
 ];
 
 const SLOTS = [
@@ -413,10 +426,12 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     }
   }, [isReplayTutorial]);
 
-  // Guest demo: seed demo cards unconditionally so the equip panel always has cards available,
-  // even for users who've previously seen the tutorial (and thus won't hit the step-4 seed path).
+  // Guest demo: seed demo skill cards + upgrade cards unconditionally so judges can test
+  // the Equip, Combine, and Upgrade features on the My Cards page without a wallet.
   useEffect(() => {
     if (!isGuestDemo) return;
+
+    // Skill cards → oddsdraft_card_collection
     const existing = JSON.parse(localStorage.getItem('oddsdraft_card_collection') || '{"cards":[]}');
     let changed = false;
     for (const c of DEMO_CARDS) {
@@ -426,6 +441,17 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       }
     }
     if (changed) localStorage.setItem('oddsdraft_card_collection', JSON.stringify(existing));
+
+    // Upgrade cards → oddsdraft_upgrade_collection
+    const upgExisting = JSON.parse(localStorage.getItem('oddsdraft_upgrade_collection') || '{"cards":[]}');
+    let upgChanged = false;
+    for (const u of DEMO_UPGRADE_CARDS) {
+      if (!upgExisting.cards.find((x: { instanceId: string }) => x.instanceId === u.instanceId)) {
+        upgExisting.cards.push(u);
+        upgChanged = true;
+      }
+    }
+    if (upgChanged) localStorage.setItem('oddsdraft_upgrade_collection', JSON.stringify(upgExisting));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGuestDemo]);
 

@@ -3,6 +3,7 @@
 // Used exclusively when ?guest_demo=1 is present in the URL.
 
 import type { DemoFixture } from './players';
+import type { FormationPlayer } from '@/components/LiveLineupFormation';
 
 // kickoffAt set 1 hour in the past so the live page shows a live score widget,
 // not a "KICK OFF IN Xh" countdown.
@@ -40,7 +41,11 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_xi_mol',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Molina',        playerId: 'arg-molina',     type: 'starting_xi', points: 2, silent: true, description: 'Molina at right-back for Argentina.' },
   { id: 'ae_xi_all',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister',  playerId: 'arg-macallister',type: 'starting_xi', points: 2, silent: true, description: 'Mac Allister starts in midfield for Argentina.' },
   { id: 'ae_xi_lau',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro',       playerId: 'arg-lautaro',    type: 'starting_xi', points: 2, silent: true, description: 'Lautaro starts up front for Argentina.' },
-  { id: 'ae_xi_alv',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez',       playerId: 'arg-alvarez',    type: 'starting_xi', points: 2, silent: true, description: 'Álvarez starts alongside Lautaro.' },
+  { id: 'ae_xi_alv',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez',       playerId: 'arg-alvarez',      type: 'starting_xi', points: 2, silent: true, description: 'Álvarez starts alongside Lautaro.' },
+  { id: 'ae_xi_lis',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez',   playerId: 'arg-lisandromartinez', type: 'starting_xi', points: 2, silent: true, description: 'Lisandro Martínez anchors the centre-back partnership.' },
+  { id: 'ae_xi_acu',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Acuña',          playerId: 'arg-acuna',        type: 'starting_xi', points: 2, silent: true, description: 'Acuña starts at left-back for Argentina.' },
+  { id: 'ae_xi_dep',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'De Paul',        playerId: 'arg-depaul',       type: 'starting_xi', points: 2, silent: true, description: 'De Paul starts in central midfield for Argentina.' },
+  { id: 'ae_xi_gon',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'N. González',   playerId: 'arg-gonzalez',     type: 'starting_xi', points: 2, silent: true, description: 'N. González starts on the right flank for Argentina.' },
 
   // ── Starting XI — England ────────────────────────────────────────────────
   { id: 'ae_xi_eng', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'starting_xi', points: 2,
@@ -52,6 +57,9 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_xi_bel',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'starting_xi', points: 2, silent: true, description: 'Bellingham starts in midfield for England.' },
   { id: 'ae_xi_ric',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rice',       playerId: 'eng-rice',       type: 'starting_xi', points: 2, silent: true, description: 'Rice starts in defensive midfield for England.' },
   { id: 'ae_xi_sak',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka',       playerId: 'eng-saka',       type: 'starting_xi', points: 2, silent: true, description: 'Saka starts on the right wing for England.' },
+  { id: 'ae_xi_gue',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Guehi',      playerId: 'eng-guehi',      type: 'starting_xi', points: 2, silent: true, description: 'Guehi partners Stones at centre-back for England.' },
+  { id: 'ae_xi_gal',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Gallagher',  playerId: 'eng-gallagher',  type: 'starting_xi', points: 2, silent: true, description: 'Gallagher completes a three-man England midfield.' },
+  { id: 'ae_xi_pal',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Palmer',     playerId: 'eng-palmer',     type: 'starting_xi', points: 2, silent: true, description: 'Palmer starts as England\'s creative outlet in attack.' },
 
   // ── FIRST HALF ───────────────────────────────────────────────────────────
   { id: 'ae_d1', minute: 7, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0,
@@ -180,4 +188,49 @@ export const ARG_ENG_EVENTS: Array<{
 
   { id: 'ae_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0,
     description: 'FULL TIME! Argentina 2–1 England! MESSI LIFTS THE WORLD CUP AGAIN! La Albiceleste are World Champions!' },
+];
+
+// Fake demo prize shown in SOL claim overlay after full time
+export const DEMO_PRIZE_SOL = 2.5;
+
+// ── Static team lineups injected into realLineup for guest demo ───────────
+// Injected by bootstrap() when guestDemoMode is true, bypassing TxLINE API.
+// Bench players (starter: false) appear in the SUBSTITUTES panel.
+
+export const DEMO_ARG_ENG_HOME_LINEUP: FormationPlayer[] = [
+  // Starters — Argentina 4-3-3
+  { id: 'arg-martinez',          name: 'E. Martínez',  position: 'GK',  participant: 1, jerseyNumber: 23, starter: true },
+  { id: 'arg-molina',            name: 'Molina',        position: 'DEF', participant: 1, jerseyNumber: 26, starter: true },
+  { id: 'arg-romero',            name: 'Romero',        position: 'DEF', participant: 1, jerseyNumber: 13, starter: true },
+  { id: 'arg-lisandromartinez',  name: 'L. Martínez',  position: 'DEF', participant: 1, jerseyNumber: 25, starter: true },
+  { id: 'arg-acuna',             name: 'Acuña',         position: 'DEF', participant: 1, jerseyNumber: 8,  starter: true },
+  { id: 'arg-depaul',            name: 'De Paul',       position: 'MID', participant: 1, jerseyNumber: 7,  starter: true },
+  { id: 'arg-macallister',       name: 'Mac Allister', position: 'MID', participant: 1, jerseyNumber: 20, starter: true },
+  { id: 'arg-messi',             name: 'Messi',         position: 'MID', participant: 1, jerseyNumber: 10, starter: true },
+  { id: 'arg-gonzalez',          name: 'N. González',  position: 'ATT', participant: 1, jerseyNumber: 11, starter: true },
+  { id: 'arg-lautaro',           name: 'Lautaro',       position: 'ATT', participant: 1, jerseyNumber: 22, starter: true },
+  { id: 'arg-alvarez',           name: 'Álvarez',       position: 'ATT', participant: 1, jerseyNumber: 9,  starter: true },
+  // Bench
+  { id: 'arg-dimaria',           name: 'Di María',      position: 'ATT', participant: 1, jerseyNumber: 11, starter: false },
+  { id: 'arg-dybala',            name: 'Dybala',        position: 'ATT', participant: 1, jerseyNumber: 21, starter: false },
+  { id: 'arg-otamendi',          name: 'Otamendi',      position: 'DEF', participant: 1, jerseyNumber: 19, starter: false },
+];
+
+export const DEMO_ARG_ENG_AWAY_LINEUP: FormationPlayer[] = [
+  // Starters — England 4-3-3
+  { id: 'eng-pickford',    name: 'Pickford',   position: 'GK',  participant: 2, jerseyNumber: 1,  starter: true },
+  { id: 'eng-walker',      name: 'Walker',     position: 'DEF', participant: 2, jerseyNumber: 2,  starter: true },
+  { id: 'eng-stones',      name: 'Stones',     position: 'DEF', participant: 2, jerseyNumber: 5,  starter: true },
+  { id: 'eng-guehi',       name: 'Guehi',      position: 'DEF', participant: 2, jerseyNumber: 6,  starter: true },
+  { id: 'eng-trippier',    name: 'Trippier',   position: 'DEF', participant: 2, jerseyNumber: 12, starter: true },
+  { id: 'eng-rice',        name: 'Rice',        position: 'MID', participant: 2, jerseyNumber: 4,  starter: true },
+  { id: 'eng-bellingham',  name: 'Bellingham', position: 'MID', participant: 2, jerseyNumber: 10, starter: true },
+  { id: 'eng-gallagher',   name: 'Gallagher',  position: 'MID', participant: 2, jerseyNumber: 8,  starter: true },
+  { id: 'eng-saka',        name: 'Saka',        position: 'ATT', participant: 2, jerseyNumber: 7,  starter: true },
+  { id: 'eng-kane',        name: 'Kane',        position: 'ATT', participant: 2, jerseyNumber: 9,  starter: true },
+  { id: 'eng-palmer',      name: 'Palmer',      position: 'ATT', participant: 2, jerseyNumber: 14, starter: true },
+  // Bench
+  { id: 'eng-rashford',    name: 'Rashford',   position: 'ATT', participant: 2, jerseyNumber: 11, starter: false },
+  { id: 'eng-foden',       name: 'Foden',       position: 'ATT', participant: 2, jerseyNumber: 20, starter: false },
+  { id: 'eng-maguire',     name: 'Maguire',    position: 'DEF', participant: 2, jerseyNumber: 6,  starter: false },
 ];

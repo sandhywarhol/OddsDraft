@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
-import { ARG_ENG_EVENTS } from '@/lib/demo-arg-eng';
+import { ARG_ENG_EVENTS, DEMO_ARG_ENG_HOME_LINEUP, DEMO_ARG_ENG_AWAY_LINEUP, DEMO_PRIZE_SOL } from '@/lib/demo-arg-eng';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { calculateEventPoints, POINT_MAP, getPrizeForRank, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
@@ -925,7 +925,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [latestEvent, setLatestEvent] = useState<(typeof matchEvents)[0] | null>(null);
   const [showPopup, setShowPopup] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [demoSpeed, setDemoSpeed] = useState<1 | 30 | 90>(1);
+  const [demoSpeed, setDemoSpeed] = useState<1 | 30 | 90>(guestDemoMode ? 30 : 1);
   const eventRef = useRef<HTMLDivElement>(null);
   const triggeredEventsRef = useRef<Set<string>>(initialState.triggered);
   const [mobileToast, setMobileToast] = useState<{ text: string; type: string } | null>(null);
@@ -1152,6 +1152,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verifying' | 'success'>('pending');
   const [matchCompleted, setMatchCompleted] = useState(false);
   const [showCardPack, setShowCardPack] = useState(false);
+  const [showDemoSolClaim, setShowDemoSolClaim] = useState(false);
 
   // Prize claim state
   type ClaimStatus = 'idle' | 'submitting' | 'ready' | 'claiming' | 'claimed' | 'no_prize' | 'error';
@@ -1903,6 +1904,13 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     const bootstrap = async () => {
       if (liveInitDoneRef.current) return;
       liveInitDoneRef.current = true;
+
+      // Guest demo: skip ALL TxLINE API calls — inject static lineup and return.
+      if (guestDemoMode) {
+        setRealLineup({ home: DEMO_ARG_ENG_HOME_LINEUP, away: DEMO_ARG_ENG_AWAY_LINEUP });
+        realLineupRef.current = { home: DEMO_ARG_ENG_HOME_LINEUP, away: DEMO_ARG_ENG_AWAY_LINEUP };
+        return;
+      }
 
       // Fetch fixture ID remap from Supabase (via API route) so new matches never need a code deploy.
       // Falls back to contestId if the fetch fails or returns no mapping.
@@ -2908,12 +2916,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
     };
 
-    bootstrap().then(() => poll());
-    const interval = setInterval(poll, 10000);
+    if (!guestDemoMode) {
+      bootstrap().then(() => poll());
+    } else {
+      bootstrap();
+    }
+    const interval = guestDemoMode ? undefined : setInterval(poll, 10000);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      clearInterval(interval as ReturnType<typeof setInterval>);
       if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3501,6 +3513,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
     }, [latestEvent, showPopup, contestId, matchCompleted, appMode]);
 
+    // Guest demo: show fake SOL claim overlay after full_time + card pack closed
+    useEffect(() => {
+      if (!guestDemoMode || showCardPack || showDemoSolClaim) return;
+      const hasFullTime = latestEvent?.type === 'full_time' || events.some(e => e.type === 'full_time');
+      if (!hasFullTime) return;
+      const t = setTimeout(() => setShowDemoSolClaim(true), 800);
+      return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [guestDemoMode, showCardPack, showDemoSolClaim, latestEvent]);
+
     // Restart the demo match 2 minutes after full time (demo only — live matches don't loop)
     useEffect(() => {
       if (appMode === 'live') return;
@@ -3593,6 +3615,73 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           onOpen={() => openCardPack(`${contestId}_${contestType}`)}
           onClose={() => setShowCardPack(false)}
         />
+      )}
+
+      {/* Demo-only: fake SOL prize claim overlay shown after full time */}
+      {showDemoSolClaim && guestDemoMode && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9998,
+          background: 'rgba(0,0,0,0.88)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #0a0e1a 0%, #0f172a 100%)',
+            border: '1px solid rgba(255,215,0,0.45)',
+            borderRadius: 20, padding: '40px 36px', maxWidth: 460, width: '100%',
+            textAlign: 'center', boxShadow: '0 25px 80px rgba(255,215,0,0.18)',
+          }}>
+            <div style={{ fontSize: '4rem', marginBottom: 12 }}>🏆</div>
+            <h2 style={{ color: '#ffd700', fontWeight: 900, fontSize: '1.5rem', margin: '0 0 8px' }}>
+              Congratulations!
+            </h2>
+            <p style={{ color: 'rgba(255,255,255,0.65)', marginBottom: 24, lineHeight: 1.5 }}>
+              You finished <strong style={{ color: '#fff' }}>#1</strong> in the OddsDraft<br />
+              Argentina vs England Final contest.
+            </p>
+            <div style={{
+              background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)',
+              borderRadius: 14, padding: '20px 28px', marginBottom: 28,
+            }}>
+              <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginBottom: 6, letterSpacing: '0.1em' }}>
+                PRIZE POOL — 1ST PLACE
+              </div>
+              <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#ffd700', lineHeight: 1 }}>
+                {DEMO_PRIZE_SOL} SOL
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginTop: 6 }}>
+                ≈ ${(DEMO_PRIZE_SOL * 150).toFixed(0)} USD (demo only)
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                className="btn btn--primary"
+                style={{ width: '100%', fontSize: '1rem', padding: '14px 24px', fontWeight: 800, borderRadius: 12 }}
+                onClick={() => {
+                  setShowDemoSolClaim(false);
+                  setActiveToasts(prev => [{
+                    id: `demo-sol-${Date.now()}`,
+                    type: 'goal' as FantasyNotificationItem['type'],
+                    title: '💰 Prize Claimed!',
+                    subtitle: `${DEMO_PRIZE_SOL} SOL sent to your wallet`,
+                    value: `+${DEMO_PRIZE_SOL} SOL`,
+                  }, ...prev]);
+                }}
+              >
+                💰 Claim {DEMO_PRIZE_SOL} SOL
+              </button>
+              <button
+                className="btn btn--ghost btn--sm"
+                style={{ width: '100%' }}
+                onClick={() => setShowDemoSolClaim(false)}
+              >
+                Dismiss
+              </button>
+            </div>
+            <p style={{ marginTop: 18, fontSize: '0.68rem', color: 'rgba(255,255,255,0.28)', lineHeight: 1.5 }}>
+              * Demo mode — no real SOL is transferred.<br />Live contests pay out on-chain via Solana.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Fantasy Notification Toast Queue */}
