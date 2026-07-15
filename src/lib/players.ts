@@ -743,8 +743,8 @@ export const DEMO_FIXTURES: DemoFixture[] = [
     awayTeam: 'England',
     homeFlag: '🇦🇷',
     awayFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-    kickoffAt: new Date(Date.now() + 86400000).toISOString(),
-    status: 'upcoming',
+    kickoffAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1h ago — shows live, not countdown
+    status: 'live',
     isNonDemo: true,
   },
   {
@@ -1105,31 +1105,30 @@ export const ARG_GER_EVENTS = [
   { id: 'ag_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'FULL TIME! Argentina 3–2 Germany! La Albiceleste are heading to the World Cup Final!' },
 ];
 
-// Dedicated Argentina vs England event script for the 'special-arg-eng' guest demo fixture.
-// Uses standard player IDs from WORLD_CUP_PLAYERS — correct IDs, no remapping needed.
-// Narrative: Argentina 2-1 England (England lead at half, Argentina comeback in second half)
-export const ARG_ENG_EVENTS = [
+// ARG_ENG_EVENTS lives in its own isolated demo file — re-exported here for backwards compat.
+export { ARG_ENG_EVENTS } from './demo-arg-eng';
+const _REMOVED_INLINE_EVENTS = [
   // KICK OFF
   { id: 'ae_e0', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'KICK OFF! Argentina vs England — World Cup 2026 Final! Both teams desperate for glory!' },
 
-  // Starting XI — Argentina
-  { id: 'ae_xi_ama', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'starting_xi', points: 2, description: 'Emiliano Martínez starts in goal for Argentina — the 2022 penalty shootout hero is ready!' },
-  { id: 'ae_xi_rom', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'starting_xi', points: 2, description: 'Cristian Romero leads the Argentine defence — physical, aggressive, commanding.' },
-  { id: 'ae_xi_mol', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Molina', playerId: 'arg-molina', type: 'starting_xi', points: 2, description: 'Nahuel Molina at right-back — a constant attacking threat from deep for Argentina.' },
-  { id: 'ae_xi_all', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister', type: 'starting_xi', points: 2, description: 'Alexis Mac Allister in midfield — composed, incisive, Liverpool\'s engine transferred to the Pampas.' },
-  { id: 'ae_xi_mes', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 2, description: 'LIONEL MESSI — the greatest of all time, starts in his third World Cup Final. Can he do it again?' },
-  { id: 'ae_xi_lau', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro', playerId: 'arg-lautaro', type: 'starting_xi', points: 2, description: 'Lautaro Martínez leads the Argentine attack — in devastating form all tournament.' },
-  { id: 'ae_xi_alv', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'starting_xi', points: 2, description: 'Julián Álvarez alongside Lautaro — tireless, intelligent, a constant menace.' },
+  // Starting XI — Argentina (single announcement, awards points to all 5 listed players)
+  { id: 'ae_xi_arg', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'starting_xi', points: 2, description: '🇦🇷 Argentina Starting XI: E. Martínez · Romero · Molina · Mac Allister · Messi · Lautaro · Álvarez' },
+  { id: 'ae_xi_arg2', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero', playerId: 'arg-romero', type: 'starting_xi', points: 2, description: 'Messi leads Argentina in his third World Cup Final. The greatest of all time — one more chance at glory.' },
+  { id: 'ae_xi_arg3', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister', type: 'starting_xi', points: 2, description: 'Mac Allister · Messi · Lautaro form a devastating midfield-attack trident for Argentina.' },
+  { id: 'ae_xi_arg4', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 2, description: 'MESSI starts. Lautaro starts. Álvarez starts. Argentina\'s full attacking force unleashed.' },
+  { id: 'ae_xi_arg5', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro', playerId: 'arg-lautaro', type: 'starting_xi', points: 2, description: 'Lautaro Martínez in electric form — 6 goals in this tournament. England will need to watch him closely.' },
+  { id: 'ae_xi_arg6', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'starting_xi', points: 2, description: 'Álvarez confirmed in the XI — energy, pressing, and clinical finishing from the Man City striker.' },
+  { id: 'ae_xi_arg7', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Molina', playerId: 'arg-molina', type: 'starting_xi', points: 2, description: 'Molina at right-back. Argentina set in their 4-3-3 — Scaloni has named his strongest XI.' },
 
-  // Starting XI — England
-  { id: 'ae_xi_pic', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford', playerId: 'eng-pickford', type: 'starting_xi', points: 2, description: 'Jordan Pickford between the posts for England — emotionally ready, technically sharp.' },
-  { id: 'ae_xi_sto', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones', playerId: 'eng-stones', type: 'starting_xi', points: 2, description: 'John Stones — composed ball-playing centre-back, key to England\'s defensive shape.' },
-  { id: 'ae_xi_wal', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Walker', playerId: 'eng-walker', type: 'starting_xi', points: 2, description: 'Kyle Walker at right-back — pace to track Messi, experience for the biggest stage.' },
-  { id: 'ae_xi_tri', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier', playerId: 'eng-trippier', type: 'starting_xi', points: 2, description: 'Kieran Trippier at left-back — dangerous from set pieces, the set-piece specialist.' },
-  { id: 'ae_xi_bel', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'starting_xi', points: 2, description: 'Jude Bellingham — England\'s heartbeat and talisman, the player the nation believes in.' },
-  { id: 'ae_xi_ric', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rice', playerId: 'eng-rice', type: 'starting_xi', points: 2, description: 'Declan Rice holds England\'s midfield together — the defensive anchor, the shield.' },
-  { id: 'ae_xi_sak', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka', playerId: 'eng-saka', type: 'starting_xi', points: 2, description: 'Bukayo Saka on the right wing — electric pace, selfless work rate, creative spark.' },
-  { id: 'ae_xi_kan', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'starting_xi', points: 2, description: 'Harry Kane leads England\'s attack — the captain, the record scorer, this is his moment.' },
+  // Starting XI — England (single announcement)
+  { id: 'ae_xi_eng', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford', playerId: 'eng-pickford', type: 'starting_xi', points: 2, description: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 England Starting XI: Pickford · Stones · Walker · Trippier · Bellingham · Rice · Saka · Kane' },
+  { id: 'ae_xi_eng2', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones', playerId: 'eng-stones', type: 'starting_xi', points: 2, description: 'Stones and Walker form a solid defensive unit — England\'s back line ready to contain Messi.' },
+  { id: 'ae_xi_eng3', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Walker', playerId: 'eng-walker', type: 'starting_xi', points: 2, description: 'Walker assigned to track Messi — the fastest full-back in the Premier League vs the world\'s best.' },
+  { id: 'ae_xi_eng4', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier', playerId: 'eng-trippier', type: 'starting_xi', points: 2, description: 'Trippier starts at left-back — his delivery from set pieces could be England\'s key weapon tonight.' },
+  { id: 'ae_xi_eng5', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'starting_xi', points: 2, description: 'Bellingham starts. England\'s talisman, their heartbeat — this is the biggest night of his career.' },
+  { id: 'ae_xi_eng6', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rice', playerId: 'eng-rice', type: 'starting_xi', points: 2, description: 'Rice anchors England\'s midfield — his job: win the ball and release Bellingham and Saka.' },
+  { id: 'ae_xi_eng7', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka', playerId: 'eng-saka', type: 'starting_xi', points: 2, description: 'Saka on the right, Kane through the middle — England\'s attacking partnership is set. LET\'S GO!' },
+  { id: 'ae_xi_eng8', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'starting_xi', points: 2, description: 'Harry Kane leads England — World Cup record scorer, captain, and the man this nation is counting on.' },
 
   // FIRST HALF
   { id: 'ae_d1', minute: 7, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Messi drifts inside from the left and plays a one-two with Álvarez! Argentina first to threaten.' },
@@ -1209,4 +1208,4 @@ export const ARG_ENG_EVENTS = [
   { id: 'ae_poss2_bel', minute: 88, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham', playerId: 'eng-bellingham', type: 'possession_bonus', points: 1, description: 'Bellingham gave everything in a losing cause — a performance of immense quality and heart.' },
 
   { id: 'ae_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: 'FULL TIME! Argentina 2–1 England! MESSI LIFTS THE WORLD CUP AGAIN! La Albiceleste are World Champions!' },
-];
+]; void _REMOVED_INLINE_EVENTS;

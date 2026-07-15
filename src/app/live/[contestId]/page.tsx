@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS, ARG_ENG_EVENTS } from '@/lib/players';
+import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
+import { ARG_ENG_EVENTS } from '@/lib/demo-arg-eng';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { calculateEventPoints, POINT_MAP, getPrizeForRank, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
@@ -1386,7 +1387,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   }, [events, matchCompleted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (appMode !== 'live' || !fixture?.kickoffAt) return;
+    if (appMode !== 'live' || forceDemoMode || !fixture?.kickoffAt) return;
     // Use fixture.kickoffAt (which includes TxLINE-enriched time via teamOverride)
     // rather than wcFixture.kickoffAt (static) so the countdown stays in sync with
     // the contests page when TxLINE has the correct kickoff time.
@@ -3134,10 +3135,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
       setEvents((prev) => [event, ...prev]);
       setCurrentEventIdx((idx) => idx + 1);
-      setLatestEvent(event);
-      setDialogStep(1);
-      setShowPopup(true);
-  
+
+      // silent events (e.g. individual starting_xi awards after the team summary) skip the NPC popup
+      if (!(event as any).silent) {
+        setLatestEvent(event);
+        setDialogStep(1);
+        setShowPopup(true);
+      }
+
       // Update score — mirror into scoreRef synchronously so full_time can read final score
       if (event.type === 'goal' || event.type === 'own_goal') {
         const isHome = event.team === fixture.homeTeam;
@@ -3782,7 +3787,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           {/* Score Bug — suppressHydrationWarning because minute/score are initialised from
               localStorage (persistedIsLive) which is unavailable on the server */}
           {(() => {
-            const isPreMatch = appMode === 'live' && !matchCompleted && minutesToKickoff !== null && minutesToKickoff > 0;
+            const isPreMatch = appMode === 'live' && !forceDemoMode && !matchCompleted && minutesToKickoff !== null && minutesToKickoff > 0;
             const fixtureStatus = wcFixture ? getFixtureStatus(wcFixture) : 'live';
             const isFinished = fixtureStatus === 'finished' && score.home === 0 && score.away === 0 && events.length === 0;
             return (
@@ -4388,6 +4393,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     events.filter((e: any) => e.type === 'substitution' && e.playerOut).map((e: any) => e.playerOut as string)
                   );
                   const subInEvs = events.filter((e: any) => e.type === 'sub_appearance');
+                  const subInIds = new Set(subInEvs.map((e: any) => e.playerId as string));
 
                   // Starters (minus any who have been subbed off)
                   const activePlayers: FormationPlayer[] = starterEvs
@@ -4395,14 +4401,22 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     .map((ev: any) => {
                       const isHome = ev.team === fixture.homeTeam;
                       const pd = WC2026_PLAYERS.find(p => p.id === ev.playerId);
-                      return { id: ev.playerId, name: ev.player, position: pd?.position ?? 'MID', participant: (isHome ? 1 : 2) as 1 | 2 };
+                      return { id: ev.playerId, name: ev.player, position: pd?.position ?? 'MID', participant: (isHome ? 1 : 2) as 1 | 2, starter: true };
                     });
 
-                  // Substitutes who have come on
+                  // Substitutes who have come on — on pitch
                   for (const ev of subInEvs) {
                     const isHome = (ev as any).team === fixture.homeTeam;
                     const pd = WC2026_PLAYERS.find(p => p.id === (ev as any).playerId);
-                    activePlayers.push({ id: (ev as any).playerId, name: (ev as any).player, position: pd?.position ?? 'ATT', participant: (isHome ? 1 : 2) as 1 | 2 });
+                    activePlayers.push({ id: (ev as any).playerId, name: (ev as any).player, position: pd?.position ?? 'ATT', participant: (isHome ? 1 : 2) as 1 | 2, starter: true });
+                  }
+
+                  // Future substitutes still on the bench (appear in matchEvents but haven't come on yet)
+                  const futureSubEvs = matchEvents.filter((e: any) => e.type === 'sub_appearance' && !subInIds.has(e.playerId));
+                  for (const ev of futureSubEvs) {
+                    const isHome = (ev as any).team === fixture.homeTeam;
+                    const pd = WC2026_PLAYERS.find(p => p.id === (ev as any).playerId);
+                    activePlayers.push({ id: (ev as any).playerId, name: (ev as any).player, position: pd?.position ?? 'ATT', participant: (isHome ? 1 : 2) as 1 | 2, starter: false });
                   }
 
                   homeFp = activePlayers.filter(p => p.participant === 1);
