@@ -817,7 +817,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   const [initialState] = useState(() => {
     // Live mode: always start clean — API provides score/events/minute
-    if (persistedIsLive) {
+    // Guest demo: always start from minute 0 regardless of fixture.status
+    if (persistedIsLive || guestDemoMode) {
       return {
         initialMin: 0,
         initialIdx: 0,
@@ -828,7 +829,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       };
     }
 
-    // Demo mode: pre-load events up to a random minute if the match is "live"
+    // Admin demo mode: pre-load events up to a random minute if the match is "live"
     const isLive = fixture.status === 'live';
     const initialMin = isLive ? Math.floor(Math.random() * 80) + 1 : 0;
 
