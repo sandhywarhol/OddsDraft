@@ -3917,7 +3917,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                           const htIdx = events.findIndex(e => e.type === 'half_time');
                           const koIdx = events.findIndex(e => e.type === 'kick_off');
                           const atHalfTime = htIdx >= 0 && (koIdx < 0 || koIdx > htIdx) && !matchCompleted;
-                          if (appMode !== 'live') return minute < 90 ? `${minute}'` : 'FT';
+                          if (appMode !== 'live' || forceDemoMode) {
+                            const hasFT = events.some(e => e.type === 'full_time');
+                            if (hasFT || minute >= 90) return 'FT';
+                            if (atHalfTime) return 'HT';
+                            return `${minute}'`;
+                          }
                           if (matchCompleted) return 'FT';
                           if (atHalfTime) return 'HT';
                           if (txlineStatus === 'live') return minute > 0 ? `${minute}'` : liveClockMinute > 0 ? `~${liveClockMinute}'` : `0'`;
