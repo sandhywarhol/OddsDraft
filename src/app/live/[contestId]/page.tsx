@@ -3732,7 +3732,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         
         if (dialog.isRefereeStyle) {
           return (
-            <div className="npc-dialog-overlay" onClick={() => setShowPopup(false)}>
+            <div className="npc-dialog-overlay" onClick={() => {
+              const type = latestEvent.type;
+              let maxSteps = 2;
+              if (type === 'full_time') maxSteps = 7;
+              else if (type === 'half_time') maxSteps = 4;
+              else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
+              else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
+              if (dialogStep < maxSteps) {
+                setDialogStep(prev => prev + 1);
+              } else {
+                if (type === 'full_time') fullTimeStatsDoneRef.current = true;
+                setShowPopup(false);
+              }
+            }}>
               {/* Referee Image */}
               <img
                 src={dialog.refereeImage}
@@ -3742,7 +3755,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               {/* Fix 6: Referee chat bubble using provided SVG asset */}
               <div className={`npc-referee-bubble-wrapper referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}>
-                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 460, height: 260, maxWidth: '72vw' }}>
+                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 640, height: 360, maxWidth: '82vw' }}>
                   {/* Background: REFEREE CHAT BUBBLE.svg */}
                   <img
                     src="/NPC/REFEREE%20CHAT%20BUBBLE.svg"
