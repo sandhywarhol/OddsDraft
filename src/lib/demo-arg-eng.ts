@@ -56,6 +56,12 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_e0', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, silent: false,
     description: 'KICK OFF! Argentina vs England — World Cup 2026 Final! The most anticipated match in football history begins!' },
 
+  // ── Pre-match opening: commentator history of the rivalry ────────────────
+  { id: 'ae_hist_arg', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 0,
+    description: '🇦🇷 Argentina — three-time World Champions (1978, 1986, 2022). In 1986, Maradona gave us both the Hand of God AND the Goal of the Century against England in the same match. Now in 2026, it\'s Messi\'s turn to write history. This squad has never lost a knockout match under Scaloni. Tonight, the legend continues — or ends.' },
+  { id: 'ae_hist_eng', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'starting_xi', points: 0,
+    description: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 England — World Champions just once, in 1966 on home soil. Sixty years of hurt. Every England fan knows 1986, 1998, 2002 — each time Argentina ended their dream. But THIS generation is different. Kane is the all-time England top scorer. Bellingham is the best midfielder in the world. Tonight, England don\'t just want to win — they want revenge.' },
+
   // ── Starting XI — Argentina XI summary is NON-SILENT (shows dialog); individual events silent ──
   { id: 'ae_xi_arg', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 2,
     description: '🇦🇷 Argentina XI: E. Martínez · Romero · Molina · Mac Allister · De Paul · N. González · Acuña · L. Martínez · Messi · Lautaro · Álvarez — Scaloni names his strongest eleven for the World Cup Final!' },
