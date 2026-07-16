@@ -13,6 +13,7 @@ const bebasNeue = Bebas_Neue({ weight: '400', subsets: ['latin'], variable: '--f
 const spaceMono = Space_Mono({ weight: ['400', '700'], subsets: ['latin'], variable: '--font-space', display: 'swap' });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.oddsdraft.fun'),
   title: 'OddsDraft — Predictive Fantasy Football | World Cup 2026',
   description:
     'Build your fantasy lineup, predict match outcomes, and win SOL prizes. Powered by TxODDS live football data on Solana.',
@@ -21,6 +22,15 @@ export const metadata: Metadata = {
     title: 'OddsDraft — Predictive Fantasy Football',
     description: 'Fantasy football meets prediction markets. Live World Cup data. On-chain prizes.',
     type: 'website',
+    url: 'https://www.oddsdraft.fun',
+    siteName: 'OddsDraft',
+    images: [{ url: '/homepage.webp', width: 1915, height: 821, alt: 'OddsDraft — Predictive Fantasy Football' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'OddsDraft — Predictive Fantasy Football',
+    description: 'Fantasy football meets prediction markets. Live World Cup data. On-chain prizes.',
+    images: ['/homepage.webp'],
   },
 };
 
