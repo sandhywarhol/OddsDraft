@@ -641,7 +641,7 @@ export default function TutorialPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 800, margin: '0 auto', width: '100%' }}>
 
                   {/* Skill Card section */}
-                  {showFilledLineup && (
+                  {showFilledLineup && tutorialStep !== 8 && (
                     <div className="ro-window" id="skill-card-section" style={{ maxWidth: 650, margin: '0 auto', width: '100%' }}>
                       <div className="ro-window__header">
                         <span>🎴 Skill Card Equipment</span>

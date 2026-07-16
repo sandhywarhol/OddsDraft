@@ -56,8 +56,8 @@ export default function PlayerAvatar({
           <div style={{
             position: 'absolute', inset: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: `${bgColor}22`,
-            fontSize: size ? size * 0.25 : '1rem', color: bgColor, fontWeight: 800, opacity: 0.6,
+            background: `${bgColor}44`,
+            fontSize: size ? size * 0.25 : '1rem', color: '#ffffff', fontWeight: 800, opacity: 0.95,
           }}>
             {initials}
           </div>
