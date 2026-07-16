@@ -56,9 +56,9 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_e0', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, silent: false,
     description: 'KICK OFF! Argentina vs England — World Cup 2026 Final! The most anticipated match in football history begins!' },
 
-  // ── Starting XI — Argentina — all silent so match flows immediately ──────
-  { id: 'ae_xi_arg', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 2, silent: true,
-    description: '🇦🇷 Argentina XI: E. Martínez · Romero · Molina · Mac Allister · Messi · Lautaro · Álvarez — Scaloni names his strongest eleven!' },
+  // ── Starting XI — Argentina XI summary is NON-SILENT (shows dialog); individual events silent ──
+  { id: 'ae_xi_arg', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 2,
+    description: '🇦🇷 Argentina XI: E. Martínez · Romero · Molina · Mac Allister · De Paul · N. González · Acuña · L. Martínez · Messi · Lautaro · Álvarez — Scaloni names his strongest eleven for the World Cup Final!' },
   { id: 'ae_xi_ama',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'starting_xi', points: 2, silent: true, description: 'E. Martínez starts in goal for Argentina.' },
   { id: 'ae_xi_rom',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',        playerId: 'arg-romero',     type: 'starting_xi', points: 2, silent: true, description: 'Romero starts at centre-back for Argentina.' },
   { id: 'ae_xi_mol',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Molina',        playerId: 'arg-molina',     type: 'starting_xi', points: 2, silent: true, description: 'Molina at right-back for Argentina.' },
@@ -70,9 +70,9 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_xi_dep',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'De Paul',        playerId: 'arg-paul',       type: 'starting_xi', points: 2, silent: true, description: 'De Paul starts in central midfield for Argentina.' },
   { id: 'ae_xi_gon',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'N. González',   playerId: 'arg-gonzalez',     type: 'starting_xi', points: 2, silent: true, description: 'N. González starts on the right flank for Argentina.' },
 
-  // ── Starting XI — England — all silent ──────────────────────────────────
-  { id: 'ae_xi_eng', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'starting_xi', points: 2, silent: true,
-    description: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 England XI: Pickford · Stones · Walker · Trippier · Rice · Bellingham · Saka · Kane — Southgate\'s final team!' },
+  // ── Starting XI — England XI summary is NON-SILENT (shows dialog); individual events silent ──
+  { id: 'ae_xi_eng', minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane', playerId: 'eng-kane', type: 'starting_xi', points: 2,
+    description: '🏴󠁧󠁢󠁥󠁮󠁧󠁿 England XI: Pickford · Walker · Stones · Guehi · Trippier · Rice · Gallagher · Bellingham · Saka · Palmer · Kane — Southgate\'s chosen eleven to lift the World Cup!' },
   { id: 'ae_xi_pic',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',   playerId: 'eng-pickford',   type: 'starting_xi', points: 2, silent: true, description: 'Pickford starts in goal for England.' },
   { id: 'ae_xi_sto',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones',     playerId: 'eng-stones',     type: 'starting_xi', points: 2, silent: true, description: 'Stones starts at centre-back for England.' },
   { id: 'ae_xi_wal',  minute: 0, team: 'England', teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Walker',     playerId: 'eng-walker',     type: 'starting_xi', points: 2, silent: true, description: 'Walker starts at right-back for England.' },
@@ -109,6 +109,9 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_yc1',       minute: 29, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rice',        playerId: 'eng-rice',       type: 'yellow_card',     points: -2,
     description: 'Yellow card for Rice — clips Mac Allister late as Argentina tried to build through midfield.' },
 
+  { id: 'ae_ck2',       minute: 35, team: 'Argentina', teamFlag: '🇦🇷', player: 'De Paul',      playerId: 'arg-paul',       type: 'corner_kick',     points: 0,
+    description: 'CORNER Argentina! De Paul\'s driven cross deflected behind by Guehi — Argentina sense an equaliser from the set piece!' },
+
   { id: 'ae_save2',     minute: 38, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',    playerId: 'eng-pickford',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'PICKFORD! Incredible reflex save from Romero\'s glancing header — world class!' },
 
@@ -119,13 +122,19 @@ export const ARG_ENG_EVENTS: Array<{
 
   { id: 'ae_ht', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0,
     description: 'HALF TIME! England 1–0 Argentina — Kane\'s header gives England the lead at the break.' },
+  { id: 'ae_ht_comm', minute: 45, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 0,
+    description: 'Half-Time Statistics: England 58% possession · 4 shots on target (Kane, Saka ×2, Bellingham). Argentina 42% possession · 6 total attempts · Messi 3 key passes. The xG says Argentina have been unlucky — expect a very different second half!' },
 
   // ── SECOND HALF ──────────────────────────────────────────────────────────
   { id: 'ae_ko2', minute: 46, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0,
     description: 'KICK OFF! Second half underway — Argentina need a response. Messi and Lautaro lead the charge!' },
+  { id: 'ae_ko2_comm', minute: 46, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 0,
+    description: 'Argentina are FLYING out of the blocks! Scaloni has clearly given them one instruction at half time: ATTACK. Messi is dropping deep to collect the ball, Lautaro pressing the England backline — this second half is going to be something special!' },
 
   { id: 'ae_d5',        minute: 51, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham',  playerId: 'eng-bellingham', type: 'danger_attack',   points: 0,  silent: true,
     description: 'England pressing high — Bellingham breaks forward and forces a corner off Romero!' },
+  { id: 'ae_ck3',       minute: 52, team: 'Argentina', teamFlag: '🇦🇷', player: 'Acuña',       playerId: 'arg-acuna',      type: 'corner_kick',     points: 0,
+    description: 'CORNER Argentina! Acuña\'s cross finds Lautaro who flicks it goalward — what a delivery into the danger zone!' },
   { id: 'ae_save3',     minute: 53, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',    playerId: 'eng-pickford',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'Pickford claws Lautaro\'s flicked header off the line! Unbelievable from the England keeper!' },
 
@@ -174,6 +183,8 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_app3',      minute: 78, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Foden',       playerId: 'eng-foden',      type: 'sub_appearance',  points: 1,  silent: true,
     description: 'Phil Foden enters — England\'s most creative player now free to attack with abandon.' },
 
+  { id: 'ae_ck4',       minute: 80, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier',    playerId: 'eng-trippier',   type: 'corner_kick',     points: 0,
+    description: 'CORNER England! Trippier swings it in — Kane attacks the near post, Maguire lurking at the far! England\'s last roll of the dice to find the equaliser!' },
   { id: 'ae_save4',     minute: 82, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'E. MARTÍNEZ! Spreads himself brilliantly to deny Bellingham a one-on-one — Argentina survive!' },
 
