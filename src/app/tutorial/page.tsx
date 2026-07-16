@@ -363,10 +363,10 @@ export default function TutorialPage() {
           onClick={handleNextStep}
           className="npc-dialog-overlay"
           style={{
-            backgroundColor: 'transparent',
+            backgroundColor: tutorialStep === 8 ? 'rgba(0,0,0,0.85)' : 'transparent',
             zIndex: 999999,
-            backdropFilter: shouldBlurBg ? 'blur(5px)' : 'none',
-            WebkitBackdropFilter: shouldBlurBg ? 'blur(5px)' : 'none',
+            backdropFilter: (shouldBlurBg || tutorialStep === 8) ? 'blur(5px)' : 'none',
+            WebkitBackdropFilter: (shouldBlurBg || tutorialStep === 8) ? 'blur(5px)' : 'none',
           }}
         >
           {tutorialStep === 8 && (

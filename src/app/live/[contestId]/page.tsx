@@ -3755,7 +3755,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               {/* Fix 6: Referee chat bubble using provided SVG asset */}
               <div className={`npc-referee-bubble-wrapper referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}>
-                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 640, height: 360, maxWidth: '82vw' }}>
+                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 720, height: 405, maxWidth: '90vw' }}>
                   {/* Background: REFEREE CHAT BUBBLE.svg */}
                   <img
                     src="/NPC/REFEREE%20CHAT%20BUBBLE.svg"
