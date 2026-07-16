@@ -215,7 +215,16 @@ interface DialogData {
   refereePosition?: 'left' | 'right';
 }
 
-function getDialogData(event: any, step: number, fixture: any, score: { home: number, away: number } = { home: 0, away: 0 }): DialogData {
+function getDialogData(
+  event: any,
+  step: number,
+  fixture: any,
+  score: { home: number, away: number } = { home: 0, away: 0 },
+  extra?: {
+    userLineupNames?: string[];   // Fix 2: user-picked player names for kick_off commentary
+    halfTimeStats?: { goals: number; saves: number; yellowCards: number; homeScore: number; awayScore: number }; // Fix 4
+  }
+): DialogData {
   const player = (event.player && event.player !== 'Unknown') ? event.player : 'The player';
   const team = event.team || 'Team';
   const opponent = event.team === fixture.homeTeam ? fixture.awayTeam : fixture.homeTeam;
@@ -250,6 +259,15 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           return {
             speakerTitle: 'Martin',
             text: `"Let's see if the managers' half-time instructions can make a difference in these final 45 minutes!"`,
+            commentator1Image: '/NPC/Komentator%201%20calm.svg',
+          };
+        } else if (extra?.userLineupNames && extra.userLineupNames.length > 0) {
+          // Fix 2: commentator reviews which of the user's picked players are in today's lineup
+          const picks = extra.userLineupNames.slice(0, 3).join(', ');
+          const rest = extra.userLineupNames.length > 3 ? ` and ${extra.userLineupNames.length - 3} more` : '';
+          return {
+            speakerTitle: 'Martin',
+            text: `"Your lineup features ${picks}${rest}. Great selections — let's see how they perform in this World Cup Final!"`,
             commentator1Image: '/NPC/Komentator%201%20calm.svg',
           };
         } else {
@@ -301,21 +319,32 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
           isRefereeStyle: true,
         };
       } else if (step === 2) {
+        // Fix 4: use actual match stats if provided
+        const st = extra?.halfTimeStats;
+        const scoreStr = st ? `${fixture.homeTeam} ${st.homeScore}–${st.awayScore} ${fixture.awayTeam}` : `${fixture.homeTeam} ${score.home}–${score.away} ${fixture.awayTeam}`;
         return {
           speakerTitle: 'Alan',
-          text: `"And that's the whistle for the break! It's been an intense first 45 minutes. Let's take a quick look at the midway TxODDS statistics."`,
+          text: `"And that's the whistle for half time! The score: ${scoreStr}. Let's take a look at the first-half statistics."`,
           commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else if (step === 3) {
+        const st = extra?.halfTimeStats;
+        if (st) {
+          return {
+            speakerTitle: 'Martin',
+            text: `"${st.goals} goal${st.goals !== 1 ? 's' : ''}, ${st.yellowCards} yellow card${st.yellowCards !== 1 ? 's' : ''}, and ${st.saves} goalkeeper save${st.saves !== 1 ? 's' : ''} in the first 45 minutes — this match has everything!"`,
+            commentator1Image: '/NPC/Komentator%201%20calm.svg',
+          };
+        }
         return {
           speakerTitle: 'Martin',
-          text: `"The possession is incredibly even so far, but ${fixture.homeTeam} has been much more dangerous in the final third, creating higher quality xG chances."`,
+          text: `"Both managers will have a lot to discuss in the dressing room. We'll see what tactical adjustments they make for the second half."`,
           commentator1Image: '/NPC/Komentator%201%20calm.svg',
         };
       } else {
         return {
           speakerTitle: 'Alan',
-          text: `"Absolutely. The managers will have a lot to talk about in the dressing room. We'll see what tactical adjustments they make for the second half."`,
+          text: `"Absolutely electric first half. The fans are on their feet — can't wait for the second 45!"`,
           commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       }
@@ -3625,72 +3654,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         />
       )}
 
-      {/* Demo-only: fake SOL prize claim overlay shown after full time */}
-      {showDemoSolClaim && guestDemoMode && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9998,
-          background: 'rgba(0,0,0,0.88)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #0a0e1a 0%, #0f172a 100%)',
-            border: '1px solid rgba(255,215,0,0.45)',
-            borderRadius: 20, padding: '40px 36px', maxWidth: 460, width: '100%',
-            textAlign: 'center', boxShadow: '0 25px 80px rgba(255,215,0,0.18)',
-          }}>
-            <div style={{ fontSize: '4rem', marginBottom: 12 }}>🏆</div>
-            <h2 style={{ color: '#ffd700', fontWeight: 900, fontSize: '1.5rem', margin: '0 0 8px' }}>
-              Congratulations!
-            </h2>
-            <p style={{ color: 'rgba(255,255,255,0.65)', marginBottom: 24, lineHeight: 1.5 }}>
-              You finished <strong style={{ color: '#fff' }}>#1</strong> in the OddsDraft<br />
-              Argentina vs England Final contest.
-            </p>
-            <div style={{
-              background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)',
-              borderRadius: 14, padding: '20px 28px', marginBottom: 28,
-            }}>
-              <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginBottom: 6, letterSpacing: '0.1em' }}>
-                PRIZE POOL — 1ST PLACE
-              </div>
-              <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#ffd700', lineHeight: 1 }}>
-                {DEMO_PRIZE_SOL} SOL
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginTop: 6 }}>
-                ≈ ${(DEMO_PRIZE_SOL * 150).toFixed(0)} USD (demo only)
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button
-                className="btn btn--primary"
-                style={{ width: '100%', fontSize: '1rem', padding: '14px 24px', fontWeight: 800, borderRadius: 12 }}
-                onClick={() => {
-                  setShowDemoSolClaim(false);
-                  setActiveToasts(prev => [{
-                    id: `demo-sol-${Date.now()}`,
-                    type: 'goal' as FantasyNotificationItem['type'],
-                    title: '💰 Prize Claimed!',
-                    subtitle: `${DEMO_PRIZE_SOL} SOL sent to your wallet`,
-                    value: `+${DEMO_PRIZE_SOL} SOL`,
-                  }, ...prev]);
-                }}
-              >
-                💰 Claim {DEMO_PRIZE_SOL} SOL
-              </button>
-              <button
-                className="btn btn--ghost btn--sm"
-                style={{ width: '100%' }}
-                onClick={() => setShowDemoSolClaim(false)}
-              >
-                Dismiss
-              </button>
-            </div>
-            <p style={{ marginTop: 18, fontSize: '0.68rem', color: 'rgba(255,255,255,0.28)', lineHeight: 1.5 }}>
-              * Demo mode — no real SOL is transferred.<br />Live contests pay out on-chain via Solana.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Fix 5: Demo SOL popup removed — SOL prize now shown in TxLINE section below */}
 
       {/* Fantasy Notification Toast Queue */}
       {activeToasts.map((toast, idx) => (
@@ -3706,7 +3670,23 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
       {/* Live Event Popup */}
       {showPopup && latestEvent && (() => {
-        const dialog = getDialogData(latestEvent, dialogStep, fixture, score);
+        // Fix 2 + 4: compute extra context for NPC dialog
+        const _userLineupNames: string[] = guestDemoMode
+          ? ((userLineup?.players as any[] ?? []).map((p: any) => p?.name).filter(Boolean) as string[])
+          : [];
+        const _halfTimeStats = latestEvent.type === 'half_time' && guestDemoMode
+          ? {
+              goals: events.filter(e => e.type === 'goal').length,
+              saves: events.filter(e => e.type === 'goalkeeper_save').length,
+              yellowCards: events.filter(e => e.type === 'yellow_card').length,
+              homeScore: score.home,
+              awayScore: score.away,
+            }
+          : undefined;
+        const dialog = getDialogData(latestEvent, dialogStep, fixture, score, {
+          userLineupNames: _userLineupNames,
+          halfTimeStats: _halfTimeStats,
+        });
         
         if (dialog.isRefereeStyle) {
           return (
@@ -3717,18 +3697,29 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 alt="Referee"
                 className={`npc-referee-img-style referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}
               />
-              
-              {/* Giant Yellow Explosion Speech Bubble */}
+
+              {/* Fix 6: Referee chat bubble using provided SVG asset */}
               <div className={`npc-referee-bubble-wrapper referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}>
-                <div className="npc-referee-bubble-container">
-                  {/* Background Starburst SVG */}
-                  <svg viewBox="0 0 500 300" width="100%" height="100%" preserveAspectRatio="none" className="npc-referee-bubble-bg">
-                    <polygon points="250,10 280,70 340,30 350,90 410,60 400,120 470,110 440,160 490,190 430,210 460,260 400,250 390,290 330,260 300,295 270,240 220,285 200,230 140,270 140,210 70,225 100,175 40,140 105,115 70,65 130,85 140,25 190,75 220,15" fill="black" transform="translate(8, 8)" />
-                    <polygon points="250,10 280,70 340,30 350,90 410,60 400,120 470,110 440,160 490,190 430,210 460,260 400,250 390,290 330,260 300,295 270,240 220,285 200,230 140,270 140,210 70,225 100,175 40,140 105,115 70,65 130,85 140,25 190,75 220,15" fill="#ffee00" stroke="black" strokeWidth="8" strokeLinejoin="miter" />
-                  </svg>
-                  <div className="npc-referee-bubble-text">
+                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 320, height: 200 }}>
+                  {/* Background: REFEREE CHAT BUBBLE.svg */}
+                  <img
+                    src="/NPC/REFEREE%20CHAT%20BUBBLE.svg"
+                    alt=""
+                    style={{
+                      position: 'absolute', inset: 0,
+                      width: '100%', height: '100%',
+                      objectFit: 'contain',
+                      filter: 'drop-shadow(4px 4px 0px rgba(0,0,0,0.8))',
+                    }}
+                  />
+                  {/* Text centered over bubble */}
+                  <div className="npc-referee-bubble-text" style={{
+                    position: 'absolute', inset: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '20px 40px',
+                    textAlign: 'center',
+                  }}>
                     {dialog.text}
-                    <span style={{ color: '#ff0000', fontSize: '1.2em', WebkitTextStroke: '2px #000000', textShadow: '3px 3px 0px #000000' }}>!</span>
                   </div>
                 </div>
               </div>
@@ -3745,6 +3736,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               const type = latestEvent.type;
               let maxSteps = 2; // Default for most multi-step events
               if (type === 'full_time') maxSteps = 7;
+              // Fix 2: one extra step for lineup commentary if user has picks
               else if (type === 'half_time') maxSteps = 4;
               else if (type === 'kick_off') maxSteps = minute < 45 ? 5 : 3;
               else if (['var_review', 'corner_kick', 'substitution', 'extra_time'].includes(type)) maxSteps = 3;
@@ -4809,6 +4801,46 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               </div>
 
               {/* SOL Prize Claim Panel — right column desktop, below Point Reference */}
+              {/* Fix 5: Demo SOL prize card — shown in TxLINE section after verify, same as live */}
+              {verificationStatus === 'success' && guestDemoMode && (
+                <div className="card desktop-only" style={{
+                  border: '1px solid rgba(255,215,0,0.4)',
+                  background: 'rgba(255,215,0,0.06)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: '#ffd700' }}>
+                      💰 SOL Prize
+                    </h3>
+                    <span style={{
+                      fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px',
+                      borderRadius: 4,
+                      background: 'rgba(255,215,0,0.15)',
+                      color: '#ffd700',
+                    }}>
+                      🎁 READY
+                    </span>
+                  </div>
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: '2rem', fontWeight: 900, color: '#ffd700', lineHeight: 1 }}>
+                      {DEMO_PRIZE_SOL} SOL
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                      Rank #1 · Double Up prize
+                    </div>
+                  </div>
+                  <button
+                    className="btn btn--primary btn--full"
+                    style={{ fontWeight: 800, fontSize: '0.9rem', padding: '12px', cursor: 'default' }}
+                    onClick={() => {/* demo — decorative only */}}
+                  >
+                    CLAIM {DEMO_PRIZE_SOL} SOL →
+                  </button>
+                  <p style={{ marginTop: 10, fontSize: '0.68rem', color: 'rgba(255,255,255,0.28)', lineHeight: 1.5, margin: '10px 0 0' }}>
+                    * Demo mode — no real SOL is transferred. Live contests pay out on-chain via Solana.
+                  </p>
+                </div>
+              )}
+
               {verificationStatus === 'success' && appMode === 'live' && publicKey && (
                 <div className="card desktop-only" style={{
                   border: claimStatus === 'claimed'

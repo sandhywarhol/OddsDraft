@@ -52,22 +52,22 @@ export const ARG_ENG_EVENTS: Array<{
   player: string; playerId: string; type: string; points: number;
   description: string; goalType?: string; playerOut?: string; silent?: boolean;
 }> = [
-  // KICK OFF — silent so match auto-flows without requiring a click
-  { id: 'ae_e0', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, silent: true,
+  // KICK OFF — show referee blowing whistle
+  { id: 'ae_e0', minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, silent: false,
     description: 'KICK OFF! Argentina vs England — World Cup 2026 Final! The most anticipated match in football history begins!' },
 
   // ── Starting XI — Argentina — all silent so match flows immediately ──────
   { id: 'ae_xi_arg', minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'starting_xi', points: 2, silent: true,
     description: '🇦🇷 Argentina XI: E. Martínez · Romero · Molina · Mac Allister · Messi · Lautaro · Álvarez — Scaloni names his strongest eleven!' },
-  { id: 'ae_xi_ama',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-martinez',   type: 'starting_xi', points: 2, silent: true, description: 'E. Martínez starts in goal for Argentina.' },
+  { id: 'ae_xi_ama',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'starting_xi', points: 2, silent: true, description: 'E. Martínez starts in goal for Argentina.' },
   { id: 'ae_xi_rom',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',        playerId: 'arg-romero',     type: 'starting_xi', points: 2, silent: true, description: 'Romero starts at centre-back for Argentina.' },
   { id: 'ae_xi_mol',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Molina',        playerId: 'arg-molina',     type: 'starting_xi', points: 2, silent: true, description: 'Molina at right-back for Argentina.' },
-  { id: 'ae_xi_all',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister',  playerId: 'arg-macallister',type: 'starting_xi', points: 2, silent: true, description: 'Mac Allister starts in midfield for Argentina.' },
-  { id: 'ae_xi_lau',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro',       playerId: 'arg-lautaro',    type: 'starting_xi', points: 2, silent: true, description: 'Lautaro starts up front for Argentina.' },
+  { id: 'ae_xi_all',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister',  playerId: 'arg-allister',type: 'starting_xi', points: 2, silent: true, description: 'Mac Allister starts in midfield for Argentina.' },
+  { id: 'ae_xi_lau',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro',       playerId: 'arg-lmartinez',    type: 'starting_xi', points: 2, silent: true, description: 'Lautaro starts up front for Argentina.' },
   { id: 'ae_xi_alv',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez',       playerId: 'arg-alvarez',      type: 'starting_xi', points: 2, silent: true, description: 'Álvarez starts alongside Lautaro.' },
-  { id: 'ae_xi_lis',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez',   playerId: 'arg-lisandromartinez', type: 'starting_xi', points: 2, silent: true, description: 'Lisandro Martínez anchors the centre-back partnership.' },
+  { id: 'ae_xi_lis',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez',   playerId: 'arg-martinez', type: 'starting_xi', points: 2, silent: true, description: 'Lisandro Martínez anchors the centre-back partnership.' },
   { id: 'ae_xi_acu',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'Acuña',          playerId: 'arg-acuna',        type: 'starting_xi', points: 2, silent: true, description: 'Acuña starts at left-back for Argentina.' },
-  { id: 'ae_xi_dep',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'De Paul',        playerId: 'arg-depaul',       type: 'starting_xi', points: 2, silent: true, description: 'De Paul starts in central midfield for Argentina.' },
+  { id: 'ae_xi_dep',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'De Paul',        playerId: 'arg-paul',       type: 'starting_xi', points: 2, silent: true, description: 'De Paul starts in central midfield for Argentina.' },
   { id: 'ae_xi_gon',  minute: 0, team: 'Argentina', teamFlag: '🇦🇷', player: 'N. González',   playerId: 'arg-gonzalez',     type: 'starting_xi', points: 2, silent: true, description: 'N. González starts on the right flank for Argentina.' },
 
   // ── Starting XI — England — all silent ──────────────────────────────────
@@ -92,14 +92,14 @@ export const ARG_ENG_EVENTS: Array<{
 
   { id: 'ae_ck1',       minute: 12, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier',    playerId: 'eng-trippier',   type: 'corner_kick',     points: 0,  silent: true,
     description: 'CORNER! Trippier wins England their first corner — curling delivery coming in towards Kane!' },
-  { id: 'ae_save1',     minute: 13, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-martinez',   type: 'goalkeeper_save', points: 1,  silent: true,
+  { id: 'ae_save1',     minute: 13, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'E. Martínez punches the corner clear! Strong from the Argentine keeper under pressure.' },
 
   { id: 'ae_asst1',     minute: 22, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka',        playerId: 'eng-saka',       type: 'assist',          points: 6,
     description: 'Saka cuts inside onto his left foot and whips a perfect ball across the six-yard box for Kane!' },
   { id: 'ae_goal1',     minute: 22, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Kane',        playerId: 'eng-kane',       type: 'goal',            points: 10, goalType: 'Header',
     description: 'GOAL! KANE! A towering header at the back post — England lead in the World Cup Final!' },
-  { id: 'ae_conc1_ama', minute: 22, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-martinez',   type: 'goal_conceded',   points: -1, silent: true,
+  { id: 'ae_conc1_ama', minute: 22, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'goal_conceded',   points: -1, silent: true,
     description: 'E. Martínez had no chance — Kane\'s header was perfectly placed into the bottom corner.' },
   { id: 'ae_conc1_rom', minute: 22, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',       playerId: 'arg-romero',     type: 'goal_conceded',   points: -1, silent: true,
     description: 'Romero failed to track Kane\'s run — England punish the Argentine defence.' },
@@ -114,7 +114,7 @@ export const ARG_ENG_EVENTS: Array<{
 
   { id: 'ae_poss1_mes', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'possession_bonus', points: 1, silent: true,
     description: 'Messi dominated possession in the first half — pulling England out of shape with every touch.' },
-  { id: 'ae_poss1_mac', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister',type: 'possession_bonus', points: 1, silent: true,
+  { id: 'ae_poss1_mac', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-allister',type: 'possession_bonus', points: 1, silent: true,
     description: 'Mac Allister ran the midfield — dictating rhythm and breaking England\'s press consistently.' },
 
   { id: 'ae_ht', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0,
@@ -132,7 +132,7 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_yc2',       minute: 57, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',       playerId: 'arg-romero',     type: 'yellow_card',     points: -2,
     description: 'Yellow card for Romero — frustration boiling over as Argentina struggle to break through.' },
 
-  { id: 'ae_asst2',     minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-macallister',type: 'assist',          points: 6,
+  { id: 'ae_asst2',     minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-allister',type: 'assist',          points: 6,
     description: 'Mac Allister plays Messi in behind the England line with a disguised through ball — perfect weight!' },
   { id: 'ae_goal2',     minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'goal',            points: 11, goalType: 'Shot',
     description: 'GOOOOAL! MESSI! A curling left-footed finish into the far corner — Pickford had no chance! 1–1!' },
@@ -157,7 +157,7 @@ export const ARG_ENG_EVENTS: Array<{
 
   { id: 'ae_asst3',     minute: 72, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'assist',          points: 6,
     description: 'Messi floats a delicate chip over the England defensive line — perfectly weighted for Lautaro!' },
-  { id: 'ae_goal3',     minute: 73, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro',      playerId: 'arg-lautaro',    type: 'goal',            points: 10, goalType: 'Shot',
+  { id: 'ae_goal3',     minute: 73, team: 'Argentina', teamFlag: '🇦🇷', player: 'Lautaro',      playerId: 'arg-lmartinez',    type: 'goal',            points: 10, goalType: 'Shot',
     description: 'GOAL! LAUTARO! A first-time volley into the roof of the net — ARGENTINA LEAD 2–1!' },
   { id: 'ae_conc3_pic', minute: 73, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',    playerId: 'eng-pickford',   type: 'goal_conceded',   points: -1, silent: true,
     description: 'Pickford had no chance — Lautaro\'s volley was absolute perfection.' },
@@ -174,7 +174,7 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_app3',      minute: 78, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Foden',       playerId: 'eng-foden',      type: 'sub_appearance',  points: 1,  silent: true,
     description: 'Phil Foden enters — England\'s most creative player now free to attack with abandon.' },
 
-  { id: 'ae_save4',     minute: 82, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-martinez',   type: 'goalkeeper_save', points: 1,  silent: true,
+  { id: 'ae_save4',     minute: 82, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'E. MARTÍNEZ! Spreads himself brilliantly to deny Bellingham a one-on-one — Argentina survive!' },
 
   { id: 'ae_poss2_mes', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'possession_bonus', points: 1, silent: true,
@@ -196,31 +196,37 @@ export const DEMO_PRIZE_SOL = 2.5;
 
 export const DEMO_ARG_ENG_HOME_LINEUP: FormationPlayer[] = [
   // Starters — Argentina 4-3-3
-  { id: 'arg-martinez',          name: 'E. Martínez',  position: 'GK',  participant: 1, jerseyNumber: 23, starter: true },
+  { id: 'arg-emartinez',          name: 'E. Martínez',  position: 'GK',  participant: 1, jerseyNumber: 23, starter: true },
   { id: 'arg-molina',            name: 'Molina',        position: 'DEF', participant: 1, jerseyNumber: 26, starter: true },
   { id: 'arg-romero',            name: 'Romero',        position: 'DEF', participant: 1, jerseyNumber: 13, starter: true },
-  { id: 'arg-lisandromartinez',  name: 'L. Martínez',  position: 'DEF', participant: 1, jerseyNumber: 25, starter: true },
+  { id: 'arg-martinez',  name: 'L. Martínez',  position: 'DEF', participant: 1, jerseyNumber: 25, starter: true },
   { id: 'arg-acuna',             name: 'Acuña',         position: 'DEF', participant: 1, jerseyNumber: 8,  starter: true },
-  { id: 'arg-depaul',            name: 'De Paul',       position: 'MID', participant: 1, jerseyNumber: 7,  starter: true },
-  { id: 'arg-macallister',       name: 'Mac Allister', position: 'MID', participant: 1, jerseyNumber: 20, starter: true },
+  { id: 'arg-paul',            name: 'De Paul',       position: 'MID', participant: 1, jerseyNumber: 7,  starter: true },
+  { id: 'arg-allister',       name: 'Mac Allister', position: 'MID', participant: 1, jerseyNumber: 20, starter: true },
   { id: 'arg-messi',             name: 'Messi',         position: 'MID', participant: 1, jerseyNumber: 10, starter: true },
   { id: 'arg-gonzalez',          name: 'N. González',  position: 'ATT', participant: 1, jerseyNumber: 11, starter: true },
-  { id: 'arg-lautaro',           name: 'Lautaro',       position: 'ATT', participant: 1, jerseyNumber: 22, starter: true },
+  { id: 'arg-lmartinez',           name: 'Lautaro',       position: 'ATT', participant: 1, jerseyNumber: 22, starter: true },
   { id: 'arg-alvarez',           name: 'Álvarez',       position: 'ATT', participant: 1, jerseyNumber: 9,  starter: true },
-  // Bench (13 players — matches real squad depth)
-  { id: 'arg-dimaria',      name: 'Di María',       position: 'ATT', participant: 1, jerseyNumber: 11, starter: false },
-  { id: 'arg-dybala',       name: 'Dybala',         position: 'ATT', participant: 1, jerseyNumber: 21, starter: false },
-  { id: 'arg-otamendi',     name: 'Otamendi',       position: 'DEF', participant: 1, jerseyNumber: 19, starter: false },
-  { id: 'arg-rulli',        name: 'Rulli',           position: 'GK',  participant: 1, jerseyNumber: 12, starter: false },
-  { id: 'arg-medina',       name: 'Medina',          position: 'MID', participant: 1, jerseyNumber: 16, starter: false },
-  { id: 'arg-enzo',         name: 'E. Fernández',    position: 'MID', participant: 1, jerseyNumber: 24, starter: false },
-  { id: 'arg-locelso',      name: 'Lo Celso',        position: 'MID', participant: 1, jerseyNumber: 18, starter: false },
-  { id: 'arg-almada',       name: 'Almada',          position: 'MID', participant: 1, jerseyNumber: 17, starter: false },
-  { id: 'arg-barco',        name: 'Barco',           position: 'ATT', participant: 1, jerseyNumber: 14, starter: false },
-  { id: 'arg-simeone',      name: 'G. Simeone',      position: 'ATT', participant: 1, jerseyNumber: 15, starter: false },
-  { id: 'arg-montiel',      name: 'Montiel',         position: 'DEF', participant: 1, jerseyNumber: 4,  starter: false },
-  { id: 'arg-palacios',     name: 'Palacios',        position: 'MID', participant: 1, jerseyNumber: 5,  starter: false },
-  { id: 'arg-talavera',     name: 'Talavera',        position: 'GK',  participant: 1, jerseyNumber: 22, starter: false },
+  // Bench — full 17-player bench as per screenshot
+  { id: 'arg-dimaria',      name: 'Di María',              position: 'ATT', participant: 1, jerseyNumber: 11, starter: false },
+  { id: 'arg-dybala',       name: 'Dybala',                position: 'ATT', participant: 1, jerseyNumber: 21, starter: false },
+  { id: 'arg-otamendi',     name: 'N. Otamendi',           position: 'DEF', participant: 1, jerseyNumber: 19, starter: false },
+  { id: 'arg-rulli',        name: 'G. Rulli',              position: 'GK',  participant: 1, jerseyNumber: 12, starter: false },
+  { id: 'arg-medina',       name: 'F. Medina',             position: 'DEF', participant: 1, jerseyNumber: 16, starter: false },
+  { id: 'arg-fernandez',         name: 'E. Fernández',          position: 'MID', participant: 1, jerseyNumber: 24, starter: false },
+  { id: 'arg-celso',      name: 'G. Lo Celso',           position: 'MID', participant: 1, jerseyNumber: 18, starter: false },
+  { id: 'arg-almada',       name: 'T. Almada',             position: 'MID', participant: 1, jerseyNumber: 17, starter: false },
+  { id: 'arg-barco',        name: 'V. Barco',              position: 'DEF', participant: 1, jerseyNumber: 14, starter: false },
+  { id: 'arg-simeone',      name: 'G. Simeone',            position: 'ATT', participant: 1, jerseyNumber: 15, starter: false },
+  { id: 'arg-montiel',      name: 'G. Montiel',            position: 'DEF', participant: 1, jerseyNumber: 4,  starter: false },
+  { id: 'arg-palacios',     name: 'E. Palacios',           position: 'MID', participant: 1, jerseyNumber: 5,  starter: false },
+  { id: 'arg-talavera',     name: 'D. Talavera',           position: 'GK',  participant: 1, jerseyNumber: 22, starter: false },
+  { id: 'arg-balerdi',      name: 'L. Balerdi',            position: 'DEF', participant: 1, jerseyNumber: 2,  starter: false },
+  { id: 'arg-ngonzalez',    name: 'N. González',           position: 'ATT', participant: 1, jerseyNumber: 11, starter: false },
+  { id: 'arg-jlopez',       name: 'J. López',              position: 'MID', participant: 1, jerseyNumber: 8,  starter: false },
+  { id: 'arg-senesi',       name: 'M. Senesi',             position: 'DEF', participant: 1, jerseyNumber: 3,  starter: false },
+  { id: 'arg-pazm',         name: 'N. Paz Martínez',       position: 'MID', participant: 1, jerseyNumber: 20, starter: false },
+  { id: 'arg-musso',        name: 'J. Musso',              position: 'GK',  participant: 1, jerseyNumber: 1,  starter: false },
 ];
 
 export const DEMO_ARG_ENG_AWAY_LINEUP: FormationPlayer[] = [
@@ -236,18 +242,24 @@ export const DEMO_ARG_ENG_AWAY_LINEUP: FormationPlayer[] = [
   { id: 'eng-saka',        name: 'Saka',        position: 'ATT', participant: 2, jerseyNumber: 7,  starter: true },
   { id: 'eng-kane',        name: 'Kane',        position: 'ATT', participant: 2, jerseyNumber: 9,  starter: true },
   { id: 'eng-palmer',      name: 'Palmer',      position: 'ATT', participant: 2, jerseyNumber: 14, starter: true },
-  // Bench (13 players — matches real squad depth)
-  { id: 'eng-rashford',    name: 'Rashford',          position: 'ATT', participant: 2, jerseyNumber: 11, starter: false },
-  { id: 'eng-foden',       name: 'Foden',             position: 'ATT', participant: 2, jerseyNumber: 20, starter: false },
-  { id: 'eng-maguire',     name: 'Maguire',           position: 'DEF', participant: 2, jerseyNumber: 6,  starter: false },
-  { id: 'eng-ramsdale',    name: 'Ramsdale',          position: 'GK',  participant: 2, jerseyNumber: 13, starter: false },
-  { id: 'eng-mainoo',      name: 'Mainoo',            position: 'MID', participant: 2, jerseyNumber: 26, starter: false },
-  { id: 'eng-white',       name: 'B. White',          position: 'DEF', participant: 2, jerseyNumber: 2,  starter: false },
-  { id: 'eng-gordon',      name: 'Gordon',            position: 'ATT', participant: 2, jerseyNumber: 22, starter: false },
-  { id: 'eng-toney',       name: 'Toney',             position: 'ATT', participant: 2, jerseyNumber: 18, starter: false },
-  { id: 'eng-eze',         name: 'Eze',               position: 'MID', participant: 2, jerseyNumber: 17, starter: false },
-  { id: 'eng-henderson',   name: 'J. Henderson',      position: 'MID', participant: 2, jerseyNumber: 8,  starter: false },
-  { id: 'eng-watkins',     name: 'Watkins',           position: 'ATT', participant: 2, jerseyNumber: 9,  starter: false },
-  { id: 'eng-chalobah',    name: 'Chalobah',          position: 'DEF', participant: 2, jerseyNumber: 16, starter: false },
-  { id: 'eng-trafford',    name: 'Trafford',          position: 'GK',  participant: 2, jerseyNumber: 22, starter: false },
+  // Bench — full 17-player bench as per screenshot
+  { id: 'eng-rashford',    name: 'M. Rashford',        position: 'ATT', participant: 2, jerseyNumber: 11, starter: false },
+  { id: 'eng-foden',       name: 'P. Foden',           position: 'ATT', participant: 2, jerseyNumber: 20, starter: false },
+  { id: 'eng-maguire',     name: 'H. Maguire',         position: 'DEF', participant: 2, jerseyNumber: 6,  starter: false },
+  { id: 'eng-ramsdale',    name: 'A. Ramsdale',        position: 'GK',  participant: 2, jerseyNumber: 13, starter: false },
+  { id: 'eng-mainoo',      name: 'K. Mainoo',          position: 'MID', participant: 2, jerseyNumber: 26, starter: false },
+  { id: 'eng-white',       name: 'B. White',           position: 'DEF', participant: 2, jerseyNumber: 2,  starter: false },
+  { id: 'eng-gordon',      name: 'A. Gordon',          position: 'ATT', participant: 2, jerseyNumber: 22, starter: false },
+  { id: 'eng-toney',       name: 'I. Toney',           position: 'ATT', participant: 2, jerseyNumber: 18, starter: false },
+  { id: 'eng-eze',         name: 'E. Eze',             position: 'MID', participant: 2, jerseyNumber: 17, starter: false },
+  { id: 'eng-henderson',   name: 'J. Henderson',       position: 'MID', participant: 2, jerseyNumber: 8,  starter: false },
+  { id: 'eng-watkins',     name: 'O. Watkins',         position: 'ATT', participant: 2, jerseyNumber: 9,  starter: false },
+  { id: 'eng-chalobah',    name: 'T. Chalobah',        position: 'DEF', participant: 2, jerseyNumber: 16, starter: false },
+  { id: 'eng-trafford',    name: 'J. Trafford',        position: 'GK',  participant: 2, jerseyNumber: 22, starter: false },
+  { id: 'eng-burn',        name: 'D. Burn',            position: 'DEF', participant: 2, jerseyNumber: 5,  starter: false },
+  { id: 'eng-dhenderson',  name: 'D. Henderson',       position: 'GK',  participant: 2, jerseyNumber: 1,  starter: false },
+  { id: 'eng-rjames',      name: 'R. James',           position: 'DEF', participant: 2, jerseyNumber: 12, starter: false },
+  { id: 'eng-quansah',     name: 'J. Quansah',         position: 'DEF', participant: 2, jerseyNumber: 4,  starter: false },
+  { id: 'eng-rogers',      name: 'M. Rogers',          position: 'MID', participant: 2, jerseyNumber: 15, starter: false },
+  { id: 'eng-spence',      name: 'D. Spence',          position: 'DEF', participant: 2, jerseyNumber: 23, starter: false },
 ];
