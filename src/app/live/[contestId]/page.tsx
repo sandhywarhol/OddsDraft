@@ -3559,15 +3559,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       }
     }, [latestEvent, showPopup, contestId, matchCompleted, appMode]);
 
-    // Guest demo: show fake SOL claim overlay after full_time + card pack closed
+    // Guest demo: show fake SOL claim overlay after full_time dialog fully closed + card pack closed
     useEffect(() => {
-      if (!guestDemoMode || showCardPack || showDemoSolClaim) return;
+      if (!guestDemoMode || showCardPack || showDemoSolClaim || showPopup) return;
       const hasFullTime = latestEvent?.type === 'full_time' || events.some(e => e.type === 'full_time');
       if (!hasFullTime) return;
       const t = setTimeout(() => setShowDemoSolClaim(true), 800);
       return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [guestDemoMode, showCardPack, showDemoSolClaim, latestEvent]);
+    }, [guestDemoMode, showCardPack, showDemoSolClaim, latestEvent, showPopup]);
 
     // Restart the demo match 2 minutes after full time (demo only — live matches don't loop)
     useEffect(() => {
@@ -3717,7 +3717,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               {/* Fix 6: Referee chat bubble using provided SVG asset */}
               <div className={`npc-referee-bubble-wrapper referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}>
-                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 720, height: 405, maxWidth: '95vw' }}>
+                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 460, height: 260, maxWidth: '72vw' }}>
                   {/* Background: REFEREE CHAT BUBBLE.svg */}
                   <img
                     src="/NPC/REFEREE%20CHAT%20BUBBLE.svg"
@@ -3726,16 +3726,16 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       position: 'absolute', inset: 0,
                       width: '100%', height: '100%',
                       objectFit: 'contain',
-                      filter: 'drop-shadow(4px 4px 0px rgba(0,0,0,0.8))',
+                      filter: 'drop-shadow(3px 3px 0px rgba(0,0,0,0.8))',
                     }}
                   />
                   {/* Text centered over bubble */}
                   <div className="npc-referee-bubble-text" style={{
                     position: 'absolute', inset: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '10%',
+                    padding: '12%',
                     textAlign: 'center',
-                    fontSize: 'clamp(1.5rem, 5vw, 3rem)',
+                    fontSize: 'clamp(1rem, 3.5vw, 2rem)',
                   }}>
                     {dialog.text}
                   </div>
