@@ -221,7 +221,7 @@ function getDialogData(
   fixture: any,
   score: { home: number, away: number } = { home: 0, away: 0 },
   extra?: {
-    userLineupNames?: string[];   // Fix 2: user-picked player names for kick_off commentary
+    userLineupStarters?: string[]; userLineupBenched?: string[];   // Fix 2: user-picked player names for kick_off commentary
     halfTimeStats?: { goals: number; saves: number; yellowCards: number; homeScore: number; awayScore: number }; // Fix 4
   }
 ): DialogData {
@@ -261,13 +261,22 @@ function getDialogData(
             text: `"Let's see if the managers' half-time instructions can make a difference in these final 45 minutes!"`,
             commentator1Image: '/NPC/Komentator%201%20calm.svg',
           };
-        } else if (extra?.userLineupNames && extra.userLineupNames.length > 0) {
-          // Fix 2: commentator reviews which of the user's picked players are in today's lineup
-          const picks = extra.userLineupNames.slice(0, 3).join(', ');
-          const rest = extra.userLineupNames.length > 3 ? ` and ${extra.userLineupNames.length - 3} more` : '';
+        } else if (extra?.userLineupStarters && extra?.userLineupBenched) {
+          const starters = extra.userLineupStarters;
+          const benched = extra.userLineupBenched;
+          let text = "Let's see... ";
+          if (starters.length > 0) {
+            text += `${starters.slice(0, 3).join(', ')} ${starters.length > 3 ? 'and others ' : ''}are starting today. `;
+          }
+          if (benched.length > 0) {
+            text += `Meanwhile, ${benched.slice(0, 2).join(', ')} ${benched.length > 2 ? 'and others ' : ''}start on the bench.`;
+          }
+          if (starters.length === 0) {
+            text += "None of your picked players made the starting XI!";
+          }
           return {
             speakerTitle: 'Martin',
-            text: `"Your lineup features ${picks}${rest}. Great selections — let's see how they perform in this World Cup Final!"`,
+            text: `"${text.trim()}"`,
             commentator1Image: '/NPC/Komentator%201%20calm.svg',
           };
         } else {
@@ -3541,7 +3550,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
     // Card pack reward after full time — fires on full_time event OR when matchCompleted becomes true
     useEffect(() => {
-      const shouldShow = (latestEvent?.type === 'full_time' && !showPopup) || matchCompleted;
+      const shouldShow = (latestEvent?.type === 'full_time' || matchCompleted) && !showPopup;
       if (shouldShow && appMode === 'live') {
         if (userLineupRef.current && !hasOpenedPack(`${contestId}_${contestType}`)) {
           const packTimer = setTimeout(() => setShowCardPack(true), 800);
@@ -3671,9 +3680,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       {/* Live Event Popup */}
       {showPopup && latestEvent && (() => {
         // Fix 2 + 4: compute extra context for NPC dialog
-        const _userLineupNames: string[] = guestDemoMode
-          ? ((userLineup?.players as any[] ?? []).map((p: any) => p?.name).filter(Boolean) as string[])
-          : [];
+        const _userLineupStarters: string[] = [];
+        const _userLineupBenched: string[] = [];
+        if (guestDemoMode && userLineup?.players) {
+          const rStarters = getRealStarterIds();
+          for (const p of userLineup.players as any[]) {
+            if (p && p.name && p.id) {
+              if (rStarters && rStarters.has(p.id)) _userLineupStarters.push(p.name);
+              else _userLineupBenched.push(p.name);
+            }
+          }
+        }
         const _halfTimeStats = latestEvent.type === 'half_time' && guestDemoMode
           ? {
               goals: events.filter(e => e.type === 'goal').length,
@@ -3684,7 +3701,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
             }
           : undefined;
         const dialog = getDialogData(latestEvent, dialogStep, fixture, score, {
-          userLineupNames: _userLineupNames,
+          userLineupStarters: _userLineupStarters, userLineupBenched: _userLineupBenched,
           halfTimeStats: _halfTimeStats,
         });
         
@@ -3700,7 +3717,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               {/* Fix 6: Referee chat bubble using provided SVG asset */}
               <div className={`npc-referee-bubble-wrapper referee-${(dialog as any).refereePosition === 'left' ? 'left' : 'right'}`}>
-                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 320, height: 200 }}>
+                <div className="npc-referee-bubble-container" style={{ position: 'relative', width: 720, height: 405, maxWidth: '95vw' }}>
                   {/* Background: REFEREE CHAT BUBBLE.svg */}
                   <img
                     src="/NPC/REFEREE%20CHAT%20BUBBLE.svg"
@@ -3716,8 +3733,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   <div className="npc-referee-bubble-text" style={{
                     position: 'absolute', inset: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '20px 40px',
+                    padding: '10%',
                     textAlign: 'center',
+                    fontSize: 'clamp(1.5rem, 5vw, 3rem)',
                   }}>
                     {dialog.text}
                   </div>
@@ -4831,13 +4849,32 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   <button
                     className="btn btn--primary btn--full"
                     style={{ fontWeight: 800, fontSize: '0.9rem', padding: '12px', cursor: 'default' }}
-                    onClick={() => {/* demo — decorative only */}}
+                    onClick={() => {
+    if (claimStatus !== 'claimed') {
+      setClaimStatus('submitting');
+      setTimeout(() => {
+        setClaimStatus('claimed');
+        setClaimTxSig('demo-tx-signature-12345');
+      }, 1500);
+    }
+  }}
+  disabled={claimStatus === 'submitting' || claimStatus === 'claimed'}
                   >
-                    CLAIM {DEMO_PRIZE_SOL} SOL →
+                    {claimStatus === 'submitting' ? 'CLAIMING...' : claimStatus === 'claimed' ? 'CLAIMED' : `CLAIM ${DEMO_PRIZE_SOL} SOL →`}
                   </button>
-                  <p style={{ marginTop: 10, fontSize: '0.68rem', color: 'rgba(255,255,255,0.28)', lineHeight: 1.5, margin: '10px 0 0' }}>
-                    * Demo mode — no real SOL is transferred. Live contests pay out on-chain via Solana.
-                  </p>
+                                    {claimStatus === 'claimed' ? (
+                    <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(0,232,122,0.1)', borderRadius: 8, border: '1px solid rgba(0,232,122,0.2)', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#00e87a', marginBottom: 2 }}>Prize Sent to Wallet!</div>
+                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }}>Tx: demo-tx-signature-12345</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ marginTop: 10, fontSize: '0.68rem', color: 'rgba(255,255,255,0.28)', lineHeight: 1.5, margin: '10px 0 0' }}>
+                      * Demo mode — no real SOL is transferred. Live contests pay out on-chain via Solana.
+                    </p>
+                  )}
                 </div>
               )}
 

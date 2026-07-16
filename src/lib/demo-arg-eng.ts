@@ -90,7 +90,7 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_d1',        minute: 7,  team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'danger_attack',   points: 0,  silent: true,
     description: 'Messi drifts inside from the left and plays a one-two with Álvarez! Argentina first to threaten.' },
 
-  { id: 'ae_ck1',       minute: 12, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier',    playerId: 'eng-trippier',   type: 'corner_kick',     points: 0,  silent: true,
+  { id: 'ae_ck1',       minute: 12, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Trippier',    playerId: 'eng-trippier',   type: 'corner_kick',     points: 0,
     description: 'CORNER! Trippier wins England their first corner — curling delivery coming in towards Kane!' },
   { id: 'ae_save1',     minute: 13, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'E. Martínez punches the corner clear! Strong from the Argentine keeper under pressure.' },
@@ -103,7 +103,7 @@ export const ARG_ENG_EVENTS: Array<{
     description: 'E. Martínez had no chance — Kane\'s header was perfectly placed into the bottom corner.' },
   { id: 'ae_conc1_rom', minute: 22, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',       playerId: 'arg-romero',     type: 'goal_conceded',   points: -1, silent: true,
     description: 'Romero failed to track Kane\'s run — England punish the Argentine defence.' },
-  { id: 'ae_var1',      minute: 24, team: '',          teamFlag: '',    player: '',            playerId: '',               type: 'var_review',      points: 0,  silent: true,
+  { id: 'ae_var1',      minute: 24, team: '',          teamFlag: '',    player: '',            playerId: '',               type: 'var_review',      points: 0,
     description: 'VAR checks Kane\'s goal for offside... confirmed onside. The goal stands!' },
 
   { id: 'ae_yc1',       minute: 29, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rice',        playerId: 'eng-rice',       type: 'yellow_card',     points: -2,
@@ -140,7 +140,7 @@ export const ARG_ENG_EVENTS: Array<{
     description: 'Pickford got a fingertip to Messi\'s curler but couldn\'t keep it out.' },
   { id: 'ae_conc2_sto', minute: 60, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones',      playerId: 'eng-stones',     type: 'goal_conceded',   points: -1, silent: true,
     description: 'Stones caught flat-footed by Mac Allister\'s pass — Messi needs no second invitation.' },
-  { id: 'ae_var2',      minute: 62, team: '',          teamFlag: '',    player: '',            playerId: '',               type: 'var_review',      points: 0,  silent: true,
+  { id: 'ae_var2',      minute: 62, team: '',          teamFlag: '',    player: '',            playerId: '',               type: 'var_review',      points: 0,
     description: 'VAR checks Messi\'s goal for a foul in the build-up... After a long review, the goal stands!' },
 
   { id: 'ae_sub1',      minute: 65, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Rashford',    playerId: 'eng-rashford',   type: 'substitution',    points: 0,  playerOut: 'Saka',
