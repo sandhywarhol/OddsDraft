@@ -19,7 +19,6 @@
 // CONFIGURABLE ITEMS IN THIS FILE:
 //   DEMO_ARG_ENG_FIXTURE  — match teams, fixture ID, kickoff time
 //   ARG_ENG_EVENTS        — full match event script (goals, cards, subs…)
-//   DEMO_PRIZE_SOL        — fake SOL prize shown after full time
 //   DEMO_ARG_ENG_HOME_LINEUP / AWAY_LINEUP — squad rosters (starters + bench)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -202,10 +201,6 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0,
     description: 'FULL TIME · Argentina 2-1 England · Goals: Kane 22\' (ENG), Messi 60\' (ARG), Lautaro 73\' (ARG) · Shots: ARG 12 ENG 9 · Possession: ARG 54% ENG 46% · Red card: Romero 57\' (ARG) · World Cup 2026 Champions: Argentina 🇦🇷' },
 ];
-
-// [GUEST_DEMO] Prize displayed in the SOL claim overlay after full time.
-// This is cosmetic only — no real SOL is transferred in demo mode.
-export const DEMO_PRIZE_SOL = 2.5;
 
 // [GUEST_DEMO] Static squad rosters — injected by bootstrap() when guestDemoMode is true,
 // bypassing TxLINE entirely. starter: true = starting XI; starter: false = bench panel.

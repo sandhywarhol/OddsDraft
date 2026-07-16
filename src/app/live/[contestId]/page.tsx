@@ -4,9 +4,9 @@ import { useState, useEffect, useRef, use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
-import { ARG_ENG_EVENTS, DEMO_ARG_ENG_HOME_LINEUP, DEMO_ARG_ENG_AWAY_LINEUP, DEMO_PRIZE_SOL } from '@/lib/demo-arg-eng';
+import { ARG_ENG_EVENTS, DEMO_ARG_ENG_HOME_LINEUP, DEMO_ARG_ENG_AWAY_LINEUP } from '@/lib/demo-arg-eng';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
-import { calculateEventPoints, POINT_MAP, getPrizeForRank, resolvePlayerDelta } from '@/lib/fantasy-engine';
+import { calculateEventPoints, POINT_MAP, getPrizeForRank, resolvePlayerDelta, ENTRY_FEE_SOL, calculateDistributablePool } from '@/lib/fantasy-engine';
 import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
@@ -1023,6 +1023,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const isFirstTxLinePollRef = useRef(true);
   // Mirrors matchCompleted state so poll closures can read it without stale capture
   const matchCompletedRef = useRef(false);
+  // True only once the commentators finish reading out the full-time stats dialogue —
+  // gates the card pack reveal so it can't pop up mid-commentary
+  const fullTimeStatsDoneRef = useRef(false);
   // Always holds the latest guestJwt so poll closure doesn't capture a stale null
   const guestJwtRef = useRef<string | null>(null);
   // Track cumulative PlayerStats from TxLINE — compare each poll to find new events
@@ -1205,7 +1208,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     setTimeout(() => {
       setVerificationStatus('success');
       if (userLineupRef.current && !hasOpenedPack(`${contestId}_${contestType}`)) {
-        setTimeout(() => setShowCardPack(true), 600);
+        // Don't reveal the pack while the commentators are still reading out the
+        // full-time stats — wait for that dialogue to finish first.
+        if (fullTimeStatsDoneRef.current) {
+          setTimeout(() => setShowCardPack(true), 600);
+        } else {
+          const interval = setInterval(() => {
+            if (fullTimeStatsDoneRef.current) {
+              clearInterval(interval);
+              setShowCardPack(true);
+            }
+          }, 500);
+          // Safety fallback — never block the reward forever if full-time dialogue never ran
+          setTimeout(() => { clearInterval(interval); setShowCardPack(true); }, 45000);
+        }
       }
     }, 2000);
   };
@@ -3503,7 +3519,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         } else if (dialogStep === 6) {
           timer = setTimeout(() => setDialogStep(7), 5000);
         } else {
-          timer = setTimeout(() => setShowPopup(false), 5000);
+          timer = setTimeout(() => {
+            fullTimeStatsDoneRef.current = true;
+            setShowPopup(false);
+          }, 5000);
         }
       } else if (latestEvent.type === 'half_time') {
         if (dialogStep === 1) {
@@ -3548,9 +3567,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       return () => clearTimeout(timer);
     }, [showPopup, latestEvent, dialogStep]);
 
-    // Card pack reward after full time — fires on full_time event OR when matchCompleted becomes true
+    // Card pack reward after full time — fires on full_time event OR when matchCompleted becomes true.
+    // When full_time is the event actually driving the popup, wait for the commentators to
+    // finish reading the full-time stats (fullTimeStatsDoneRef) before revealing the pack —
+    // otherwise the pack can pop up mid-commentary. If the match was already over before this
+    // page loaded (no full_time dialogue to watch), fall back to the old immediate behavior.
     useEffect(() => {
-      const shouldShow = (latestEvent?.type === 'full_time' || matchCompleted) && !showPopup;
+      const shouldShow = latestEvent?.type === 'full_time'
+        ? fullTimeStatsDoneRef.current && !showPopup
+        : matchCompleted && !showPopup;
       if (shouldShow && appMode === 'live') {
         if (userLineupRef.current && !hasOpenedPack(`${contestId}_${contestType}`)) {
           const packTimer = setTimeout(() => setShowCardPack(true), 800);
@@ -3733,9 +3758,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   <div className="npc-referee-bubble-text" style={{
                     position: 'absolute', inset: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '12%',
+                    padding: '10%',
                     textAlign: 'center',
-                    fontSize: 'clamp(1rem, 3.5vw, 2rem)',
+                    fontSize: 'clamp(1.8rem, 5vw, 4rem)',
                   }}>
                     {dialog.text}
                   </div>
@@ -3762,6 +3787,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               if (dialogStep < maxSteps) {
                 setDialogStep(prev => prev + 1);
               } else {
+                if (type === 'full_time') fullTimeStatsDoneRef.current = true;
                 setShowPopup(false);
               }
             }}
@@ -4765,20 +4791,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   {/* Prize pool breakdown */}
                   {(() => {
                     const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
-                    const pool = Math.round(n * 0.01 * 10000) / 10000;
+                    const pool = calculateDistributablePool(n, ENTRY_FEE_SOL);
                     type Row = { place: string; prize: string; pct: string; color: string };
                     let breakdown: Row[] = [];
                     if (contestType === '5050') {
                       const winners = Math.max(1, Math.floor(n / 2));
-                      const each = winners > 0 ? Math.round((pool / winners) * 10000) / 10000 : 0;
+                      const each = getPrizeForRank(1, contestType, n, ENTRY_FEE_SOL);
                       breakdown = [{ place: 'Top 50%', prize: `${each.toFixed(4)} SOL each`, pct: '100%', color: '#10b981' }];
                     } else if (contestType === 'wta') {
-                      breakdown = [{ place: '1st', prize: `${pool.toFixed(4)} SOL`, pct: '100%', color: '#FFD700' }];
+                      breakdown = [{ place: '1st', prize: `${getPrizeForRank(1, contestType, n, ENTRY_FEE_SOL).toFixed(4)} SOL`, pct: '100%', color: '#FFD700' }];
                     } else {
                       breakdown = [
-                        { place: '1st', prize: `${(pool * 0.5).toFixed(4)} SOL`, pct: '50%', color: '#FFD700' },
-                        { place: '2nd', prize: `${(pool * 0.3).toFixed(4)} SOL`, pct: '30%', color: '#C0C0C0' },
-                        { place: '3rd', prize: `${(pool * 0.2).toFixed(4)} SOL`, pct: '20%', color: '#CD7F32' },
+                        { place: '1st', prize: `${getPrizeForRank(1, contestType, n, ENTRY_FEE_SOL).toFixed(4)} SOL`, pct: '50%', color: '#FFD700' },
+                        { place: '2nd', prize: `${getPrizeForRank(2, contestType, n, ENTRY_FEE_SOL).toFixed(4)} SOL`, pct: '30%', color: '#C0C0C0' },
+                        { place: '3rd', prize: `${getPrizeForRank(3, contestType, n, ENTRY_FEE_SOL).toFixed(4)} SOL`, pct: '20%', color: '#CD7F32' },
                       ];
                     }
                     return (
@@ -4820,7 +4846,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
               {/* SOL Prize Claim Panel — right column desktop, below Point Reference */}
               {/* Fix 5: Demo SOL prize card — shown in TxLINE section after verify, same as live */}
-              {verificationStatus === 'success' && guestDemoMode && (
+              {verificationStatus === 'success' && guestDemoMode && (() => {
+                const n = leaderboard.filter(e => e.wallet !== 'YOUR WALLET').length || leaderboard.length;
+                const demoPrize = getPrizeForRank(1, contestType, n, ENTRY_FEE_SOL);
+                return (
                 <div className="card desktop-only" style={{
                   border: '1px solid rgba(255,215,0,0.4)',
                   background: 'rgba(255,215,0,0.06)',
@@ -4840,7 +4869,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                   </div>
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ fontSize: '2rem', fontWeight: 900, color: '#ffd700', lineHeight: 1 }}>
-                      {DEMO_PRIZE_SOL} SOL
+                      {demoPrize.toFixed(4)} SOL
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
                       Rank #1 · Double Up prize
@@ -4860,7 +4889,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   }}
   disabled={claimStatus === 'submitting' || claimStatus === 'claimed'}
                   >
-                    {claimStatus === 'submitting' ? 'CLAIMING...' : claimStatus === 'claimed' ? 'CLAIMED' : `CLAIM ${DEMO_PRIZE_SOL} SOL →`}
+                    {claimStatus === 'submitting' ? 'CLAIMING...' : claimStatus === 'claimed' ? 'CLAIMED' : `CLAIM ${demoPrize.toFixed(4)} SOL →`}
                   </button>
                                     {claimStatus === 'claimed' ? (
                     <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(0,232,122,0.1)', borderRadius: 8, border: '1px solid rgba(0,232,122,0.2)', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -4876,7 +4905,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                     </p>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {verificationStatus === 'success' && appMode === 'live' && publicKey && (
                 <div className="card desktop-only" style={{
