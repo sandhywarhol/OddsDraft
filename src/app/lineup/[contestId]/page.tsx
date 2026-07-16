@@ -156,7 +156,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const router = useRouter();
 
   // isGuestDemo: URL-based demo for non-admin users accessing the guest demo flow
-  const isDemo = appMode === 'demo' || isGuestDemo;
+  // isReplayTutorial: "Replay Tutorial" button must work even when no wallet is connected
+  const isDemo = appMode === 'demo' || isGuestDemo || isReplayTutorial;
   const isDevnet = process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'devnet';
 
   // Always prefer WC2026 real fixture; fall back to demo fixtures, then placeholder
@@ -1291,7 +1292,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                     .tutorial-step-8-cards { top: 38%; }
                   }
                 `}</style>
-                {DEMO_CARDS.map((card, i) => {
+                {DEMO_CARDS.slice(0, 5).map((card, i) => {
                   const def = SKILL_CARDS.find(c => c.id === card.cardId);
                   return (
                     <div key={card.instanceId} style={{

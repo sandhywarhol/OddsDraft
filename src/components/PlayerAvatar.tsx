@@ -3,6 +3,17 @@
 import { useState, useEffect } from 'react';
 import { getPlayerPhoto } from '@/lib/player-photos';
 
+// Locally bundled photos for the tutorial/demo squad — avoids depending on a
+// live third-party API call (which can fail from ad-blockers, corporate
+// networks, or rate limits) during a judged demo walkthrough.
+const STATIC_DEMO_PHOTOS: Record<string, string> = {
+  'ger-neuer': '/players/ger-neuer.png',
+  'ger-tah': '/players/ger-tah.png',
+  'arg-paul': '/players/arg-paul.png',
+  'arg-messi': '/players/arg-messi.png',
+  'arg-alvarez': '/players/arg-alvarez.png',
+};
+
 // Team color palette for initials fallback
 const TEAM_COLORS: Record<string, string> = {
   Brazil: '#009c3b', Argentina: '#74acdf', France: '#003189',
@@ -36,14 +47,16 @@ interface PlayerAvatarProps {
 export default function PlayerAvatar({
   playerId, name, team, size = 60, style, variant = 'circle', className,
 }: PlayerAvatarProps) {
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const staticPhoto = STATIC_DEMO_PHOTOS[playerId] ?? null;
+  const [photoUrl, setPhotoUrl] = useState<string | null>(staticPhoto);
   const [imgOk, setImgOk] = useState(false);
 
   useEffect(() => {
+    if (staticPhoto) return; // bundled locally — skip the live API fetch entirely
     let active = true;
     getPlayerPhoto(playerId, name).then(url => { if (active) setPhotoUrl(url); });
     return () => { active = false; };
-  }, [playerId, name]);
+  }, [playerId, name, staticPhoto]);
 
   const initials = getInitials(name);
   const bgColor = TEAM_COLORS[team] ?? '#1e3a5f';
