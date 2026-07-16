@@ -31,6 +31,8 @@ export const metadata: Metadata = {
     title: 'OddsDraft — Predictive Fantasy Football',
     description: 'Fantasy football meets prediction markets. Live World Cup data. On-chain prizes.',
     images: ['/homepage.webp'],
+    creator: '@oddsdraft',
+    site: '@oddsdraft',
   },
 };
 

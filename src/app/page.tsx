@@ -793,14 +793,14 @@ function Footer() {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.02 9.522c-.149.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.88 14.376l-2.95-.924c-.642-.2-.654-.642.136-.95l11.52-4.44c.535-.194 1.003.13.976.186z"/></svg>
                 Telegram
               </a>
-              <a href="https://x.com/chainvolio" target="_blank" rel="noopener noreferrer"
+              <a href="https://x.com/oddsdraft" target="_blank" rel="noopener noreferrer"
                 style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#1DA1F2')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
-                @ChainVolio
+                @OddsDraft
               </a>
               <a href="https://txline-docs.txodds.com" target="_blank" rel="noopener noreferrer"
                 style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
