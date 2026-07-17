@@ -218,13 +218,22 @@ interface TeamCardProps {
 }
 
 function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: TeamCardProps) {
-  // If the API returned all squad members without starter flags, fall back to jersey ≤ 11 = starter
-  const allStarterUnset = players.length > 11 && players.every(p => p.starter === undefined);
-  const resolvedPlayers = allStarterUnset
-    ? players.map(p => ({ ...p, starter: p.jerseyNumber !== undefined ? p.jerseyNumber <= 11 : undefined }))
-    : players;
-  const starters = resolvedPlayers.filter(p => p.starter !== false);
+  // Resolve starter/bench when the API gives full squad without proper Starter flags
+  const allStarterUnset = players.every(p => p.starter === undefined);
+  let resolvedPlayers = players;
+  if (allStarterUnset && players.length > 11) {
+    // Sort by jersey number, treat first 11 as starters, rest as bench
+    const sorted = [...players].sort((a, b) => (a.jerseyNumber ?? 99) - (b.jerseyNumber ?? 99));
+    resolvedPlayers = sorted.map((p, i) => ({ ...p, starter: i < 11 }));
+  }
+  let starters = resolvedPlayers.filter(p => p.starter !== false);
   const bench = resolvedPlayers.filter(p => p.starter === false);
+  // Hard cap: never render more than 11 players on the pitch (safety net for any edge case)
+  if (starters.length > 11) {
+    const extra = starters.slice(11);
+    starters = starters.slice(0, 11);
+    bench.push(...extra);
+  }
   const rows = buildRows(starters);
 
   type RowKey = 'gk' | 'def' | 'mid' | 'fwd';
