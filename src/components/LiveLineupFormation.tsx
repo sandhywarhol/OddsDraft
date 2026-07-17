@@ -27,18 +27,24 @@ interface Props {
 function posGroup(pos: string): 'GK' | 'DEF' | 'MID' | 'FWD' {
   const p = pos.toUpperCase().trim();
   if (!p || p === '0') return 'MID';
+  // GK
   if (p === 'GK' || p === '1' || p === 'G' || p === 'PO' || p === 'PT'
-    || p.startsWith('GOAL') || p === 'PORTERO' || p === 'GOLEIRO') return 'GK';
-  if (p.includes('DEF') || p.includes('BACK') || p.includes('CENTR')
-    || ['CB', 'LB', 'RB', 'LWB', 'RWB', 'SW', 'D', '2', '3', '4', '5'].includes(p)) return 'DEF';
+    || p.startsWith('GOAL') || p === 'PORTERO' || p === 'GOLEIRO'
+    || p === 'GOALKEEPER') return 'GK';
+  // DEF — use 'BACK' and 'DEFENS' patterns but NOT 'CENTR' (which also matches centrocampista)
+  if (p.includes('DEF') || p.includes('BACK') || p.includes('DEFENS')
+    || ['CB', 'LB', 'RB', 'LWB', 'RWB', 'WB', 'SW', 'D', 'DF',
+        '2', '3', '4', '5'].includes(p)) return 'DEF';
+  // MID — 'CENTR' moved here to catch centrocampista/mediocentro
   if (p.includes('MID') || p.includes('FIELD') || p.includes('MEDIO') || p.includes('CENTRO')
-    || p.includes('VOLANTE') || p === 'MEIA'
+    || p.includes('CENTR') || p.includes('VOLANTE') || p === 'MEIA' || p === 'MF'
     || ['CM', 'CDM', 'CAM', 'DM', 'AM', 'LM', 'RM', 'M', 'DMF', 'AMF', 'CMF',
-      '6', '7', '8', '10'].includes(p)) return 'MID';
+        '6', '7', '8', '10'].includes(p)) return 'MID';
+  // FWD
   if (p.includes('FORW') || p.includes('ATT') || p.includes('STRIK') || p.includes('WING')
-    || p.includes('DELAN') || p === 'PUNTA'
+    || p.includes('DELAN') || p === 'PUNTA' || p === 'WM'
     || ['ST', 'CF', 'LW', 'RW', 'LWF', 'RWF', 'SS', 'FW', 'F', 'ATT',
-      '9', '11'].includes(p)) return 'FWD';
+        '9', '11'].includes(p)) return 'FWD';
   return 'FWD';
 }
 
@@ -77,20 +83,21 @@ function distributeByJersey(players: FormationPlayer[]): FormationPlayer[] {
 }
 
 function buildRows(players: FormationPlayer[]) {
-  const g = {
-    GK: players.filter(p => posGroup(p.position) === 'GK'),
-    DEF: players.filter(p => posGroup(p.position) === 'DEF'),
-    MID: players.filter(p => posGroup(p.position) === 'MID'),
-    FWD: players.filter(p => posGroup(p.position) === 'FWD'),
-  };
-  const filled = Object.values(g).filter(arr => arr.length > 0).length;
-  const processed = filled < 3 ? distributeByJersey(players) : players;
-  const gk = processed.filter(p => posGroup(p.position) === 'GK');
-  const def = processed.filter(p => posGroup(p.position) === 'DEF');
-  const mid = processed.filter(p => posGroup(p.position) === 'MID');
-  const fwd = processed.filter(p => posGroup(p.position) === 'FWD');
-  const formation = [def.length, mid.length, fwd.length].filter(n => n > 0).join('-');
-  return { gk, def, mid, fwd, formation };
+  const gk  = players.filter(p => posGroup(p.position) === 'GK');
+  const def = players.filter(p => posGroup(p.position) === 'DEF');
+  const mid = players.filter(p => posGroup(p.position) === 'MID');
+  const fwd = players.filter(p => posGroup(p.position) === 'FWD');
+  const filled = [gk, def, mid, fwd].filter(arr => arr.length > 0).length;
+  // Fall back to jersey-based distribution if positions are unrealistic
+  // (>5 DEF, 0 MID, or 0 FWD almost never happen in real football)
+  const isUnrealistic = def.length > 5 || mid.length === 0 || fwd.length === 0 || filled < 3;
+  const processed = isUnrealistic ? distributeByJersey(players) : players;
+  const gkF  = processed.filter(p => posGroup(p.position) === 'GK');
+  const defF = processed.filter(p => posGroup(p.position) === 'DEF');
+  const midF = processed.filter(p => posGroup(p.position) === 'MID');
+  const fwdF = processed.filter(p => posGroup(p.position) === 'FWD');
+  const formation = [defF.length, midF.length, fwdF.length].filter(n => n > 0).join('-');
+  return { gk: gkF, def: defF, mid: midF, fwd: fwdF, formation };
 }
 
 // ── Pitch viewBox ─────────────────────────────────────────────────────────
