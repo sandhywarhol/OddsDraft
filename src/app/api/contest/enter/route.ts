@@ -74,17 +74,22 @@ function validateLineup(
   // ── players must belong to the fixture's two teams ───────────────────
   const fixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
   if (fixture) {
-    const allowedTeams = new Set([fixture.homeTeam, fixture.awayTeam]);
-
     // Build a lookup of known player IDs and their teams
     const playerRegistry = new Map(WC2026_PLAYERS.map(p => [p.id, p]));
+
+    const isTbdFixture = !fixture.homeTeam || fixture.homeTeam.toLowerCase() === 'tbd'
+      || !fixture.awayTeam || fixture.awayTeam.toLowerCase() === 'tbd';
+
+    const allowedTeams = isTbdFixture ? null : new Set([fixture.homeTeam, fixture.awayTeam]);
 
     for (const p of players) {
       const known = playerRegistry.get(p.id);
       if (!known) {
         return { ok: false, error: `Unknown player id "${p.id}"` };
       }
-      if (!allowedTeams.has(known.team)) {
+      // Skip team restriction when fixture teams are TBD (knockout match, teams not yet confirmed).
+      // This allows entries to be saved when the static fixture hasn't been updated yet.
+      if (allowedTeams && !allowedTeams.has(known.team)) {
         return {
           ok: false,
           error: `Player "${known.name}" (${known.team}) does not belong to this fixture (${fixture.homeTeam} vs ${fixture.awayTeam})`,

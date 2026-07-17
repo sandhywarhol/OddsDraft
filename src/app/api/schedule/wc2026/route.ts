@@ -134,6 +134,21 @@ export async function GET() {
              ?? staticByTeams.get(`${normStr(away)}__${normStr(home)}`);
       }
 
+      // Third fallback: match by kickoff time for TBD static fixtures (e.g. finals before teams
+      // are confirmed). This preserves the static ID in Supabase so existing contest_entries
+      // don't get orphaned when TxLINE assigns its own ID to a confirmed knockout match.
+      if (!match && kickoffAt && !isTbd(home) && !isTbd(away)) {
+        const txTime = new Date(kickoffAt).getTime();
+        for (const [id, sf] of resultMap) {
+          if (!isTbd(sf.homeTeam) && !isTbd(sf.awayTeam)) continue;
+          const sfTime = sf.kickoffAt ? new Date(sf.kickoffAt).getTime() : 0;
+          if (sfTime && Math.abs(sfTime - txTime) <= 2 * 3_600_000) {
+            match = staticById.get(id) ?? (sf as WCFixture);
+            break;
+          }
+        }
+      }
+
       if (match) {
         // Update the existing entry with live TxLINE data.
         // Keep our static ID (e.g. 18220001) even if TxLINE uses a different ID — changing

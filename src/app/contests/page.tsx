@@ -101,10 +101,14 @@ export default function ContestsPage() {
     });
   }, [publicKey, isDemo]);
 
-  // Fetch real participant counts from Supabase for visible fixtures
-  // Always fetch — Supabase data is real regardless of TxLINE appMode.
+  // Fetch real participant counts from Supabase for visible fixtures.
+  // Always include static fixture IDs alongside live schedule IDs — the schedule API
+  // may purge a static ID (e.g. 18230001) when TxLINE assigns its own knockout ID, but
+  // existing Supabase contest_entries are still stored under the original static ID.
   useEffect(() => {
-    const ids = scheduleFixtures.map(f => f.fixtureId).join(',');
+    const dynamicIds = scheduleFixtures.map(f => f.fixtureId);
+    const staticIds = WC2026_FIXTURES.map(f => f.fixtureId);
+    const ids = [...new Set([...dynamicIds, ...staticIds])].join(',');
     if (!ids) return;
     fetch(`/api/contest/counts?fixtures=${ids}`)
       .then(r => r.json())
