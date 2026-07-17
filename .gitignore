@@ -48,7 +48,16 @@ next-env.d.ts
 *.doc
 *.rtf
 *.pdf
+*.pptx
 Implementation\ Plan*.rtf
+
+# Private pitch / internal documents
+OddsDraft_Pitch_Deck*
+OddsDraft_Pitch_Script*
+laporan-audit-oddsdraft*
+
+# Temporary fix/debug scripts
+fix_*.js
 
 # Anchor / Rust program files
 /oddsdraft_program/.anchor
