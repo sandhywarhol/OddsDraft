@@ -40,8 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Claude Code session data
+# Claude Code session data and config
 .claude/
+CLAUDE.md
+AGENTS.md
 
 # Office documents and temp files
 *.docx
