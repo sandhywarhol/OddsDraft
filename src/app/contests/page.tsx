@@ -102,14 +102,15 @@ export default function ContestsPage() {
   }, [publicKey, isDemo]);
 
   // Fetch real participant counts from Supabase for visible fixtures
+  // Always fetch — Supabase data is real regardless of TxLINE appMode.
   useEffect(() => {
-    if (isDemo) return;
     const ids = scheduleFixtures.map(f => f.fixtureId).join(',');
+    if (!ids) return;
     fetch(`/api/contest/counts?fixtures=${ids}`)
       .then(r => r.json())
       .then(data => setContestCounts(data))
       .catch(() => {});
-  }, [isDemo]);
+  }, [scheduleFixtures]);
 
   // Extract scores from TxLINE allFixtures snapshot
   useEffect(() => {

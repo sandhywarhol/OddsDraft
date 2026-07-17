@@ -218,8 +218,13 @@ interface TeamCardProps {
 }
 
 function TeamCard({ players, team, flag, coach, color, userSet, playerPoints }: TeamCardProps) {
-  const starters = players.filter(p => p.starter !== false);
-  const bench = players.filter(p => p.starter === false);
+  // If the API returned all squad members without starter flags, fall back to jersey ≤ 11 = starter
+  const allStarterUnset = players.length > 11 && players.every(p => p.starter === undefined);
+  const resolvedPlayers = allStarterUnset
+    ? players.map(p => ({ ...p, starter: p.jerseyNumber !== undefined ? p.jerseyNumber <= 11 : undefined }))
+    : players;
+  const starters = resolvedPlayers.filter(p => p.starter !== false);
+  const bench = resolvedPlayers.filter(p => p.starter === false);
   const rows = buildRows(starters);
 
   type RowKey = 'gk' | 'def' | 'mid' | 'fwd';
