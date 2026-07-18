@@ -19,6 +19,75 @@ import CardPackOpener from '@/components/CardPackOpener';
 import FlagImage from '@/components/FlagImage';
 import { openCardPack, hasOpenedPack } from '@/lib/card-collection';
 import type { MatchResult, PeriodStats } from '@/app/api/match/result/route';
+import LiveLineupFormation, { type FormationPlayer } from '@/components/LiveLineupFormation';
+
+// Best-effort XI when TxLINE has no published lineup for this fixture — derived purely
+// from our own roster data (jersey numbers 1-11), so it's always available for a real match.
+function buildPredictedXI(team: string, participant: 1 | 2): FormationPlayer[] {
+  return WC2026_PLAYERS
+    .filter(p => p.team === team && p.jerseyNumber <= 11)
+    .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      jerseyNumber: p.jerseyNumber,
+      position: p.position === 'SWG' ? 'ATT' : p.position,
+      participant,
+    }));
+}
+
+// Flattens TxLINE's lineup response (any of its several shapes) into FormationPlayer[].
+function parseLineupData(lineupData: any, pMap: Record<string, string>): { home: FormationPlayer[]; away: FormationPlayer[]; homeCoach?: string; awayCoach?: string } | null {
+  let players: any[] = [];
+  const topArr: any[] | null = (() => {
+    if (Array.isArray(lineupData)) return lineupData;
+    const cand = lineupData?.Lineups ?? lineupData?.lineups
+              ?? lineupData?.Data?.Lineups ?? lineupData?.Data?.lineups
+              ?? lineupData?.players;
+    return Array.isArray(cand) ? cand : null;
+  })();
+  if (topArr && topArr.length > 0) {
+    const first = topArr[0];
+    const isTeamNested = first && (Array.isArray(first.lineups) || Array.isArray(first.Lineups) || Array.isArray(first.players));
+    if (isTeamNested) {
+      topArr.forEach((teamData: any, idx: number) => {
+        const ptcp: 1 | 2 = (teamData.Participant ?? teamData.participant ?? (idx === 0 ? 1 : 2)) === 2 ? 2 : 1;
+        const sub: any[] = teamData.lineups ?? teamData.Lineups ?? teamData.players ?? [];
+        sub.forEach((p: any) => players.push({ ...p, Participant: ptcp }));
+      });
+    } else {
+      players = topArr;
+    }
+  }
+  if (players.length === 0) return null;
+  const home: FormationPlayer[] = [];
+  const away: FormationPlayer[] = [];
+  let homeCoach: string | undefined;
+  let awayCoach: string | undefined;
+  for (const p of players) {
+    const participant: 1 | 2 = (p.Participant ?? p.participant ?? 1) === 2 ? 2 : 1;
+    const rawPos: string = (p.Position ?? p.position ?? '').toUpperCase();
+    const rawName: string = p.PlayerName ?? p.playerName ?? p.player?.preferredName ?? '';
+    const name = rawName.includes(',') ? rawName.split(',').map((s: string) => s.trim()).reverse().join(' ') : rawName;
+    if (!name) continue;
+    if (rawPos === 'COACH' || (p.Role ?? p.role ?? '').toUpperCase() === 'COACH') {
+      if (participant === 1) homeCoach = name; else awayCoach = name;
+      continue;
+    }
+    const starterRaw = p.Starter ?? p.starter;
+    const fp: FormationPlayer = {
+      id: pMap[String(p.PlayerId ?? p.playerId ?? '')] ?? undefined,
+      name,
+      jerseyNumber: p.JerseyNumber ?? p.jerseyNumber ?? undefined,
+      position: rawPos || 'MID',
+      participant,
+      starter: starterRaw !== undefined ? !!starterRaw : undefined,
+    };
+    if (participant === 1) home.push(fp); else away.push(fp);
+  }
+  if (home.length + away.length === 0) return null;
+  return { home, away, homeCoach, awayCoach };
+}
 
 // Fallback events (mirrors live page LIVE_EVENTS with all valid TxLINE event types)
 const LIVE_EVENTS = [
@@ -752,6 +821,10 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     return () => { cancelled = true; };
   }, [contestId, wcFixture]);
 
+  // Real published lineup (formation + starters + bench) from TxLINE, with a predicted-XI
+  // fallback derived from our own roster so the Team Lineup panel always has something to show.
+  const [realLineup, setRealLineup] = useState<{ home: FormationPlayer[]; away: FormationPlayer[]; homeCoach?: string; awayCoach?: string } | null>(null);
+
   // All state hooks — always called unconditionally (Rules of Hooks)
   const [events, setEvents] = useState<any[]>([]);
   const [currentEventIdx, setCurrentEventIdx] = useState(0);
@@ -831,8 +904,9 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
       fetchLiveScoreUpdates(apiToken, contestId, guestJwt),
       buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt),
       fetch('/api/scores/txline').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      fetch(`/api/txline/api/fixtures/lineups/${contestId}`).then(r => r.ok ? r.json() : null).catch(() => null),
     ])
-      .then(([raw, pMap, scoresData]) => {
+      .then(([raw, pMap, scoresData, lineupData]) => {
         if (cancelled) return;
         const updates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
         const seenSeqs = new Set<number>();
@@ -842,6 +916,18 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
           (fixture as any).homeFlag ?? '', (fixture as any).awayFlag ?? '',
           seenSeqs,
         );
+
+        // Real published lineup if TxLINE has one for this fixture, else a predicted XI
+        // from our own roster — either way the Team Lineup panel has something to show.
+        const parsedLineup = lineupData ? parseLineupData(lineupData, pMap) : null;
+        if (parsedLineup) {
+          setRealLineup(parsedLineup);
+        } else {
+          setRealLineup({
+            home: buildPredictedXI(fixture.homeTeam, 1),
+            away: buildPredictedXI(fixture.awayTeam, 2),
+          });
+        }
 
         if (apiEvents.length > 0) {
           const sorted = [...apiEvents].sort((a, b) => a.minute - b.minute);
@@ -1521,25 +1607,39 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                     Match Statistics
                   </h3>
 
-                  {/* Final score — same TxLINE-driven events feed as the Match Events timeline */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <FlagImage flag={fixture.homeFlag} size={18} />
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{fixture.homeTeam}</span>
-                    </div>
-                    <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.6rem', letterSpacing: '0.05em' }}>
-                      {score.home} — {score.away}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{fixture.awayTeam}</span>
-                      <FlagImage flag={fixture.awayFlag} size={18} />
-                    </div>
-                  </div>
-
-                  {/* Goal scorers + cards — derived from the same TxLINE event feed */}
+                  {/* Final score + goals/cards — read straight from the full event queue (not the
+                      progressively-revealed `events` state) so Match Statistics always shows the
+                      end result immediately, independent of where Match Events playback is. */}
                   {(() => {
-                    const goals = events.filter(e => e.type === 'goal' || e.type === 'own_goal').sort((a, b) => a.minute - b.minute);
-                    const cards = events.filter(e => e.type === 'yellow_card' || e.type === 'red_card').sort((a, b) => a.minute - b.minute);
+                    const allEvents = eventsQueueRef.current;
+                    let finalHome = 0, finalAway = 0;
+                    allEvents.forEach((e: any) => {
+                      if (e.type === 'goal' || e.type === 'own_goal') {
+                        if (e.team === fixture.homeTeam) finalHome++; else finalAway++;
+                      }
+                    });
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <FlagImage flag={fixture.homeFlag} size={18} />
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{fixture.homeTeam}</span>
+                        </div>
+                        <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.6rem', letterSpacing: '0.05em' }}>
+                          {finalHome} — {finalAway}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{fixture.awayTeam}</span>
+                          <FlagImage flag={fixture.awayFlag} size={18} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Goal scorers + cards — derived from the full event queue, same reasoning as above */}
+                  {(() => {
+                    const allEvents = eventsQueueRef.current;
+                    const goals = allEvents.filter((e: any) => e.type === 'goal' || e.type === 'own_goal').sort((a: any, b: any) => a.minute - b.minute);
+                    const cards = allEvents.filter((e: any) => e.type === 'yellow_card' || e.type === 'red_card').sort((a: any, b: any) => a.minute - b.minute);
                     if (goals.length === 0 && cards.length === 0) return null;
                     return (
                       <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1759,81 +1859,97 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               </div>
               )}
 
-              {/* Team Lineup — starting XI + substitutions, derived from the same TxLINE event feed */}
-              <div className="card" style={{ marginTop: 20 }}>
-                <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 16, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Team Lineup
-                </h4>
-                {(() => {
-                  const homeXI = events.filter(e => e.type === 'starting_xi' && e.team === fixture.homeTeam);
-                  const awayXI = events.filter(e => e.type === 'starting_xi' && e.team === fixture.awayTeam);
-                  const homeSubs = events.filter(e => e.type === 'substitution' && e.team === fixture.homeTeam).sort((a, b) => a.minute - b.minute);
-                  const awaySubs = events.filter(e => e.type === 'substitution' && e.team === fixture.awayTeam).sort((a, b) => a.minute - b.minute);
+              {/* Team Lineup — real published formation from TxLINE (predicted XI fallback when
+                  TxLINE has no published lineup for this fixture yet); falls back further to a
+                  plain starting_xi/substitution list for demo fixtures with no TxLINE backing at all */}
+              {realLineup ? (
+                <LiveLineupFormation
+                  homePlayers={realLineup.home}
+                  awayPlayers={realLineup.away}
+                  homeTeam={fixture.homeTeam}
+                  awayTeam={fixture.awayTeam}
+                  homeFlag={fixture.homeFlag}
+                  awayFlag={fixture.awayFlag}
+                  homeCoach={realLineup.homeCoach}
+                  awayCoach={realLineup.awayCoach}
+                />
+              ) : (
+                <div className="card" style={{ marginTop: 20 }}>
+                  <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 16, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Team Lineup
+                  </h4>
+                  {(() => {
+                    const allEvents = eventsQueueRef.current;
+                    const homeXI = allEvents.filter((e: any) => e.type === 'starting_xi' && e.team === fixture.homeTeam);
+                    const awayXI = allEvents.filter((e: any) => e.type === 'starting_xi' && e.team === fixture.awayTeam);
+                    const homeSubs = allEvents.filter((e: any) => e.type === 'substitution' && e.team === fixture.homeTeam).sort((a: any, b: any) => a.minute - b.minute);
+                    const awaySubs = allEvents.filter((e: any) => e.type === 'substitution' && e.team === fixture.awayTeam).sort((a: any, b: any) => a.minute - b.minute);
 
-                  if (homeXI.length === 0 && awayXI.length === 0) {
-                    return (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic', opacity: 0.7 }}>
-                        Lineup not available for this match
+                    if (homeXI.length === 0 && awayXI.length === 0) {
+                      return (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic', opacity: 0.7 }}>
+                          Lineup not available for this match
+                        </div>
+                      );
+                    }
+
+                    const posOf = (playerId?: string): string | null => {
+                      if (!playerId) return null;
+                      return WC2026_PLAYERS.find(p => p.id === playerId)?.position ?? null;
+                    };
+
+                    const TeamColumn = ({ team, flag, xi, subs }: { team: string; flag: string; xi: any[]; subs: any[] }) => (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <FlagImage flag={flag} size={16} />
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{team}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: subs.length > 0 ? 12 : 0 }}>
+                          {xi.map((p, i) => {
+                            const pos = posOf(p.playerId);
+                            return (
+                              <div key={`xi-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.76rem' }}>
+                                {pos && (
+                                  <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', width: 24, flexShrink: 0 }}>{pos}</span>
+                                )}
+                                <span>{p.player}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {subs.length > 0 && (
+                          <>
+                            <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 5, opacity: 0.7 }}>Substitutes</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {subs.map((s, i) => (
+                                <div key={`sub-${i}`} style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                                  <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{s.minute}&apos;</span>{' '}
+                                  {s.player}{s.playerOut ? ` (for ${s.playerOut})` : ''}
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     );
-                  }
 
-                  const posOf = (playerId?: string): string | null => {
-                    if (!playerId) return null;
-                    return WC2026_PLAYERS.find(p => p.id === playerId)?.position ?? null;
-                  };
-
-                  const TeamColumn = ({ team, flag, xi, subs }: { team: string; flag: string; xi: any[]; subs: any[] }) => (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                        <FlagImage flag={flag} size={16} />
-                        <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{team}</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: subs.length > 0 ? 12 : 0 }}>
-                        {xi.map((p, i) => {
-                          const pos = posOf(p.playerId);
-                          return (
-                            <div key={`xi-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.76rem' }}>
-                              {pos && (
-                                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', width: 24, flexShrink: 0 }}>{pos}</span>
-                              )}
-                              <span>{p.player}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {subs.length > 0 && (
-                        <>
-                          <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 5, opacity: 0.7 }}>Substitutes</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {subs.map((s, i) => (
-                              <div key={`sub-${i}`} style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                                <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{s.minute}&apos;</span>{' '}
-                                {s.player}{s.playerOut ? ` (for ${s.playerOut})` : ''}
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-
-                  return (
-                    <>
-                      <style>{`
-                        .replay-lineup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-                        @media (max-width: 480px) {
-                          .replay-lineup-grid { grid-template-columns: 1fr; }
-                        }
-                      `}</style>
-                      <div className="replay-lineup-grid">
-                        <TeamColumn team={fixture.homeTeam} flag={fixture.homeFlag} xi={homeXI} subs={homeSubs} />
-                        <TeamColumn team={fixture.awayTeam} flag={fixture.awayFlag} xi={awayXI} subs={awaySubs} />
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
+                    return (
+                      <>
+                        <style>{`
+                          .replay-lineup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+                          @media (max-width: 480px) {
+                            .replay-lineup-grid { grid-template-columns: 1fr; }
+                          }
+                        `}</style>
+                        <div className="replay-lineup-grid">
+                          <TeamColumn team={fixture.homeTeam} flag={fixture.homeFlag} xi={homeXI} subs={homeSubs} />
+                          <TeamColumn team={fixture.awayTeam} flag={fixture.awayFlag} xi={awayXI} subs={awaySubs} />
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* RIGHT: Leaderboard — entrant-only, spectators have no lineup/prize stake to show */}

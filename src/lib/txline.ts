@@ -202,7 +202,12 @@ export async function fetchLiveScoreUpdates(apiToken: string, fixtureId: string,
     if (!Array.isArray(res.data) || res.data.length === 0) return res.data ?? null;
     return mergeEvents(res.data);
   } catch (err: any) {
-    if (err?.response?.status === 404) return null;
+    // 404 = no data for this fixture; 401/403 = token invalid or fixture/tier not
+    // covered by it. All three just mean "nothing to show here" — fail soft rather
+    // than throwing, since callers already have a fallback event script and there's
+    // nothing actionable on our end for any of these statuses.
+    const status = err?.response?.status;
+    if (status === 404 || status === 403 || status === 401) return null;
     throw err;
   }
 }
@@ -217,7 +222,12 @@ export async function fetchScoreSnapshot(apiToken: string, fixtureId: string, gu
     if (!Array.isArray(res.data) || res.data.length === 0) return res.data ?? null;
     return mergeEvents(res.data);
   } catch (err: any) {
-    if (err?.response?.status === 404) return null;
+    // 404 = no data for this fixture; 401/403 = token invalid or fixture/tier not
+    // covered by it. All three just mean "nothing to show here" — fail soft rather
+    // than throwing, since callers already have a fallback event script and there's
+    // nothing actionable on our end for any of these statuses.
+    const status = err?.response?.status;
+    if (status === 404 || status === 403 || status === 401) return null;
     throw err;
   }
 }
@@ -231,7 +241,12 @@ export async function fetchHistoricalScores(apiToken: string, fixtureId: string,
     });
     return res.data;
   } catch (err: any) {
-    if (err?.response?.status === 404) return null;
+    // 404 = no data for this fixture; 401/403 = token invalid or fixture/tier not
+    // covered by it. All three just mean "nothing to show here" — fail soft rather
+    // than throwing, since callers already have a fallback event script and there's
+    // nothing actionable on our end for any of these statuses.
+    const status = err?.response?.status;
+    if (status === 404 || status === 403 || status === 401) return null;
     throw err;
   }
 }
