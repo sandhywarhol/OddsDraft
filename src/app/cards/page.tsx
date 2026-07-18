@@ -478,10 +478,9 @@ function EquipModal({
     // IDs that were never real (short test IDs, leftover fixtures removed from the
     // schedule). Only surface lineups whose fixture ID still corresponds to a known WC2026
     // or demo fixture, so stale/fake entries don't flood this list.
-    const validFixtureIds = new Set([
-      ...WC2026_FIXTURES.map(f => f.fixtureId),
-      ...DEMO_FIXTURES.map(f => f.fixtureId),
-    ]);
+    const fixturesById = new Map<string, { homeTeam: string; awayTeam: string }>();
+    for (const f of WC2026_FIXTURES) fixturesById.set(f.fixtureId, { homeTeam: f.homeTeam, awayTeam: f.awayTeam });
+    for (const f of DEMO_FIXTURES) fixturesById.set(f.fixtureId, { homeTeam: f.homeTeam, awayTeam: f.awayTeam });
     const CONTEST_TYPE_SUFFIXES = ['_top3', '_wta', '_5050'];
 
     const found: typeof lineups = [];
@@ -494,11 +493,12 @@ function EquipModal({
         const contestId = key.replace('txodds_user_lineup_', '');
         const suffix = CONTEST_TYPE_SUFFIXES.find(s => contestId.endsWith(s));
         const fixtureId = suffix ? contestId.slice(0, -suffix.length) : contestId;
-        if (!validFixtureIds.has(fixtureId)) continue;
+        const fixture = fixturesById.get(fixtureId);
+        if (!fixture) continue;
         found.push({
           contestId,
-          homeTeam: data.players[0]?.team ?? contestId,
-          awayTeam: contestId,
+          homeTeam: fixture.homeTeam,
+          awayTeam: fixture.awayTeam,
           players: (data.players as { id: string; name: string; position: string }[]) ?? [],
         });
       } catch {}
@@ -579,7 +579,7 @@ function EquipModal({
                         borderRadius: 8, color: '#fff', fontSize: 13, cursor: 'pointer',
                       }}
                     >
-                      Contest #{l.contestId.slice(-6)} — {l.players.length} players
+                      {l.homeTeam} vs {l.awayTeam} — {l.players.length} players
                     </button>
                   ))}
                 </div>
