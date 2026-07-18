@@ -8,6 +8,35 @@ const LINEUP_PREFIX = 'txodds_user_lineup_';
 const PACK_PREFIX = 'oddsdraft_pack_opened_';
 const COLLECTION_KEY = 'oddsdraft_card_collection';
 const UPGRADE_COLLECTION_KEY = 'oddsdraft_upgrade_collection';
+// These two are written directly by other pages (not synced to/from Supabase by this
+// provider), but they're just as wallet-agnostic in storage and must be cleared on a
+// wallet switch for the same reason — see clearSharedLocalCaches below.
+const ENTERED_CONTESTS_PREFIX = 'txodds_entered_contests_';
+const PENDING_SIG_PREFIX = 'txodds_pending_sig_';
+const NEW_CARDS_KEY = 'oddsdraft_new_cards';
+const SOLD_ACKED_KEY = 'oddsdraft_sold_acked';
+// Tracks which wallet last used this browser/device, purely to detect a switch.
+const LAST_WALLET_KEY = 'oddsdraft_last_wallet';
+
+// None of the keys above are namespaced per wallet — they're a single shared cache on
+// this device. Connecting a different wallet than last time must wipe them first, or
+// the new wallet inherits the previous wallet's cards/entries/lineups until (if ever)
+// Supabase happens to have data for a key to overwrite them with. An empty/no-data
+// response from Supabase for a brand-new wallet does NOT clear stale local data on its
+// own — applyRemoteData only overwrites keys it actually has a value for.
+function clearSharedLocalCaches() {
+  const exactKeys = [COLLECTION_KEY, UPGRADE_COLLECTION_KEY, NEW_CARDS_KEY, SOLD_ACKED_KEY];
+  const prefixes = [PACK_PREFIX, LINEUP_PREFIX, ENTERED_CONTESTS_PREFIX, PENDING_SIG_PREFIX];
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (exactKeys.includes(key) || prefixes.some(p => key.startsWith(p))) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(k => localStorage.removeItem(k));
+}
 
 function gatherLocalData(walletAddress: string) {
   const cardCollection = (() => {
@@ -123,6 +152,18 @@ export default function SupabaseSyncProvider({ children }: { children: React.Rea
     const wallet = publicKey.toString();
     if (walletRef.current === wallet) return; // already loaded for this wallet
     walletRef.current = wallet;
+
+    // 0. If this device was last used with a DIFFERENT wallet, the shared local caches
+    //    belong to that other wallet — wipe them before anything reads or displays them
+    //    for this session. Must happen before loadFromSupabase so a brand-new wallet
+    //    with nothing in Supabase yet ends up empty, not inheriting stale progress.
+    try {
+      const lastWallet = localStorage.getItem(LAST_WALLET_KEY);
+      if (lastWallet && lastWallet !== wallet) {
+        clearSharedLocalCaches();
+      }
+      localStorage.setItem(LAST_WALLET_KEY, wallet);
+    } catch {}
 
     // 1. Pull fresh Supabase data into localStorage (Supabase always wins).
     //    This ensures any local cache is replaced with the authoritative source

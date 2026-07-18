@@ -82,9 +82,12 @@ export default function ContestsPage() {
       setEnteredContests(prev => {
         const next = { ...prev };
         for (const { fid, contestTypes } of results) {
-          if (contestTypes.length === 0) continue;
-          const merged = Array.from(new Set([...(next[fid] ?? []), ...contestTypes]));
-          next[fid] = merged;
+          // Supabase is authoritative for the connected wallet — replace rather than
+          // merge-add. The initial local scan isn't wallet-scoped, so on a device
+          // previously used with a different wallet it can carry stale "entered"
+          // flags that don't belong to the wallet connected right now; a merge would
+          // never clear those. An empty result here correctly means "not entered".
+          next[fid] = contestTypes;
         }
         return next;
       });
