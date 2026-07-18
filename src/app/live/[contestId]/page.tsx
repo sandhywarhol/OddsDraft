@@ -1184,8 +1184,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         });
         // If the user has a lineup (entered the contest) but isn't in the server's participant
         // list yet (e.g. Supabase sync pending, or demo entry), preserve an isUser entry so
-        // scoring updates have a row to accumulate into.
-        if (walletStr && !entries.some(e => e.isUser)) {
+        // scoring updates have a row to accumulate into. Must actually check for a lineup —
+        // any connected wallet satisfies `walletStr` even if they never entered this contest,
+        // which would otherwise list a non-participant's own wallet on the leaderboard.
+        if (walletStr && userLineupRef.current && !entries.some(e => e.isUser)) {
           let userUsername = 'You';
           let userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${walletStr}`;
           try {
