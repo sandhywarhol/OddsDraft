@@ -18,7 +18,7 @@ import { fetchLiveScoreUpdates } from '@/lib/txline';
 import CardPackOpener from '@/components/CardPackOpener';
 import FlagImage from '@/components/FlagImage';
 import { openCardPack, hasOpenedPack } from '@/lib/card-collection';
-import type { MatchResult, PeriodStats, TeamLineup } from '@/app/api/match/result/route';
+import type { MatchResult, MatchEvent, PeriodStats, TeamLineup } from '@/app/api/match/result/route';
 import LiveLineupFormation, { type FormationPlayer } from '@/components/LiveLineupFormation';
 
 // Best-effort XI when TxLINE has no published lineup for this fixture — derived purely
@@ -57,6 +57,56 @@ function espnLineupToFormationPlayers(lineup: TeamLineup, participant: 1 | 2): F
     participant,
     starter: p.starter,
   }));
+}
+
+// ESPN gives minutes like "55'" or stoppage time like "90'+2'" — parse to a plain
+// integer (base + stoppage) for sorting/display.
+function parseEspnMinute(m: string): number {
+  const match = m.match(/(\d+)'?(?:\+(\d+))?/);
+  if (!match) return 0;
+  return (parseInt(match[1], 10) || 0) + (match[2] ? parseInt(match[2], 10) || 0 : 0);
+}
+
+const ESPN_TYPE_MAP: Record<MatchEvent['type'], string> = {
+  goal: 'goal',
+  own_goal: 'own_goal',
+  penalty: 'goal',
+  yellow_card: 'yellow_card',
+  red_card: 'red_card',
+  yellow_red_card: 'red_card',
+  sub: 'substitution',
+};
+
+// Converts ESPN's real (but sparse — goals/cards/subs only, no saves/shots/possession)
+// match report into the same internal event shape the timeline renders, with synthetic
+// kick_off/half_time/full_time markers so playback still has a coherent start and end.
+// This is what actually happened in the match — unlike the position-remapped generic
+// demo script, which reuses the same fixed storyline (and score) for every fixture.
+function espnEventsToTimeline(espnEvents: MatchEvent[], homeTeam: string, homeFlag: string, awayFlag: string): any[] {
+  const scored = espnEvents
+    .map((e, i) => {
+      const minute = parseEspnMinute(e.minute);
+      const type = ESPN_TYPE_MAP[e.type] ?? 'goal';
+      const isHome = e.team === homeTeam;
+      return {
+        id: `espn-${i}-${type}-${minute}`,
+        minute,
+        team: e.team,
+        teamFlag: isHome ? homeFlag : awayFlag,
+        player: e.player,
+        type,
+        points: calculateEventPoints(type),
+        description: `${e.player} (${e.team}) — ${type.replace(/_/g, ' ')} at ${e.minute}`,
+      };
+    })
+    .sort((a, b) => a.minute - b.minute);
+
+  const lastMinute = scored.length > 0 ? scored[scored.length - 1].minute : 90;
+  return [
+    { id: 'espn-kickoff', minute: 0, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Kick Off! The match begins.' },
+    ...scored,
+    { id: 'espn-fulltime', minute: Math.max(90, lastMinute), team: '', teamFlag: '', player: '', type: 'full_time', points: 0, description: 'Full Time!' },
+  ];
 }
 
 // Flattens TxLINE's lineup response (any of its several shapes) into FormationPlayer[].
@@ -816,12 +866,18 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
           kickoffAt: new Date().toISOString(), status: 'upcoming' as const, homeScore: 0, awayScore: 0 }
       : (DEMO_FIXTURES.find(f => f.fixtureId === contestId) || DEMO_FIXTURES[0]);
 
-  // Mutable events queue — demo events only in demo mode; live starts empty (API fills it)
+  // Mutable events queue — demo events only in demo mode; live starts empty (API fills it).
+  // For a real wcFixture this is a placeholder until TxLINE or ESPN data (below) replaces
+  // it with what actually happened — getDynamicEvents just remaps a fixed generic script
+  // (same storyline, same score, every time) onto whichever real players are on the roster.
   const eventsQueueRef = useRef<any[]>(
     appMode === 'demo' || !!wcFixture
       ? getDynamicEvents(fixture, REPLAY_EVENTS[contestId] || LIVE_EVENTS)
       : []
   );
+  // True once TxLINE has successfully supplied real events for this fixture — the ESPN
+  // fallback effect checks this so TxLINE (when it works) stays the higher-priority source.
+  const txlineEventsLoadedRef = useRef(false);
 
   // apiVersion increments after API events load, triggering the event trigger effect to re-evaluate
   const [apiVersion, setApiVersion] = useState(0);
@@ -911,6 +967,43 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isResultsMode]);
 
+  // ESPN's real match report as the events-queue fallback, once TxLINE has had its
+  // chance and matchStats has resolved. TxLINE is left as-is above if it succeeded —
+  // this only replaces the placeholder generic script (fixed storyline, fixed score,
+  // remapped by position) with what actually happened in this specific match.
+  useEffect(() => {
+    if (txlineEventsLoadedRef.current) return;
+    const espnEvents = matchStats.data?.events;
+    if (!espnEvents || espnEvents.length === 0) return;
+
+    const sorted = espnEventsToTimeline(espnEvents, fixture.homeTeam, (fixture as any).homeFlag ?? '', (fixture as any).awayFlag ?? '');
+    eventsQueueRef.current = sorted;
+    triggeredEventsRef.current.clear();
+    notifiedEventsRef.current.clear();
+
+    if (isResultsMode) {
+      let h = 0, a = 0;
+      sorted.forEach(ev => {
+        if (ev.type === 'goal' || ev.type === 'own_goal') { if (ev.team === fixture.homeTeam) h++; else a++; }
+        triggeredEventsRef.current.add(ev.id);
+      });
+      setEvents([...sorted].reverse());
+      setCurrentEventIdx(sorted.length);
+      setScore({ home: h, away: a });
+      const ftEvent = sorted.find(ev => ev.type === 'full_time');
+      setMinute(ftEvent?.minute ?? 90);
+      setIsPlaying(false);
+    } else {
+      // Replay from the beginning with the real event script instead of the placeholder.
+      setEvents([]);
+      setMinute(0);
+      setCurrentEventIdx(0);
+      setScore({ home: 0, away: 0 });
+      setApiVersion(v => v + 1);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchStats.data]);
+
   useEffect(() => {
     leaderboardRef.current = leaderboard;
   }, [leaderboard]);
@@ -959,6 +1052,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         if (apiEvents.length > 0) {
           const sorted = [...apiEvents].sort((a, b) => a.minute - b.minute);
           eventsQueueRef.current = sorted;
+          txlineEventsLoadedRef.current = true;
           triggeredEventsRef.current.clear();
           notifiedEventsRef.current.clear();
 
