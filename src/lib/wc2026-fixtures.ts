@@ -214,12 +214,12 @@ export const WC2026_FIXTURES: WCFixture[] = [
   sf('18220002', 'England',      'Argentina',         2026, 7, 16, 20),
 
   // ── Third Place ──────────────────────────────────────────────────────────────
-  // Teams TBD — depends on SF results
-  final('18230001', 'TBD',        'TBD',              2026, 7, 18, 20),
+  // SF losers: France (lost to Spain) and England (lost to Argentina)
+  final('18230001', 'France',     'England',          2026, 7, 18, 21),
 
   // ── Final ────────────────────────────────────────────────────────────────────
-  // Teams TBD — depends on SF results
-  final('18240001', 'TBD',        'TBD',              2026, 7, 19, 20),
+  // SF winners: Spain and Argentina
+  final('18240001', 'Spain',      'Argentina',        2026, 7, 19, 20),
 ];
 
 /** Fixture IDs for matches scheduled for today or live right now */
