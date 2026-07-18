@@ -24,9 +24,19 @@ import LiveLineupFormation, { type FormationPlayer } from '@/components/LiveLine
 // Best-effort XI when TxLINE has no published lineup for this fixture — derived purely
 // from our own roster data (jersey numbers 1-11), so it's always available for a real match.
 function buildPredictedXI(team: string, participant: 1 | 2): FormationPlayer[] {
+  const seenJerseys = new Set<number>();
   return WC2026_PLAYERS
     .filter(p => p.team === team && p.jerseyNumber <= 11)
     .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
+    .filter(p => {
+      // Some roster entries share a jersey number (data duplicates) — keep only the
+      // first so this never returns more than 11 players. TeamCard treats >11 players
+      // with no explicit starter flag as "starters + bench", so leftover duplicates
+      // were showing up as fake substitutes.
+      if (seenJerseys.has(p.jerseyNumber)) return false;
+      seenJerseys.add(p.jerseyNumber);
+      return true;
+    })
     .map(p => ({
       id: p.id,
       name: p.name,
@@ -824,6 +834,9 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   // Real published lineup (formation + starters + bench) from TxLINE, with a predicted-XI
   // fallback derived from our own roster so the Team Lineup panel always has something to show.
   const [realLineup, setRealLineup] = useState<{ home: FormationPlayer[]; away: FormationPlayer[]; homeCoach?: string; awayCoach?: string } | null>(null);
+  // True when realLineup came from buildPredictedXI rather than TxLINE — a guess with no
+  // real bench data, so the UI should say so rather than implying a short substitutes list.
+  const [isPredictedLineup, setIsPredictedLineup] = useState(false);
 
   // All state hooks — always called unconditionally (Rules of Hooks)
   const [events, setEvents] = useState<any[]>([]);
@@ -905,8 +918,13 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
       buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt),
       fetch('/api/scores/txline').then(r => r.ok ? r.json() : {}).catch(() => ({})),
       fetch(`/api/txline/api/fixtures/lineups/${contestId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      // TxLINE's dedicated lineup endpoint sometimes only lists starters + whichever subs
+      // actually came on, not the full bench. The score snapshot separately carries a
+      // "lineups" action that's often more complete — fetch it too and keep whichever
+      // parse yields more players.
+      fetch(`/api/txline/api/scores/snapshot/${contestId}`).then(r => r.ok ? r.json() : null).catch(() => null),
     ])
-      .then(([raw, pMap, scoresData, lineupData]) => {
+      .then(([raw, pMap, scoresData, lineupData, snapshotData]) => {
         if (cancelled) return;
         const updates = Array.isArray(raw) ? raw : (raw ? [raw] : []);
         const seenSeqs = new Set<number>();
@@ -919,14 +937,22 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
         // Real published lineup if TxLINE has one for this fixture, else a predicted XI
         // from our own roster — either way the Team Lineup panel has something to show.
-        const parsedLineup = lineupData ? parseLineupData(lineupData, pMap) : null;
+        const fromDedicated = lineupData ? parseLineupData(lineupData, pMap) : null;
+        const snapshotLineupAction = Array.isArray(snapshotData)
+          ? snapshotData.find((u: any) => (u.Action ?? u.action ?? '').toLowerCase() === 'lineups')
+          : (snapshotData && (snapshotData.Action ?? snapshotData.action ?? '').toLowerCase() === 'lineups' ? snapshotData : null);
+        const fromSnapshot = snapshotLineupAction ? parseLineupData(snapshotLineupAction, pMap) : null;
+        const countOf = (l: typeof fromDedicated) => (l ? l.home.length + l.away.length : 0);
+        const parsedLineup = countOf(fromSnapshot) > countOf(fromDedicated) ? fromSnapshot : fromDedicated;
         if (parsedLineup) {
           setRealLineup(parsedLineup);
+          setIsPredictedLineup(false);
         } else {
           setRealLineup({
             home: buildPredictedXI(fixture.homeTeam, 1),
             away: buildPredictedXI(fixture.awayTeam, 2),
           });
+          setIsPredictedLineup(true);
         }
 
         if (apiEvents.length > 0) {
@@ -1545,7 +1571,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               `}</style>
               <div className={matchStats.data && (matchStats.data.stats || matchStats.data.venue) ? 'replay-events-stats-grid' : undefined} style={!(matchStats.data && (matchStats.data.stats || matchStats.data.venue)) ? { marginBottom: 20 } : undefined}>
               {/* Match Events Timeline */}
-              <div className="card" style={{ margin: 0 }}>
+              <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, color: '#ffd700', display: 'flex', alignItems: 'center', gap: 8 }}>
                   Match Events
                   <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>LIVE</span>
@@ -1558,7 +1584,10 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   </div>
                 )}
 
-                <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 400, overflowY: 'auto' }}>
+                {/* flex: 1 + minHeight: 0 lets this fill whatever height the grid's
+                    align-items: stretch gives the card (matching Match Statistics'
+                    height) instead of stopping at a fixed 400px with empty space below */}
+                <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
                   {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
                     <div
                       key={event.id}
@@ -1863,16 +1892,25 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   TxLINE has no published lineup for this fixture yet); falls back further to a
                   plain starting_xi/substitution list for demo fixtures with no TxLINE backing at all */}
               {realLineup ? (
-                <LiveLineupFormation
-                  homePlayers={realLineup.home}
-                  awayPlayers={realLineup.away}
-                  homeTeam={fixture.homeTeam}
-                  awayTeam={fixture.awayTeam}
-                  homeFlag={fixture.homeFlag}
-                  awayFlag={fixture.awayFlag}
-                  homeCoach={realLineup.homeCoach}
-                  awayCoach={realLineup.awayCoach}
-                />
+                <>
+                  {isPredictedLineup && (
+                    <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#ffaa00', background: 'rgba(255,170,0,0.12)', border: '1px solid rgba(255,170,0,0.3)', borderRadius: 4, padding: '2px 8px', letterSpacing: '0.05em' }}>
+                        ⏳ PREDICTED XI — TxLINE has no published lineup for this match
+                      </span>
+                    </div>
+                  )}
+                  <LiveLineupFormation
+                    homePlayers={realLineup.home}
+                    awayPlayers={realLineup.away}
+                    homeTeam={fixture.homeTeam}
+                    awayTeam={fixture.awayTeam}
+                    homeFlag={fixture.homeFlag}
+                    awayFlag={fixture.awayFlag}
+                    homeCoach={realLineup.homeCoach}
+                    awayCoach={realLineup.awayCoach}
+                  />
+                </>
               ) : (
                 <div className="card" style={{ marginTop: 20 }}>
                   <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 16, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>

@@ -781,9 +781,19 @@ function getDialogData(
 // Build a predicted starting XI from official FIFA squad data (jerseys 1–11).
 // Used when TxLINE hasn't published official lineups yet.
 function buildPredictedXI(team: string, participant: 1 | 2): FormationPlayer[] {
+  const seenJerseys = new Set<number>();
   return WC2026_PLAYERS
     .filter(p => p.team === team && p.jerseyNumber <= 11)
     .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
+    .filter(p => {
+      // Some roster entries share a jersey number (data duplicates) — keep only the
+      // first so this never returns more than 11 players. TeamCard treats >11 players
+      // with no explicit starter flag as "starters + bench", so leftover duplicates
+      // were showing up as fake substitutes.
+      if (seenJerseys.has(p.jerseyNumber)) return false;
+      seenJerseys.add(p.jerseyNumber);
+      return true;
+    })
     .map(p => ({
       id: p.id,
       name: p.name,
