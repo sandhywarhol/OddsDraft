@@ -129,12 +129,21 @@ export async function GET() {
   const needScore = Array.from(results.values()).filter(r => r.scoreHome === null);
 
   if (needScore.length > 0) {
+    // Search dates relative to each match's own kickoff (day before/of/after), not to
+    // "now" — the backup source sometimes lists a match under a different calendar date
+    // than our own kickoff time (timezone rollover, admin correction, etc.), and a
+    // now-anchored window can drift entirely past a fixture's real listing once a few
+    // days pass. This mirrors the same kickoff-relative search /api/match/result uses,
+    // which reliably finds these matches.
     const dates = new Set<string>();
-    for (let i = 0; i <= 2; i++) {
-      const d = new Date(now - i * 86_400_000);
-      dates.add(
-        `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`
-      );
+    for (const r of needScore) {
+      const kickoff = new Date(r.kickoffAt).getTime();
+      for (let i = -1; i <= 1; i++) {
+        const d = new Date(kickoff + i * 86_400_000);
+        dates.add(
+          `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`
+        );
+      }
     }
 
     const backupEvents: any[] = [];
