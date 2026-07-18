@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, use } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useWallet } from '@solana/wallet-adapter-react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
@@ -850,6 +851,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const searchParams = useSearchParams();
   const isResultsMode = searchParams.get('results') === '1';
   const contestTypeParam = searchParams.get('contestType') ?? 'top3';
+  const { publicKey } = useWallet();
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt } = useTxLine();
 
@@ -928,23 +930,40 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   const appearedPlayersRef = useRef<Set<string>>(new Set());
   const leaderboardRef = useRef(leaderboard);
   const userLineupRef = useRef<any>(null);
+  const [, setLineupCheckDone] = useState(false);
 
   // Prize claim / card pack state
   const [hasClaimed, setHasClaimed] = useState(false);
   const [showCardPack, setShowCardPack] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(`txodds_user_lineup_${contestId}_${contestTypeParam}`)
-        ?? localStorage.getItem(`txodds_user_lineup_${contestId}`);
-      if (stored) {
-        userLineupRef.current = JSON.parse(stored);
+    // localStorage's `txodds_user_lineup_*` cache is shared across whichever wallet last
+    // used this browser — trusting it directly here would let a stale/other wallet's
+    // lineup surface as "my result" for a wallet that never entered. Supabase's
+    // contest_entries table (keyed by wallet_address) is the only reliable answer to
+    // "did THIS connected wallet enter this contest," so cross-check against it instead.
+    let cancelled = false;
+    userLineupRef.current = null;
+    async function loadLineup() {
+      try {
+        if (publicKey) {
+          const wallet = publicKey.toString();
+          const res = await fetch(
+            `/api/contest/enter?fixtureId=${contestId}&walletAddress=${encodeURIComponent(wallet)}&contestType=${contestTypeParam}`
+          );
+          const data = await res.json();
+          if (!cancelled) userLineupRef.current = data?.lineup ?? null;
+        }
+        if (!cancelled && hasOpenedPack(`${contestId}_${contestTypeParam}`)) setHasClaimed(true);
+      } catch (e) {
+        console.error('Failed to load user lineup:', e);
+      } finally {
+        if (!cancelled) setLineupCheckDone(true);
       }
-      if (hasOpenedPack(`${contestId}_${contestTypeParam}`)) setHasClaimed(true);
-    } catch (e) {
-      console.error('Failed to parse user lineup:', e);
     }
-  }, [contestId]);
+    loadLineup();
+    return () => { cancelled = true; };
+  }, [contestId, contestTypeParam, publicKey]);
 
   // Results mode: immediately skip to final state
   useEffect(() => {

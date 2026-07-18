@@ -153,15 +153,16 @@ export default function SupabaseSyncProvider({ children }: { children: React.Rea
     if (walletRef.current === wallet) return; // already loaded for this wallet
     walletRef.current = wallet;
 
-    // 0. If this device was last used with a DIFFERENT wallet, the shared local caches
-    //    belong to that other wallet — wipe them before anything reads or displays them
-    //    for this session. Must happen before loadFromSupabase so a brand-new wallet
-    //    with nothing in Supabase yet ends up empty, not inheriting stale progress.
+    // 0. The shared local caches are not namespaced per wallet, so they may belong to
+    //    whichever wallet last touched this browser — including a wallet used before
+    //    this reconciliation logic even existed, in which case there is no recorded
+    //    LAST_WALLET_KEY to compare against. Relying on "recorded last wallet differs"
+    //    silently skips clearing on that first run and leaks the old wallet's cards/
+    //    lineups/entries into the new wallet. Always wipe first, then let Supabase (the
+    //    authoritative source) repopulate whatever this wallet actually owns — a brand
+    //    new wallet with nothing in Supabase yet ends up empty, not inheriting progress.
     try {
-      const lastWallet = localStorage.getItem(LAST_WALLET_KEY);
-      if (lastWallet && lastWallet !== wallet) {
-        clearSharedLocalCaches();
-      }
+      clearSharedLocalCaches();
       localStorage.setItem(LAST_WALLET_KEY, wallet);
     } catch {}
 
