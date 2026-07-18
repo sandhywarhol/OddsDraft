@@ -6,8 +6,9 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents } from '@/lib/players';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
+import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { REPLAY_EVENTS } from '@/lib/replay-events';
-import { calculateEventPoints, POINT_MAP, resolvePlayerDelta } from '@/lib/fantasy-engine';
+import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
 import FantasyToast, { type FantasyNotificationItem } from '@/components/FantasyToast';
@@ -1449,7 +1450,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   display: grid;
                   grid-template-columns: 1fr 1fr;
                   gap: 20px;
-                  align-items: start;
+                  align-items: stretch;
                   margin-bottom: 20px;
                 }
                 @media (max-width: 900px) {
@@ -1519,6 +1520,64 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, color: '#ffd700' }}>
                     Match Statistics
                   </h3>
+
+                  {/* Final score — same TxLINE-driven events feed as the Match Events timeline */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <FlagImage flag={fixture.homeFlag} size={18} />
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{fixture.homeTeam}</span>
+                    </div>
+                    <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.6rem', letterSpacing: '0.05em' }}>
+                      {score.home} — {score.away}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{fixture.awayTeam}</span>
+                      <FlagImage flag={fixture.awayFlag} size={18} />
+                    </div>
+                  </div>
+
+                  {/* Goal scorers + cards — derived from the same TxLINE event feed */}
+                  {(() => {
+                    const goals = events.filter(e => e.type === 'goal' || e.type === 'own_goal').sort((a, b) => a.minute - b.minute);
+                    const cards = events.filter(e => e.type === 'yellow_card' || e.type === 'red_card').sort((a, b) => a.minute - b.minute);
+                    if (goals.length === 0 && cards.length === 0) return null;
+                    return (
+                      <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {goals.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6, opacity: 0.7 }}>Goals</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {goals.map((g, i) => (
+                                <div key={`goal-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem' }}>
+                                  <span style={{ color: 'var(--text-muted)', width: 28, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{g.minute}&apos;</span>
+                                  <span style={{ flexShrink: 0 }}>⚽</span>
+                                  <FlagImage flag={g.teamFlag} size={14} />
+                                  <span style={{ fontWeight: 600 }}>{g.player}</span>
+                                  {g.type === 'own_goal' && <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>(OG)</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {cards.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6, opacity: 0.7 }}>Cards</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {cards.map((c, i) => (
+                                <div key={`card-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem' }}>
+                                  <span style={{ color: 'var(--text-muted)', width: 28, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{c.minute}&apos;</span>
+                                  <span style={{ flexShrink: 0 }}>{c.type === 'red_card' ? '🟥' : '🟨'}</span>
+                                  <FlagImage flag={c.teamFlag} size={14} />
+                                  <span style={{ fontWeight: 600 }}>{c.player}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {matchStats.data.stats && (() => {
                     const { h1, h2, total } = matchStats.data.stats;
                     const allRows: { label: string; hKey: keyof PeriodStats; aKey: keyof PeriodStats }[] = [
@@ -1700,21 +1759,80 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               </div>
               )}
 
-              {/* Point Reference */}
+              {/* Team Lineup — starting XI + substitutions, derived from the same TxLINE event feed */}
               <div className="card" style={{ marginTop: 20 }}>
-                <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Fantasy Points Reference
+                <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: 16, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Team Lineup
                 </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                  {Object.entries(POINT_MAP).map(([event, pts]) => (
-                    <div key={event} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', padding: '4px 8px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>{event.replace(/_/g, ' ')}</span>
-                      <span style={{ fontWeight: 700, color: pts >= 0 ? 'var(--color-primary)' : 'var(--color-danger)' }}>
-                        {pts >= 0 ? '+' : ''}{pts}
-                      </span>
+                {(() => {
+                  const homeXI = events.filter(e => e.type === 'starting_xi' && e.team === fixture.homeTeam);
+                  const awayXI = events.filter(e => e.type === 'starting_xi' && e.team === fixture.awayTeam);
+                  const homeSubs = events.filter(e => e.type === 'substitution' && e.team === fixture.homeTeam).sort((a, b) => a.minute - b.minute);
+                  const awaySubs = events.filter(e => e.type === 'substitution' && e.team === fixture.awayTeam).sort((a, b) => a.minute - b.minute);
+
+                  if (homeXI.length === 0 && awayXI.length === 0) {
+                    return (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic', opacity: 0.7 }}>
+                        Lineup not available for this match
+                      </div>
+                    );
+                  }
+
+                  const posOf = (playerId?: string): string | null => {
+                    if (!playerId) return null;
+                    return WC2026_PLAYERS.find(p => p.id === playerId)?.position ?? null;
+                  };
+
+                  const TeamColumn = ({ team, flag, xi, subs }: { team: string; flag: string; xi: any[]; subs: any[] }) => (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <FlagImage flag={flag} size={16} />
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>{team}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: subs.length > 0 ? 12 : 0 }}>
+                        {xi.map((p, i) => {
+                          const pos = posOf(p.playerId);
+                          return (
+                            <div key={`xi-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.76rem' }}>
+                              {pos && (
+                                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', width: 24, flexShrink: 0 }}>{pos}</span>
+                              )}
+                              <span>{p.player}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {subs.length > 0 && (
+                        <>
+                          <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 5, opacity: 0.7 }}>Substitutes</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {subs.map((s, i) => (
+                              <div key={`sub-${i}`} style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                                <span style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{s.minute}&apos;</span>{' '}
+                                {s.player}{s.playerOut ? ` (for ${s.playerOut})` : ''}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  );
+
+                  return (
+                    <>
+                      <style>{`
+                        .replay-lineup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+                        @media (max-width: 480px) {
+                          .replay-lineup-grid { grid-template-columns: 1fr; }
+                        }
+                      `}</style>
+                      <div className="replay-lineup-grid">
+                        <TeamColumn team={fixture.homeTeam} flag={fixture.homeFlag} xi={homeXI} subs={homeSubs} />
+                        <TeamColumn team={fixture.awayTeam} flag={fixture.awayFlag} xi={awayXI} subs={awaySubs} />
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
