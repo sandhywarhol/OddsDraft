@@ -4,7 +4,7 @@
 // Phase 1: Shows Unopened Card.svg (the pack) — user taps to open.
 // Phase 2: Flip animation → reveals Opened Card.svg with card data overlaid via SkillCardDisplay.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import type { OwnedCard, OwnedUpgradeCard } from '@/lib/card-collection';
 import { type UpgradeCard, UPGRADE_RARITY_COLOR } from '@/lib/upgrade-cards';
@@ -54,8 +54,17 @@ export default function CardPackOpener({ contestId, upgradePackMode, title, subt
 
   const CARD_W = 220; // card display width in px
 
+  // Synchronous re-entry guard — `phase` state updates asynchronously, so a rapid
+  // double click/tap (very plausible on a "tap to open" prompt) can fire this handler
+  // twice before React re-renders with the new phase, launching two overlapping
+  // setTimeout chains that fight over setPhase(...) and produce a stuck, flickering
+  // modal (plus a duplicate card award from calling onOpen() twice). A ref updates
+  // immediately, unlike state, so it reliably blocks the second invocation.
+  const isOpeningRef = useRef(false);
+
   const handleOpenPack = () => {
-    if (phase !== 'idle') return;
+    if (phase !== 'idle' || isOpeningRef.current) return;
+    isOpeningRef.current = true;
 
     // Phase 1: shake the pack
     setPhase('shaking');
