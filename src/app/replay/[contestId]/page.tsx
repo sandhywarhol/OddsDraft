@@ -1171,8 +1171,10 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     );
   }
 
-  // ── No API data yet (live mode, WC fixture, no demo replay fallback either) ──
-  if (appMode === 'live' && wcFixture && !isDemoFixture && !REPLAY_EVENTS[contestId] && apiVersion === 0) {
+  // ── Still fetching TxLINE data — once the fetch settles (success OR failure),
+  // fall through to the main page, which already has a generic demo event script
+  // pre-loaded in eventsQueueRef as a fallback for fixtures TxLINE has no data for. ──
+  if (appMode === 'live' && wcFixture && !isDemoFixture && !REPLAY_EVENTS[contestId] && apiLoading) {
     return (
       <div style={{ minHeight: '100vh', background: 'transparent' }}>
         <Navbar />
@@ -1335,7 +1337,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                 {minute < 90 ? `${minute}'` : 'FT'}
               </div>
               <span className="badge" style={{ fontSize: '0.65rem', background: '#3b82f6', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 6px', borderRadius: '4px' }}>
-                REPLAY
+                {userLineup ? 'MY RESULT' : 'MATCH RESULT'}
               </span>
             </div>
             <div className="score-bug__team">
@@ -1391,38 +1393,41 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
             </button>
           </div>
 
-          {/* Main Grid */}
-          <div className="grid-sidebar">
+          {/* Main Grid — spectators (no saved lineup) get a single column since the
+              leaderboard/prize sidebar is entrant-only */}
+          <div className="grid-sidebar" style={!userLineup ? { gridTemplateColumns: '1fr' } : undefined}>
             {/* LEFT: Events Timeline + User Stats */}
             <div>
-              {/* User Fantasy Stats */}
-              <div className="card card--primary" style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                      Fantasy Points
-                    </div>
-                    <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '3rem', color: 'var(--color-primary)', lineHeight: 1 }}>
-                      {userPoints.toFixed(1)}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', gap: 16 }}>
+              {/* User Fantasy Stats — only shown to users who actually entered this contest */}
+              {userLineup && (
+                <div className="card card--primary" style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: 'var(--text-primary)' }}>
-                        #{userRank}
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                        Fantasy Points
                       </div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rank</div>
+                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '3rem', color: 'var(--color-primary)', lineHeight: 1 }}>
+                        {userPoints.toFixed(1)}
+                      </div>
                     </div>
-                    <div>
-                      <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: '#ffd700' }}>
-                        3.0
+                    <div style={{ flex: 1, display: 'flex', gap: 16 }}>
+                      <div>
+                        <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: 'var(--text-primary)' }}>
+                          #{userRank}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rank</div>
                       </div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Estimated SOL</div>
+                      <div>
+                        <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.8rem', color: '#ffd700' }}>
+                          3.0
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Estimated SOL</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              
+              )}
+
               {/* Match Events Timeline */}
               <div className="card" style={{ marginBottom: 20 }}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, color: '#ffd700', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1479,8 +1484,9 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                 </div>
               </div>
 
-              {/* Cryptographic Result Verification Panel */}
-              <div className="card" style={{ 
+              {/* Cryptographic Result Verification Panel — verifies YOUR result, so only relevant to entrants */}
+              {userLineup && (
+              <div className="card" style={{
                 marginBottom: 20,
               }}>
                 <style>{`
@@ -1586,12 +1592,13 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                       cursor: minute >= 90 || verificationStatus === 'success' ? 'pointer' : 'not-allowed'
                     }}
                   >
-                    {verificationStatus === 'success' 
-                      ? '✓ Verified' 
+                    {verificationStatus === 'success'
+                      ? '✓ Verified'
                       : (minute >= 90 ? 'Run Verification' : 'Wait for Full Time')}
                   </button>
                 )}
               </div>
+              )}
 
               {/* Point Reference */}
               <div className="card" style={{ marginTop: 20 }}>
@@ -1611,7 +1618,8 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               </div>
             </div>
 
-            {/* RIGHT: Leaderboard */}
+            {/* RIGHT: Leaderboard — entrant-only, spectators have no lineup/prize stake to show */}
+            {userLineup && (
             <div>
               <div className="ro-window" style={{ position: 'sticky', top: 80 }}>
                 <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #b45309 0%, #78350f 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1739,6 +1747,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </main>
