@@ -1008,8 +1008,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const getRealStarterIds = (): Set<string> | null => {
     const rl = realLineupRef.current;
     if (!rl) return null;
-    const starters = [...rl.home, ...rl.away].filter(p => p.starter !== false).map(p => p.id).filter(Boolean) as string[];
-    if (starters.length === 0) return null; // no starter flags set — don't penalise
+    const all = [...rl.home, ...rl.away];
+    // Only filter if we have explicit starter flags (starter === true or false).
+    // If all entries have starter === undefined the lineup is starters-only and we
+    // cannot distinguish bench — return null so no player is unfairly excluded.
+    const hasStarterFlags = all.some(p => p.starter === true);
+    if (!hasStarterFlags) return null;
+    const starters = all.filter(p => p.starter === true).map(p => p.id).filter(Boolean) as string[];
+    if (starters.length === 0) return null;
     return new Set(starters);
   };
   // Tracks score synchronously so the full_time handler can read the final score
@@ -1666,12 +1672,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     const bonuses = evaluateHalfStats(stats);
     let totalDelta = 0;
 
+    // Only award HT/FT stats bonuses to players who actually took the field.
+    // Uses the same guard as the appearance-bonus logic so confirmed bench players
+    // (starter === false in TxLINE lineup) are never awarded stat bonuses.
+    const realStarters = getRealStarterIds();
+
     for (const bonus of bonuses) {
       const bonusTeam = bonus.forTeam === 'home' ? fixture.homeTeam : fixture.awayTeam;
       const label = STAT_BONUS_LABELS[bonus.eventType] ?? bonus.eventType.replace(/_/g, ' ');
 
       for (const p of (players as any[])) {
         if (!p?.id || p.team !== bonusTeam) continue;
+        // Skip confirmed bench players — only starters and subs who entered the game
+        // (appearedPlayersRef) qualify for stats bonuses.
+        if (realStarters && !realStarters.has(p.id) && !appearedPlayersRef.current.has(p.id)) continue;
         const basePts = getPositionScore(bonus.eventType, p.position);
         if (basePts === 0) continue;
 
