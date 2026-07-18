@@ -246,24 +246,11 @@ export async function GET(req: NextRequest) {
         ? await buildPlayerIdMap(apiToken, txlineFixtureId, fixture.homeTeam, fixture.awayTeam)
         : {};
 
-      // Fetch subscribers for this match
-      const { data: subs } = await supabase
-        .from('telegram_subscriptions')
-        .select('chat_id')
-        .eq('contest_id', fixture.fixtureId);
-
-      if (!subs?.length) {
-        // Still mark as notified so we don't reprocess
-        await supabase.from('notified_events').upsert(
-          newEvents.map((ev, i) => {
-            const idx = candidateEvents.indexOf(newEvents[i]);
-            return { fixture_id: fixture.fixtureId, event_id: eventIds[idx] };
-          })
-        );
-        continue;
-      }
-
-      // ── Write all new events to live_match_events (for /points command) ──
+      // ── Write all new events to live_match_events FIRST ───────────────────
+      // CRITICAL: this table is the server-side source of truth for all participants'
+      // fantasy scores in /api/contest/leaderboard. Must be written unconditionally —
+      // before any Telegram subscriber check — so opponent scores are never stuck at 0
+      // just because nobody subscribed to Telegram notifications for this match.
       await supabase.from('live_match_events').upsert(
         newEvents.map((ev, i) => {
           const idx = candidateEvents.indexOf(newEvents[i]);
@@ -293,6 +280,23 @@ export async function GET(req: NextRequest) {
         }),
         { onConflict: 'fixture_id,event_id' }
       );
+
+      // Fetch subscribers for this match (Telegram notifications only)
+      const { data: subs } = await supabase
+        .from('telegram_subscriptions')
+        .select('chat_id')
+        .eq('contest_id', fixture.fixtureId);
+
+      if (!subs?.length) {
+        // Still mark as notified so we don't reprocess
+        await supabase.from('notified_events').upsert(
+          newEvents.map((ev, i) => {
+            const idx = candidateEvents.indexOf(newEvents[i]);
+            return { fixture_id: fixture.fixtureId, event_id: eventIds[idx] };
+          })
+        );
+        continue;
+      }
 
       let sent = 0;
       for (let i = 0; i < newEvents.length; i++) {

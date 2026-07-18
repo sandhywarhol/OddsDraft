@@ -28,6 +28,20 @@ export function computeParticipantPoints(lineup: ContestLineup | null | undefine
   if (!lineup?.players?.length) return 0;
 
   let total = 0;
+
+  // Appearance bonus (+2 per player): the client-side engine awards this at kick_off /
+  // starting_xi, but the cron only stores goal/card/etc events in live_match_events —
+  // not the appearance event itself. We infer it: if ANY scoring event exists the match
+  // has started and every lineup player is owed their starting appearance bonus.
+  // Captain × 2, then confidence multiplier — same as resolvePlayerDelta(0, {..., appearanceBonus: 2}).
+  if (events.length > 0) {
+    for (const p of lineup.players) {
+      const isCaptain = lineup.captain === p.id;
+      const stars = (lineup.confidence ?? {})[p.id] ?? 3;
+      total += resolvePlayerDelta(0, { isCaptain, confidenceStars: stars, appearanceBonus: 2 });
+    }
+  }
+
   for (const ev of events) {
     const resolvedId = matchPlayerName(ev.player_name ?? '', ev.team_name ?? '');
     let matched = resolvedId
