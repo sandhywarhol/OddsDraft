@@ -1443,8 +1443,22 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                 </div>
               )}
 
+              {/* Match Events + Match Statistics — side by side on desktop */}
+              <style>{`
+                .replay-events-stats-grid {
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 20px;
+                  align-items: start;
+                  margin-bottom: 20px;
+                }
+                @media (max-width: 900px) {
+                  .replay-events-stats-grid { grid-template-columns: 1fr; }
+                }
+              `}</style>
+              <div className={matchStats.data && (matchStats.data.stats || matchStats.data.venue) ? 'replay-events-stats-grid' : undefined} style={!(matchStats.data && (matchStats.data.stats || matchStats.data.venue)) ? { marginBottom: 20 } : undefined}>
               {/* Match Events Timeline */}
-              <div className="card" style={{ marginBottom: 20 }}>
+              <div className="card" style={{ margin: 0 }}>
                 <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, color: '#ffd700', display: 'flex', alignItems: 'center', gap: 8 }}>
                   Match Events
                   <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>LIVE</span>
@@ -1501,7 +1515,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
               {/* Match Statistics — public info (shots/corners/cards, venue), shown to everyone */}
               {matchStats.data && (matchStats.data.stats || matchStats.data.venue) && (
-                <div className="card" style={{ marginBottom: 20 }}>
+                <div className="card" style={{ margin: 0 }}>
                   <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 16, color: '#ffd700' }}>
                     Match Statistics
                   </h3>
@@ -1517,6 +1531,14 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                     ];
                     const statRows = allRows.filter(r => (total[r.hKey] as number) > 0 || (total[r.aKey] as number) > 0);
                     if (statRows.length === 0) return null;
+                    // A half-period section is only worth showing if at least one of its
+                    // rows has real data — otherwise every source we have (TxLINE Period1/2,
+                    // our own live-tracked Supabase events) simply never captured this match's
+                    // per-half breakdown, and a row of zeros would misleadingly read as
+                    // "literally nothing happened" rather than "no data".
+                    const hasHalfData = (data: PeriodStats) => statRows.some(row => (data[row.hKey] as number) > 0 || (data[row.aKey] as number) > 0);
+                    const h1HasData = hasHalfData(h1);
+                    const h2HasData = hasHalfData(h2);
                     const StatSection = ({ label, data }: { label: string; data: PeriodStats }) => (
                       <div style={{ marginBottom: 10 }}>
                         <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 5, opacity: 0.7 }}>{label}</div>
@@ -1540,8 +1562,13 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                           <div style={{ textAlign: 'center', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Statistics</div>
                           <div style={{ textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, paddingLeft: 12 }}>{fixture.awayTeam}</div>
                         </div>
-                        <StatSection label="1st Half" data={h1} />
-                        <StatSection label="2nd Half" data={h2} />
+                        {h1HasData && <StatSection label="1st Half" data={h1} />}
+                        {h2HasData && <StatSection label="2nd Half" data={h2} />}
+                        {!h1HasData && !h2HasData && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 10, opacity: 0.7 }}>
+                            Per-half breakdown not available for this match
+                          </div>
+                        )}
                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8 }}>
                           <StatSection label="Full Time" data={total} />
                         </div>
@@ -1555,6 +1582,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                   )}
                 </div>
               )}
+              </div>
 
               {/* Cryptographic Result Verification Panel — verifies YOUR result, so only relevant to entrants */}
               {userLineup && (
