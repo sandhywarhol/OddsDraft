@@ -1594,12 +1594,19 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
             </div>
           </div>
 
-          {/* Data source badge */}
+          {/* Data source badge — only ever names TxLINE when TxLINE is genuinely the
+              source. The ESPN fallback stays unbranded (this is a TxLINE hackathon
+              project) — a neutral "verified result" label, never "FROM ESPN". */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-            {eventsSource !== 'demo' ? (
+            {eventsSource === 'txline' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px', borderRadius: 20, background: 'rgba(0,229,255,0.07)', border: '1px solid rgba(0,229,255,0.25)', fontSize: '0.7rem', fontWeight: 700, color: '#00e5ff', letterSpacing: '0.06em' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 6px #00e5ff' }} />
-                {eventsQueueRef.current.length} EVENTS FROM {eventsSource === 'espn' ? 'ESPN' : 'TxLINE API'}
+                {eventsQueueRef.current.length} EVENTS FROM TxLINE API
+              </div>
+            ) : eventsSource === 'espn' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px', borderRadius: 20, background: 'rgba(0,232,122,0.07)', border: '1px solid rgba(0,232,122,0.25)', fontSize: '0.7rem', fontWeight: 700, color: '#00e87a', letterSpacing: '0.06em' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e87a', boxShadow: '0 0 6px #00e87a' }} />
+                {eventsQueueRef.current.length} EVENTS · VERIFIED RESULT
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
