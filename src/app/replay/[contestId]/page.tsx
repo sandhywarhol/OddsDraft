@@ -18,7 +18,7 @@ import { fetchLiveScoreUpdates } from '@/lib/txline';
 import CardPackOpener from '@/components/CardPackOpener';
 import FlagImage from '@/components/FlagImage';
 import { openCardPack, hasOpenedPack } from '@/lib/card-collection';
-import type { MatchResult, PeriodStats } from '@/app/api/match/result/route';
+import type { MatchResult, PeriodStats, TeamLineup } from '@/app/api/match/result/route';
 import LiveLineupFormation, { type FormationPlayer } from '@/components/LiveLineupFormation';
 
 // Best-effort XI when TxLINE has no published lineup for this fixture — derived purely
@@ -44,6 +44,19 @@ function buildPredictedXI(team: string, participant: 1 | 2): FormationPlayer[] {
       position: p.position === 'SWG' ? 'ATT' : p.position,
       participant,
     }));
+}
+
+// ESPN's rosters field (via /api/match/result) — the only source with a complete
+// matchday squad (starters + full bench), since this is a finished match. Preferred
+// over TxLINE, which often only records starters plus whichever subs actually played.
+function espnLineupToFormationPlayers(lineup: TeamLineup, participant: 1 | 2): FormationPlayer[] {
+  return lineup.players.map(p => ({
+    name: p.name,
+    jerseyNumber: p.jerseyNumber,
+    position: p.position,
+    participant,
+    starter: p.starter,
+  }));
 }
 
 // Flattens TxLINE's lineup response (any of its several shapes) into FormationPlayer[].
@@ -831,12 +844,10 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     return () => { cancelled = true; };
   }, [contestId, wcFixture]);
 
-  // Real published lineup (formation + starters + bench) from TxLINE, with a predicted-XI
-  // fallback derived from our own roster so the Team Lineup panel always has something to show.
-  const [realLineup, setRealLineup] = useState<{ home: FormationPlayer[]; away: FormationPlayer[]; homeCoach?: string; awayCoach?: string } | null>(null);
-  // True when realLineup came from buildPredictedXI rather than TxLINE — a guess with no
-  // real bench data, so the UI should say so rather than implying a short substitutes list.
-  const [isPredictedLineup, setIsPredictedLineup] = useState(false);
+  // TxLINE-published lineup (formation + starters + bench), if TxLINE has one for this
+  // fixture. Combined with the ESPN-sourced lineup (from matchStats, below) and a
+  // predicted-XI fallback into `realLineup` — see that derivation further down.
+  const [txlineLineup, setTxlineLineup] = useState<{ home: FormationPlayer[]; away: FormationPlayer[]; homeCoach?: string; awayCoach?: string } | null>(null);
 
   // All state hooks — always called unconditionally (Rules of Hooks)
   const [events, setEvents] = useState<any[]>([]);
@@ -935,25 +946,15 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
           seenSeqs,
         );
 
-        // Real published lineup if TxLINE has one for this fixture, else a predicted XI
-        // from our own roster — either way the Team Lineup panel has something to show.
+        // TxLINE lineup, if published for this fixture — used as a fallback behind the
+        // ESPN-sourced lineup (see realLineup derivation below), which is normally more complete.
         const fromDedicated = lineupData ? parseLineupData(lineupData, pMap) : null;
         const snapshotLineupAction = Array.isArray(snapshotData)
           ? snapshotData.find((u: any) => (u.Action ?? u.action ?? '').toLowerCase() === 'lineups')
           : (snapshotData && (snapshotData.Action ?? snapshotData.action ?? '').toLowerCase() === 'lineups' ? snapshotData : null);
         const fromSnapshot = snapshotLineupAction ? parseLineupData(snapshotLineupAction, pMap) : null;
         const countOf = (l: typeof fromDedicated) => (l ? l.home.length + l.away.length : 0);
-        const parsedLineup = countOf(fromSnapshot) > countOf(fromDedicated) ? fromSnapshot : fromDedicated;
-        if (parsedLineup) {
-          setRealLineup(parsedLineup);
-          setIsPredictedLineup(false);
-        } else {
-          setRealLineup({
-            home: buildPredictedXI(fixture.homeTeam, 1),
-            away: buildPredictedXI(fixture.awayTeam, 2),
-          });
-          setIsPredictedLineup(true);
-        }
+        setTxlineLineup(countOf(fromSnapshot) > countOf(fromDedicated) ? fromSnapshot : fromDedicated);
 
         if (apiEvents.length > 0) {
           const sorted = [...apiEvents].sort((a, b) => a.minute - b.minute);
@@ -992,6 +993,23 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode, apiToken, contestId]);
+
+  // Final lineup shown in Team Lineup, combining every source in priority order:
+  //   1. ESPN's rosters (via matchStats) — the only source with a full matchday squad,
+  //      since this is a finished match ESPN has already fully reported on.
+  //   2. TxLINE's published lineup — often starters-only or missing unused bench players.
+  //   3. Predicted XI from our own roster — a guess, used only when neither above has data.
+  const espnLineup = matchStats.data?.homeLineup && matchStats.data?.awayLineup
+    ? {
+        home: espnLineupToFormationPlayers(matchStats.data.homeLineup, 1),
+        away: espnLineupToFormationPlayers(matchStats.data.awayLineup, 2),
+      }
+    : null;
+  const realLineup = espnLineup ?? txlineLineup ?? (wcFixture ? {
+    home: buildPredictedXI(fixture.homeTeam, 1),
+    away: buildPredictedXI(fixture.awayTeam, 2),
+  } : null);
+  const isPredictedLineup = !espnLineup && !txlineLineup && !!wcFixture;
 
   const [dialogStep, setDialogStep] = useState(1);
 
@@ -1888,9 +1906,10 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
               </div>
               )}
 
-              {/* Team Lineup — real published formation from TxLINE (predicted XI fallback when
-                  TxLINE has no published lineup for this fixture yet); falls back further to a
-                  plain starting_xi/substitution list for demo fixtures with no TxLINE backing at all */}
+              {/* Team Lineup — ESPN's full matchday squad (starters + bench) when available,
+                  else TxLINE's published lineup, else a predicted XI as last resort; falls back
+                  further to a plain starting_xi/substitution list for demo fixtures with no
+                  TxLINE/ESPN backing at all */}
               {realLineup ? (
                 <>
                   {isPredictedLineup && (
@@ -1907,8 +1926,8 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
                     awayTeam={fixture.awayTeam}
                     homeFlag={fixture.homeFlag}
                     awayFlag={fixture.awayFlag}
-                    homeCoach={realLineup.homeCoach}
-                    awayCoach={realLineup.awayCoach}
+                    homeCoach={(realLineup as { homeCoach?: string }).homeCoach}
+                    awayCoach={(realLineup as { awayCoach?: string }).awayCoach}
                   />
                 </>
               ) : (

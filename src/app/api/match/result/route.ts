@@ -32,11 +32,25 @@ export interface MatchStats {
   total: PeriodStats;
 }
 
+export interface LineupPlayer {
+  name: string;
+  jerseyNumber?: number;
+  position: string;
+  starter: boolean;
+}
+
+export interface TeamLineup {
+  formation?: string;
+  players: LineupPlayer[];
+}
+
 export interface MatchResult {
   events: MatchEvent[];
   venue?: string;
   attendance?: string;
   stats?: MatchStats;
+  homeLineup?: TeamLineup;
+  awayLineup?: TeamLineup;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -294,6 +308,29 @@ export async function GET(req: NextRequest) {
   const venue = gameInfo?.venue?.fullName ?? gameInfo?.venue?.name;
   const attendance = gameInfo?.attendance != null ? Number(gameInfo.attendance).toLocaleString() : undefined;
 
+  // ── Full matchday squads (starters + bench) ───────────────────────────────
+  // ESPN's summary "rosters" field is the only source here with a complete squad —
+  // TxLINE frequently only lists starters plus whichever subs actually came on.
+  const parseLineup = (rosterTeam: any): TeamLineup | undefined => {
+    const roster: any[] = rosterTeam?.roster ?? [];
+    if (roster.length === 0) return undefined;
+    const players: LineupPlayer[] = roster
+      .filter((p: any) => p.active !== false)
+      .map((p: any): LineupPlayer => ({
+        name: p.athlete?.displayName ?? p.athlete?.fullName ?? '',
+        jerseyNumber: p.jersey ? (parseInt(p.jersey, 10) || undefined) : undefined,
+        position: p.position?.abbreviation ?? p.position?.displayName ?? '',
+        starter: !!p.starter,
+      }))
+      .filter((p: LineupPlayer) => p.name);
+    if (players.length === 0) return undefined;
+    return { formation: rosterTeam?.formation, players };
+  };
+  const rosterHome = detail?.rosters?.find((r: any) => r.homeAway === 'home');
+  const rosterAway = detail?.rosters?.find((r: any) => r.homeAway === 'away');
+  const homeLineup = parseLineup(rosterHome);
+  const awayLineup = parseLineup(rosterAway);
+
   // ── Build combined stats ─────────────────────────────────────────────────────
   // Strict priority so sources never double-count the same stat:
   //   H1/H2 goals, corners, cards → TxLINE Period1/Period2 (only source with per-half data)
@@ -365,7 +402,7 @@ export async function GET(req: NextRequest) {
     stats = base;
   }
 
-  const result: MatchResult = { events, venue, attendance, stats };
+  const result: MatchResult = { events, venue, attendance, stats, homeLineup, awayLineup };
   return NextResponse.json(result, {
     headers: {
       'Cache-Control': isLive
