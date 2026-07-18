@@ -24,7 +24,15 @@ export interface ContestLineup {
 // Same player-matching + point-resolution logic used to finalize real prize payouts
 // in /api/prize/submit — kept here as the single source of truth so a live leaderboard
 // preview and the authoritative payout computation can never silently drift apart.
-export function computeParticipantPoints(lineup: ContestLineup | null | undefined, events: ScoringEvent[]): number {
+//
+// starterIds: when provided (fetched from TxLINE lineup), only players in this set receive
+// the starting appearance bonus (+2). Players on the bench are correctly excluded.
+// Pass null/undefined to fall back to awarding all players (e.g. when lineup data unavailable).
+export function computeParticipantPoints(
+  lineup: ContestLineup | null | undefined,
+  events: ScoringEvent[],
+  starterIds?: Set<string> | null,
+): number {
   if (!lineup?.players?.length) return 0;
 
   let total = 0;
@@ -32,10 +40,13 @@ export function computeParticipantPoints(lineup: ContestLineup | null | undefine
   // Appearance bonus (+2 per player): the client-side engine awards this at kick_off /
   // starting_xi, but the cron only stores goal/card/etc events in live_match_events —
   // not the appearance event itself. We infer it: if ANY scoring event exists the match
-  // has started and every lineup player is owed their starting appearance bonus.
+  // has started and every confirmed starter in the lineup is owed their appearance bonus.
   // Captain × 2, then confidence multiplier — same as resolvePlayerDelta(0, {..., appearanceBonus: 2}).
   if (events.length > 0) {
     for (const p of lineup.players) {
+      // When TxLINE lineup data is available, only real starters get the bonus.
+      // Bench players (not in starterIds) are skipped to match client-side behaviour.
+      if (starterIds && !starterIds.has(p.id)) continue;
       const isCaptain = lineup.captain === p.id;
       const stars = (lineup.confidence ?? {})[p.id] ?? 3;
       total += resolvePlayerDelta(0, { isCaptain, confidenceStars: stars, appearanceBonus: 2 });

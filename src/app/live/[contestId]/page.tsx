@@ -1052,6 +1052,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const halftimePossAwardedRef = useRef(false);
   const fulltimePossAwardedRef = useRef(false);
   const extraTimeBonusAwardedRef = useRef(false);
+  // Set to true when bootstrap wants to award appearance bonus but lineup isn't loaded yet.
+  // fetchLineup() checks this after it resolves so the award is never permanently skipped.
+  const appearanceBonusDeferredRef = useRef(false);
   // Suppress popup on the very first TxLINE poll (historical events, not live arrivals)
   const isFirstTxLinePollRef = useRef(true);
   // Mirrors matchCompleted state so poll closures can read it without stale capture
@@ -2174,8 +2177,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         return { home, away, homeCoach, awayCoach };
       };
 
-      const fetchLineup = async () => {
-        if (lineupFetchedRef.current || !isMounted) return;
+      const fetchLineup = async (): Promise<boolean> => {
+        if (lineupFetchedRef.current || !isMounted) return false;
         // Always read the ref so retries pick up any late fixture ID correction
         const lineupFixtureId = txlineFixtureIdRef.current ?? resolvedFixtureId;
         try {
@@ -2187,44 +2190,73 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           } else {
             // Try snapshot — TxLINE often embeds lineup in the snapshot before publishing the endpoint
             const snapFallback = await fetch(`/api/txline/api/scores/snapshot/${lineupFixtureId}`);
-            if (!snapFallback.ok) return;
+            if (!snapFallback.ok) return false;
             const snapArr: any[] = await snapFallback.json();
             const lineupAction = (Array.isArray(snapArr) ? snapArr : [snapArr])
               .find((u: any) => (u.Action ?? u.action ?? '').toLowerCase() === 'lineups');
-            if (!lineupAction) return;
-            // Reuse the nested team format the snapshot uses
+            if (!lineupAction) return false;
             lineupData = lineupAction;
           }
 
           const parsed = parseLineupData(lineupData);
-          if (!parsed || !isMounted) return;
+          if (!parsed || !isMounted) return false;
           const { home, away, homeCoach, awayCoach } = parsed;
-          // Always update the displayed lineup so starters appear immediately
           setRealLineup({ home, away, homeCoach, awayCoach });
           realLineupRef.current = { home, away };
           const hasBench = [...home, ...away].some(p => p.starter === false);
           console.log(`[LivePage] Lineup loaded: ${home.length} home, ${away.length} away, bench: ${hasBench}`);
           if (hasBench) {
-            // Full squad (starters + bench) received — stop retrying
             lineupFetchedRef.current = true;
             if (lineupRetryTimerRef.current) { clearInterval(lineupRetryTimerRef.current); lineupRetryTimerRef.current = null; }
           }
-          // Otherwise keep retrying — bench players announced later than starters
+
+          // If bootstrap already ran but couldn't award appearance bonus (lineup wasn't ready),
+          // award it now with the correct starter filter.
+          if (appearanceBonusDeferredRef.current && userLineupRef.current?.players?.length > 0 && isMounted) {
+            appearanceBonusDeferredRef.current = false;
+            const { players, captain, confidence } = userLineupRef.current;
+            const realStarters = getRealStarterIds();
+            let deferredBonus = 0;
+            for (const p of (players as any[])) {
+              if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+              if (realStarters && !realStarters.has(p.id)) continue; // bench — skip
+              const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+              const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
+              deferredBonus += pts;
+              appearedPlayersRef.current.add(p.id);
+              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }] }));
+            }
+            if (deferredBonus > 0) {
+              setLeaderboard(prev => {
+                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + deferredBonus) * 100) / 100 } : e);
+                return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
+              });
+              console.log(`[LivePage] Deferred appearance bonus awarded: +${deferredBonus} pts (lineup arrived after snapshot)`);
+            }
+          }
+
+          return true;
         } catch (err) {
           console.warn('[LivePage] Lineup fetch failed (will retry):', err);
+          return false;
         }
       };
 
-      // Immediate attempt + retry every 15s until data arrives (lineups released ~30min before KO)
-      fetchLineup();
+      // Fetch lineup and snapshot in PARALLEL so lineup is available when appearance bonus is awarded.
+      // lineupPromise is awaited jointly with the snapshot via Promise.allSettled below.
+      const lineupPromise = fetchLineup();
       if (!lineupFetchedRef.current) {
         if (lineupRetryTimerRef.current) clearInterval(lineupRetryTimerRef.current);
         lineupRetryTimerRef.current = setInterval(fetchLineup, 15_000);
       }
 
-      // Load all events that happened before we connected via the score snapshot
-      // Routed through server-side proxy — avoids browser token/IP issues with TxLINE
-      const snapRes = await fetch(`/api/txline/api/scores/snapshot/${resolvedFixtureId}`);
+      // Load all events that happened before we connected via the score snapshot.
+      // Await lineup in parallel so realLineupRef is populated before we award appearance bonus.
+      const [, snapRes] = await Promise.all([
+        lineupPromise,
+        fetch(`/api/txline/api/scores/snapshot/${resolvedFixtureId}`),
+      ]);
       const snapRawArr = snapRes.ok ? await snapRes.json() : null;
       const snap = Array.isArray(snapRawArr) && snapRawArr.length > 0 ? mergeEvents(snapRawArr) : snapRawArr;
       if (snap && isMounted) {
@@ -2268,29 +2300,40 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (snapGs && lastGameStateRef.current === null) {
           lastGameStateRef.current = snapGs; // prevent poll from re-synthesizing the same state
 
-          // Award starting_xi appearance points once (only for players confirmed in real TxLINE XI)
+          // Award starting_xi appearance points once — only for players confirmed in the real TxLINE XI.
+          // Lineup is fetched in parallel with the snapshot (Promise.all above), so
+          // realLineupRef should be populated by now. If the lineup endpoint was slow and
+          // still hasn't responded, defer via appearanceBonusDeferredRef so fetchLineup()
+          // can award it once the data arrives.
           if (isMatchLive && userLineupRef.current?.players?.length > 0) {
             const { players, captain, confidence } = userLineupRef.current;
             const realStarters = getRealStarterIds();
-            let totalBonus = 0;
-            for (const p of (players as any[])) {
-              if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
-              if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
-              const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
-              totalBonus += pts;
-              appearedPlayersRef.current.add(p.id);
-              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-              setPlayerHistory(prev => ({
-                ...prev,
-                [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }],
-              }));
-            }
-            if (totalBonus > 0 && isMounted) {
-              setLeaderboard(prev => {
-                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
-              });
+
+            // If TxLINE lineup still not loaded, defer — fetchLineup() will pick this up
+            if (!realLineupRef.current) {
+              appearanceBonusDeferredRef.current = true;
+              console.log('[LivePage] Appearance bonus deferred — waiting for lineup data');
+            } else {
+              let totalBonus = 0;
+              for (const p of (players as any[])) {
+                if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
+                if (realStarters && !realStarters.has(p.id)) continue; // bench — skip
+                const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
+                const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
+                totalBonus += pts;
+                appearedPlayersRef.current.add(p.id);
+                setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
+                setPlayerHistory(prev => ({
+                  ...prev,
+                  [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }],
+                }));
+              }
+              if (totalBonus > 0 && isMounted) {
+                setLeaderboard(prev => {
+                  const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
+                  return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
+                });
+              }
             }
           }
 
