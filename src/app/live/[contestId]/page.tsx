@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, use } from 'react';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
@@ -807,6 +808,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const { contestId } = use(params);
   const searchParamsObj = use(searchParams);
   const contestType = (searchParamsObj.contestType as string) || 'top3';
+  const router = useRouter();
   const { publicKey, signMessage } = useWallet();
   const { playSFX } = useAudio();
   const { appMode, apiToken, guestJwt, liveFixtures, allFixtures, isAdmin } = useTxLine();
@@ -984,6 +986,10 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const notifiedEventsRef = useRef<Set<string>>(new Set());
   const leaderboardRef = useRef(leaderboard);
   const userLineupRef = useRef<any>(null);
+  // True once the lineup-loading effect below has definitively resolved (found one, or
+  // confirmed none exists) — gates the non-entrant redirect so it can't fire while we're
+  // still mid-check and would otherwise kick out a legitimate entrant.
+  const [lineupCheckDone, setLineupCheckDone] = useState(false);
   const appearedPlayersRef = useRef<Set<string>>(new Set());
 
   // Returns Set of internal player IDs who actually started, per TxLINE data.
@@ -1142,6 +1148,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
       } catch (e) {
         console.error('Failed to load user lineup:', e);
+      } finally {
+        if (!cancelled) setLineupCheckDone(true);
       }
     })();
 
@@ -1214,6 +1222,23 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const [claimTxSig, setClaimTxSig] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
   const prizeSubmittedRef = useRef(false);
+
+  // Non-entrants who land here for a FINISHED match (e.g. a direct URL, not the
+  // "My Results" button) get sent to the spectator Match Result page instead — this
+  // page assumes an entrant's lineup for most of its post-match UI (fantasy points,
+  // leaderboard, claim panel). Live/upcoming matches are left alone; "Watch Live" is
+  // intentionally open to anyone. Demo and guest-demo flows are exempt — they have
+  // their own self-contained narrative and aren't tied to a real wallet's entries.
+  // "Finished" here is matchCompleted OR the plain wall-clock fixture.status — a match
+  // our own live tracking never actually saw (so matchCompleted never flips) can still
+  // be unambiguously over by kickoff time + its stage's normal duration.
+  const isFinishedByClock = fixture.status === 'finished';
+  useEffect(() => {
+    if (!persistedIsLive || guestDemoMode) return;
+    if ((!matchCompleted && !isFinishedByClock) || !lineupCheckDone) return;
+    if (userLineupRef.current) return;
+    router.replace(`/replay/${contestId}`);
+  }, [persistedIsLive, guestDemoMode, matchCompleted, isFinishedByClock, lineupCheckDone, contestId, router]);
 
   const handleVerify = () => {
     setVerificationStatus('verifying');
