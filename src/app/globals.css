@@ -509,6 +509,54 @@ h1, h2, h3, h4, h5, h6 {
     0 4px 10px rgba(255, 98, 0, 0.3);
 }
 
+.btn-hero-demo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 36px;
+  border-radius: 12px;
+  font-family: var(--font-inter), sans-serif;
+  font-weight: 900;
+  font-size: 1.15rem;
+  font-style: italic;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: linear-gradient(to bottom, #ff3366 0%, #ff0044 50%, #cc0033 100%);
+  border: 3px solid #000000;
+  box-shadow: 
+    0 6px 0 #880022, 
+    0 10px 25px rgba(255, 0, 68, 0.4),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+  text-shadow: 
+    -2px -2px 0 #000,  
+     2px -2px 0 #000,
+    -2px  2px 0 #000,
+     2px  2px 0 #000,
+     0px  3px 0 #000;
+  transition: all 0.15s ease-out;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  top: 0;
+}
+
+.btn-hero-demo:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(to bottom, #ff5588 0%, #ff1155 50%, #dd0044 100%);
+  box-shadow: 
+    0 8px 0 #880022, 
+    0 12px 30px rgba(255, 0, 68, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.6);
+}
+
+.btn-hero-demo:active {
+  top: 4px;
+  box-shadow: 
+    0 2px 0 #880022, 
+    0 4px 10px rgba(255, 0, 68, 0.3);
+}
+
 .btn-hero-learn {
   display: inline-flex;
   align-items: center;
@@ -1982,7 +2030,7 @@ a {
 /* Title - Blue Lock Theme */
 .wallet-adapter-modal-title {
   font-family: var(--font-bebas), cursive;
-  font-size: 1.4rem !important;
+  font-size: 0 !important; /* Hides the original text */
   font-weight: 400 !important;
   letter-spacing: 0.15em !important;
   color: #fff !important;
@@ -1994,6 +2042,21 @@ a {
   text-transform: uppercase !important;
   line-height: 1.1 !important;
   margin-bottom: 8px !important;
+}
+
+.wallet-adapter-modal-title::after {
+  content: "CONNECT A SOLANA DEVNET WALLET TO JOIN CONTESTS";
+  font-size: 1.4rem !important;
+  display: inline-block;
+  background: #ffd700;
+  color: #000 !important;
+  text-shadow: none !important;
+  border: 2px solid #ff9f00;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+  margin-top: 4px;
+  margin-bottom: 8px;
 }
 
 /* Subtitle / subheading */

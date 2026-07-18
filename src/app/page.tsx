@@ -112,24 +112,9 @@ function HeroSection() {
           <Link
             href="/lineup/special-arg-eng?guest_demo=1&contestType=top3"
             id="hero-demo-btn"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '14px 28px',
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, #e53e3e 0%, #c53030 100%)',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: 15,
-              letterSpacing: 0.3,
-              textDecoration: 'none',
-              border: '2px solid rgba(255,255,255,0.18)',
-              boxShadow: '0 4px 16px rgba(229,62,62,0.45)',
-              transition: 'transform 0.15s, box-shadow 0.15s',
-            }}
+            className="btn-hero-demo"
           >
-            🎮 Try Demo
+            Try Demo
           </Link>
         </div>
 
@@ -157,9 +142,9 @@ function HeroSection() {
                   <path fill="url(#solana-gradient-final)" d="M84.53,59.85A17.08,17.08,0,0,1,96.28,55H501.73a8.3,8.3,0,0,1,5.87,14.18l-80.09,80.09a16.61,16.61,0,0,1-11.75,4.86H10.31A8.31,8.31,0,0,1,4.43,140Z" transform="translate(-1.98 -55)"/>
                   <path fill="url(#solana-gradient-final)" d="M427.51,208.42a16.61,16.61,0,0,0-11.75-4.86H10.31a8.31,8.30,0,0,0-5.88,14.18l80.1,80.09a16.6,16.6,0,0,0,11.75,4.86H501.73a8.3,8.3,0,0,0,5.87-14.18Z" transform="translate(-1.98 -55)"/>
                 </svg>
-              ), text: 'Solana Verified' },
-          ].map((item) => (
-            <div key={item.text} style={{
+              ), text: <span style={{ color: '#00ffa3', fontWeight: 700 }}>Solana Devnet</span> },
+          ].map((item, index) => (
+            <div key={index} style={{
               display: 'flex',
               alignItems: 'center',
               gap: 8,

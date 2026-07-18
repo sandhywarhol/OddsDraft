@@ -1013,6 +1013,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
 
       // ── Step 5: Save to Supabase ──────────────────────────────────────
       setStep(5, { status: 'loading' });
+      // Persist txSig so the user can recover their entry if this step fails.
+      if (entryTxSig) {
+        try { localStorage.setItem(`txodds_pending_sig_${contestId}_${contestType}`, entryTxSig); } catch { /* ignore */ }
+      }
       try {
         const res = await fetch('/api/contest/enter', {
           method: 'POST',
@@ -1025,12 +1029,33 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
             entryTxSig,
           }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          // For validation errors (4xx), surface the server message so we know what went wrong.
+          // Payment already confirmed on-chain — we do NOT re-charge, but we must still save.
+          const body = await res.json().catch(() => ({}));
+          const msg = body?.error ?? `Server error (HTTP ${res.status})`;
+          console.error('[contest/enter] Save failed:', msg);
+          // Attempt one retry in case it was a transient error
+          const retry = await fetch('/api/contest/enter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fixtureId: contestId, walletAddress: publicKey.toString(), contestType, lineup: lineupData, entryTxSig }),
+          });
+          if (!retry.ok) {
+            const retryBody = await retry.json().catch(() => ({}));
+            throw new Error(retryBody?.error ?? msg);
+          }
+        }
         setStep(5, { status: 'ok', detail: 'Lineup saved' });
+        // Clear pending sig now that entry is saved
+        try { localStorage.removeItem(`txodds_pending_sig_${contestId}_${contestType}`); } catch { /* ignore */ }
       } catch (e: any) {
-        // Payment already went through — don't block the user, just log
-        setStep(5, { status: 'ok', detail: 'Saved locally (server sync will retry)' });
-        console.error('[contest/enter] Supabase save failed:', e);
+        // Payment went through but Supabase save failed — mark as error so user knows to retry.
+        // txSig is preserved in localStorage (txodds_pending_sig_*) for manual recovery.
+        setPayError(`Entry save failed: ${e?.message ?? 'unknown error'}. Your payment went through — contact support with your transaction signature.`);
+        setStep(5, { status: 'error', detail: e?.message ?? 'Save failed' });
+        setSubmitting(false);
+        return;
       }
       // Save to localStorage only after confirmed payment so JOINED badge is accurate
       try {
