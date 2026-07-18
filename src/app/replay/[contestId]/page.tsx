@@ -875,9 +875,13 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
       ? getDynamicEvents(fixture, REPLAY_EVENTS[contestId] || LIVE_EVENTS)
       : []
   );
-  // True once TxLINE has successfully supplied real events for this fixture — the ESPN
-  // fallback effect checks this so TxLINE (when it works) stays the higher-priority source.
-  const txlineEventsLoadedRef = useRef(false);
+  // Which source eventsQueueRef.current actually came from — purely for the "EVENTS FROM
+  // ..." badge label. ESPN is treated as authoritative for event correctness regardless of
+  // whether TxLINE also responded (see the ESPN effect below): TxLINE's live stream can
+  // return a partial or inconsistent reconstruction for a fixture it didn't track cleanly,
+  // and for a REPLAY of an already-finished match, ESPN's post-match report is the more
+  // reliable source of "what actually happened" even when TxLINE has *something*.
+  const [eventsSource, setEventsSource] = useState<'demo' | 'txline' | 'espn'>('demo');
 
   // apiVersion increments after API events load, triggering the event trigger effect to re-evaluate
   const [apiVersion, setApiVersion] = useState(0);
@@ -967,12 +971,15 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isResultsMode]);
 
-  // ESPN's real match report as the events-queue fallback, once TxLINE has had its
-  // chance and matchStats has resolved. TxLINE is left as-is above if it succeeded —
-  // this only replaces the placeholder generic script (fixed storyline, fixed score,
-  // remapped by position) with what actually happened in this specific match.
+  // ESPN's real match report replaces whatever's in eventsQueueRef once matchStats
+  // resolves with real events — including overriding TxLINE if it already applied
+  // something above. TxLINE's live-stream reconstruction can come back partial or
+  // inconsistent for a fixture it didn't track cleanly, and this page's whole purpose
+  // is showing what actually happened in a finished match, so correctness (ESPN) wins
+  // over "whichever source responded" or extra live-only granularity (TxLINE). Either
+  // way this replaces the placeholder generic script (fixed storyline, fixed score,
+  // remapped by position) that's there until one of the real sources loads.
   useEffect(() => {
-    if (txlineEventsLoadedRef.current) return;
     const espnEvents = matchStats.data?.events;
     if (!espnEvents || espnEvents.length === 0) return;
 
@@ -980,6 +987,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
     eventsQueueRef.current = sorted;
     triggeredEventsRef.current.clear();
     notifiedEventsRef.current.clear();
+    setEventsSource('espn');
 
     if (isResultsMode) {
       let h = 0, a = 0;
@@ -1052,7 +1060,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
         if (apiEvents.length > 0) {
           const sorted = [...apiEvents].sort((a, b) => a.minute - b.minute);
           eventsQueueRef.current = sorted;
-          txlineEventsLoadedRef.current = true;
+          setEventsSource('txline');
           triggeredEventsRef.current.clear();
           notifiedEventsRef.current.clear();
 
@@ -1588,10 +1596,10 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
           {/* Data source badge */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-            {appMode === 'live' && apiVersion > 0 ? (
+            {eventsSource !== 'demo' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px', borderRadius: 20, background: 'rgba(0,229,255,0.07)', border: '1px solid rgba(0,229,255,0.25)', fontSize: '0.7rem', fontWeight: 700, color: '#00e5ff', letterSpacing: '0.06em' }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00e5ff', boxShadow: '0 0 6px #00e5ff' }} />
-                {eventsQueueRef.current.length} EVENTS FROM TxLINE API
+                {eventsQueueRef.current.length} EVENTS FROM {eventsSource === 'espn' ? 'ESPN' : 'TxLINE API'}
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
