@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getPrizeForRank, calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
-import { matchPlayerName } from '@/lib/txline-bridge';
+import { getPrizeForRank } from '@/lib/fantasy-engine';
+import { SCORING_EVENTS, computeParticipantPoints } from '@/lib/contest-scoring';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-const SCORING_EVENTS = new Set([
-  'goal', 'own_goal', 'red_card', 'yellow_card', 'penalty_save',
-  'assist', 'penalty_won', 'penalty_missed', 'goalkeeper_save',
-]);
 
 // POST /api/prize/submit
 // Triggered by the live page at full time. The server re-derives the
@@ -51,35 +46,10 @@ export async function POST(req: NextRequest) {
     const events = (dbEvents ?? []).filter(e => SCORING_EVENTS.has(e.event_type));
 
     // 3. Compute points for each entry server-side
-    const scored = entries.map(entry => {
-      const lineup = entry.lineup;
-      if (!lineup?.players?.length) return { walletAddress: entry.wallet_address, points: 0 };
-
-      let total = 0;
-      for (const ev of events) {
-        const resolvedId = matchPlayerName(ev.player_name ?? '', ev.team_name ?? '');
-        let matched = resolvedId
-          ? lineup.players.find((p: any) => p.id === resolvedId)
-          : null;
-
-        if (!matched && ev.player_name) {
-          const parts = (ev.player_name as string).toLowerCase().split(/\s+/).filter((p: string) => p.length >= 3);
-          matched = lineup.players.find((p: any) =>
-            parts.some((part: string) => (p.name ?? '').toLowerCase().includes(part))
-          );
-        }
-        if (!matched) continue;
-
-        const basePts = calculateEventPoints(ev.event_type, matched.position ?? 'ATT');
-        if (basePts === 0) continue;
-
-        const isCaptain = lineup.captain === matched.id;
-        const stars = (lineup.confidence ?? {})[matched.id] ?? 3;
-        total += resolvePlayerDelta(basePts, { isCaptain, confidenceStars: stars });
-      }
-
-      return { walletAddress: entry.wallet_address, points: Math.round(total * 100) / 100 };
-    });
+    const scored = entries.map(entry => ({
+      walletAddress: entry.wallet_address,
+      points: computeParticipantPoints(entry.lineup, events),
+    }));
 
     // 4. Sort descending, assign ranks (ties share the higher rank)
     scored.sort((a, b) => b.points - a.points);

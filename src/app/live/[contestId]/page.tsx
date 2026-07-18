@@ -1171,53 +1171,70 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     leaderboardRef.current = leaderboard;
   }, [leaderboard]);
 
-  // Live mode: populate leaderboard with real Supabase participants + compute prizes
+  // Live mode: populate leaderboard with real Supabase participants + compute prizes.
+  // Polls periodically so opponents' points (computed server-side from events the cron
+  // poller has recorded so far) keep advancing during the match — this endpoint is a
+  // read-only preview and never affects the money-authoritative /api/prize/submit payout.
   useEffect(() => {
     if (appMode !== 'live') return;
-    fetch(`/api/contest/leaderboard?fixture=${contestId}&contestType=${contestType}`)
-      .then(r => r.json())
-      .then((data: { participants?: Array<{ wallet_address: string; contest_type: string }> }) => {
-        const list = data.participants ?? [];
-        if (list.length === 0) return;
-        const n = list.length;
-        const walletStr = publicKey?.toString() ?? '';
-        const entries = list.map((p, i) => {
-          const rank = i + 1;
-          const w = p.wallet_address;
-          const isUser = !!walletStr && w === walletStr;
-          let username = isUser ? 'You' : `${w.substring(0, 4)}...${w.slice(-3)}`;
-          let avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${w}`;
-          if (isUser) {
+
+    const loadLeaderboard = () => {
+      fetch(`/api/contest/leaderboard?fixture=${contestId}&contestType=${contestType}`)
+        .then(r => r.json())
+        .then((data: { participants?: Array<{ wallet_address: string; contest_type: string; points?: number }> }) => {
+          const list = data.participants ?? [];
+          if (list.length === 0) return;
+          const n = list.length;
+          const walletStr = publicKey?.toString() ?? '';
+          // Rank by actual points, not entry order — ties keep original (entry-time) order.
+          const sorted = [...list].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+          const entries = sorted.map((p, i) => {
+            const rank = i + 1;
+            const w = p.wallet_address;
+            const isUser = !!walletStr && w === walletStr;
+            let username = isUser ? 'You' : `${w.substring(0, 4)}...${w.slice(-3)}`;
+            let avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${w}`;
+            if (isUser) {
+              try {
+                const stored = localStorage.getItem(`profile_${w}`);
+                if (stored) {
+                  const pp = JSON.parse(stored);
+                  username = pp.username || username;
+                  avatar = pp.avatar || avatar;
+                }
+              } catch {}
+            }
+            const prizeSol = getPrizeForRank(rank, contestType, n);
+            const prize = prizeSol > 0 ? `${prizeSol.toFixed(4)} SOL` : '–';
+            // The user's own row is kept driven by the client-side event-replay engine
+            // (updated instantly as events arrive, and includes skill-card bonuses this
+            // server-side preview doesn't factor in) — only pull the server's computed
+            // points for opponents, who have no other live source.
+            const points = isUser ? (leaderboardRef.current.find(e => e.isUser)?.points ?? 0) : (p.points ?? 0);
+            return { rank, username, wallet: `${w.substring(0, 4)}...${w.slice(-3)}`, avatar, points, prize, isUser };
+          });
+          // If the user has a lineup (entered the contest) but isn't in the server's participant
+          // list yet (e.g. Supabase sync pending, or demo entry), preserve an isUser entry so
+          // scoring updates have a row to accumulate into. Must actually check for a lineup —
+          // any connected wallet satisfies `walletStr` even if they never entered this contest,
+          // which would otherwise list a non-participant's own wallet on the leaderboard.
+          if (walletStr && userLineupRef.current && !entries.some(e => e.isUser)) {
+            let userUsername = 'You';
+            let userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${walletStr}`;
             try {
-              const stored = localStorage.getItem(`profile_${w}`);
-              if (stored) {
-                const pp = JSON.parse(stored);
-                username = pp.username || username;
-                avatar = pp.avatar || avatar;
-              }
+              const storedProfile = localStorage.getItem(`profile_${walletStr}`);
+              if (storedProfile) { const pp = JSON.parse(storedProfile); userUsername = pp.username || userUsername; userAvatar = pp.avatar || userAvatar; }
             } catch {}
+            entries.push({ rank: entries.length + 1, username: userUsername, wallet: `${walletStr.substring(0, 4)}...${walletStr.slice(-3)}`, avatar: userAvatar, points: 0, prize: '–', isUser: true });
           }
-          const prizeSol = getPrizeForRank(rank, contestType, n);
-          const prize = prizeSol > 0 ? `${prizeSol.toFixed(4)} SOL` : '–';
-          return { rank, username, wallet: `${w.substring(0, 4)}...${w.slice(-3)}`, avatar, points: 0, prize, isUser };
-        });
-        // If the user has a lineup (entered the contest) but isn't in the server's participant
-        // list yet (e.g. Supabase sync pending, or demo entry), preserve an isUser entry so
-        // scoring updates have a row to accumulate into. Must actually check for a lineup —
-        // any connected wallet satisfies `walletStr` even if they never entered this contest,
-        // which would otherwise list a non-participant's own wallet on the leaderboard.
-        if (walletStr && userLineupRef.current && !entries.some(e => e.isUser)) {
-          let userUsername = 'You';
-          let userAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${walletStr}`;
-          try {
-            const storedProfile = localStorage.getItem(`profile_${walletStr}`);
-            if (storedProfile) { const pp = JSON.parse(storedProfile); userUsername = pp.username || userUsername; userAvatar = pp.avatar || userAvatar; }
-          } catch {}
-          entries.push({ rank: entries.length + 1, username: userUsername, wallet: `${walletStr.substring(0, 4)}...${walletStr.slice(-3)}`, avatar: userAvatar, points: 0, prize: '–', isUser: true });
-        }
-        setLeaderboard(entries);
-      })
-      .catch(err => console.warn('[Leaderboard] fetch failed:', err));
+          setLeaderboard(entries);
+        })
+        .catch(err => console.warn('[Leaderboard] fetch failed:', err));
+    };
+
+    loadLeaderboard();
+    const interval = setInterval(loadLeaderboard, 20_000);
+    return () => clearInterval(interval);
   }, [appMode, contestId, contestType, publicKey]);
 
   const [dialogStep, setDialogStep] = useState(1);
