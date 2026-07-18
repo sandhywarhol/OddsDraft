@@ -42,6 +42,8 @@ import {
 } from '@/lib/upgrade-cards';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { useTxLine } from '@/context/TxLineContext';
+import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
+import { DEMO_FIXTURES } from '@/lib/players';
 import { Transaction, SystemProgram, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { buildListCardIx, buildCancelListingIx, TREASURY_PUBKEY } from '@/lib/oddsdraft-anchor';
 import {
@@ -471,6 +473,17 @@ function EquipModal({
   const [done, setDone] = useState(false);
 
   useEffect(() => {
+    // `txodds_user_lineup_*` is a shared, non-wallet-scoped localStorage cache — over the
+    // course of testing/demo sessions on a device, it can accumulate entries for fixture
+    // IDs that were never real (short test IDs, leftover fixtures removed from the
+    // schedule). Only surface lineups whose fixture ID still corresponds to a known WC2026
+    // or demo fixture, so stale/fake entries don't flood this list.
+    const validFixtureIds = new Set([
+      ...WC2026_FIXTURES.map(f => f.fixtureId),
+      ...DEMO_FIXTURES.map(f => f.fixtureId),
+    ]);
+    const CONTEST_TYPE_SUFFIXES = ['_top3', '_wta', '_5050'];
+
     const found: typeof lineups = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -479,6 +492,9 @@ function EquipModal({
         const data = JSON.parse(localStorage.getItem(key) ?? '{}');
         if (!data.players?.length) continue;
         const contestId = key.replace('txodds_user_lineup_', '');
+        const suffix = CONTEST_TYPE_SUFFIXES.find(s => contestId.endsWith(s));
+        const fixtureId = suffix ? contestId.slice(0, -suffix.length) : contestId;
+        if (!validFixtureIds.has(fixtureId)) continue;
         found.push({
           contestId,
           homeTeam: data.players[0]?.team ?? contestId,
