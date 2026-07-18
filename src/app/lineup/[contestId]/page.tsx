@@ -265,10 +265,21 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contestId]);
   const enteredContestsKey = `txodds_entered_contests_${contestId}`;
+  // `typeof window` is always undefined during SSR, so this differed between the server
+  // (always false) and the client's first render (true if actually already entered) —
+  // a hydration mismatch, since it fed straight into `submitted`'s initial value below.
+  // alreadyEntered itself is only ever rendered inside the `if (submitted)` block further
+  // down, which now always starts closed on first paint, so it's safe to keep as a plain
+  // per-render read — only submitted's *initial* value needed to stop depending on it.
   const alreadyEntered = typeof window !== 'undefined'
     ? (JSON.parse(localStorage.getItem(enteredContestsKey) ?? '[]') as string[]).includes(contestType)
     : false;
-  const [submitted, setSubmitted] = useState(isReplayTutorial ? false : (isGuestDemo ? false : alreadyEntered));
+  const [submitted, setSubmitted] = useState(false);
+  useEffect(() => {
+    if (isReplayTutorial || isGuestDemo) return;
+    if (alreadyEntered) setSubmitted(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [submitting, setSubmitting] = useState(false);
 
   type PayStep = { label: string; status: 'pending' | 'loading' | 'ok' | 'error'; detail?: string };

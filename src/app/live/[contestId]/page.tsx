@@ -818,9 +818,20 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const guestDemoMode = searchParamsObj.guest_demo === '1';
   const forceDemoMode = (searchParamsObj.mode === 'demo' && isAdmin) || guestDemoMode;
 
-  const persistedIsLive = !forceDemoMode
-    && typeof window !== 'undefined'
-    && localStorage.getItem('txline_app_mode') !== 'demo';
+  // `typeof window !== 'undefined'` is always false during SSR (no window server-side),
+  // so reading it directly here made the server always render this page's "demo" render
+  // branches (e.g. the DEMO_LEADERBOARD-seeded leaderboard) while the client — which
+  // almost always has txline_app_mode !== 'demo' — rendered the "live" branches instead,
+  // producing a hydration mismatch on first load. Default to true (assume live) so the
+  // first render matches on both sides, then correct after mount from the real value —
+  // a state update post-hydration is fine; differing initial HTML is not. Since non-admin
+  // wallets are force-reset out of demo mode anyway (see TxLineContext), true is also the
+  // correct value for the overwhelming majority of visitors, not just a placeholder.
+  const [isLiveAppMode, setIsLiveAppMode] = useState(true);
+  useEffect(() => {
+    setIsLiveAppMode(localStorage.getItem('txline_app_mode') !== 'demo');
+  }, []);
+  const persistedIsLive = !forceDemoMode && isLiveAppMode;
 
   // Always prefer WC2026 real fixtures (works in both demo and live modes)
   const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === contestId);
