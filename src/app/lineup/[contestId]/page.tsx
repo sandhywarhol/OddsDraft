@@ -495,7 +495,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       }
     }
 
-    if (tutorialStep < 8) {
+    if (tutorialStep < 9) {
       const nextStep = tutorialStep + 1;
       const nextData = getTutorialData(nextStep);
       const targetId = nextData?.targetId;
@@ -1379,8 +1379,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               `}</style>
             )}
 
-            {/* NPC Character Image (Female - Left) */}
-            {tutorialData?.position === 'left' && (
+            {/* NPC Character Image (Female - Left). Also shown on the final step 9,
+                where both guides appear together. */}
+            {(tutorialData?.position === 'left' || tutorialStep === 9) && (
               <img
                 src="/NPC/NPC%20Guide%20Female.svg"
                 alt="Guide"
@@ -1398,8 +1399,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               />
             )}
 
-            {/* NPC Character Image (Male - Right) */}
-            {tutorialData?.position === 'right' && (
+            {/* NPC Character Image (Male - Right). Also shown on the final step 9,
+                where both guides appear together. */}
+            {(tutorialData?.position === 'right' || tutorialStep === 9) && (
               <img
                 src="/NPC/NPC%20Guide%20Male.svg"
                 alt="Guide"
@@ -1471,8 +1473,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   animation: 'blink-text 1.5s infinite',
                   letterSpacing: '0.05em'
                 }}>
-                  Click anywhere to continue 
-                  <span style={{ marginLeft: 8 }}>({tutorialStep}/8)</span>
+                  Click anywhere to continue
+                  <span style={{ marginLeft: 8 }}>({tutorialStep}/9)</span>
                 </div>
               </div>
               
@@ -2539,6 +2541,15 @@ function getTutorialData(step: number): { speakerTitle: string, text: string, im
         image: '/NPC/NPC%20Guide%20Male.svg',
         position: 'right',
         targetId: 'lineup-header',
+      };
+    case 9:
+      return {
+        speakerTitle: 'Guides',
+        text: `"One last thing — subscribe to our Telegram bot @OddsDraftBot to get live match updates, the leaderboard, and your fantasy points delivered straight to you. See you on the pitch!"`,
+        image: '/NPC/NPC%20Guide%20Female.svg',
+        position: 'left',
+        // No zoom target — this final message just shows both guides and the dialog.
+        targetId: '',
       };
     default:
       return null;
