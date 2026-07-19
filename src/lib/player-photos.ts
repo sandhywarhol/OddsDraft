@@ -33,15 +33,57 @@ function writeCache(playerId: string, url: string | null) {
 }
 
 // TheSportsDB free tier — search by player name, return best photo URL
-async function fetchFromSportsDB(name: string): Promise<string | null> {
-  const url = `https://www.thesportsdb.com/api/v1/json/3/searchplayers.php?p=${encodeURIComponent(name)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const player = data?.player?.[0];
-  if (!player) return null;
-  // strCutout is a transparent PNG cutout (best for cards), strThumb is a head shot
-  return player.strCutout || player.strThumb || null;
+async function fetchFromSportsDB(name: string, attempt = 0): Promise<string | null> {
+  try {
+    const url = `https://www.thesportsdb.com/api/v1/json/3/searchplayers.php?p=${encodeURIComponent(name)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const player = data?.player?.[0];
+    if (!player) return null; // resolved, but genuinely no such player — caller caches null
+    // strCutout is a transparent PNG cutout (best for cards), strThumb is a head shot
+    return player.strCutout || player.strThumb || null;
+  } catch (err) {
+    // Retry once on a transient failure — the free tier throttles bursts, e.g. a whole
+    // starting XI mounting at once on an incognito cold load with no cache.
+    if (attempt < 1) {
+      await new Promise(r => setTimeout(r, 400 + Math.random() * 500));
+      return fetchFromSportsDB(name, attempt + 1);
+    }
+    throw err; // exhausted — let the caller treat it as a network error (not cached)
+  }
+}
+
+// Some squad/demo players carry abbreviated or accented display names that TheSportsDB's
+// name search can't resolve (verified: "N. González" and "Acuña" return nothing). Map those
+// player ids to a full ASCII search name so their photo always resolves.
+const SEARCH_NAME_OVERRIDES: Record<string, string> = {
+  'arg-gonzalez':  'Nicolas Gonzalez',
+  'arg-acuna':     'Marcos Acuna',
+  'arg-emartinez': 'Emiliano Martinez',
+  'arg-martinez':  'Lisandro Martinez',
+  'arg-lmartinez': 'Lautaro Martinez',
+  'arg-allister':  'Alexis Mac Allister',
+  'arg-molina':    'Nahuel Molina',
+  'arg-romero':    'Cristian Romero',
+  'arg-dimaria':   'Angel Di Maria',
+  'arg-paul':      'Rodrigo De Paul',
+};
+
+// Cap concurrent TheSportsDB requests so a cold page load (a full starting XI mounting at
+// once with an empty cache — the exact incognito case) doesn't burst-throttle the free tier
+// and silently lose a few photos. A released slot is handed straight to the next waiter.
+const MAX_CONCURRENT = 4;
+let activeFetches = 0;
+const slotWaiters: Array<() => void> = [];
+function acquireSlot(): Promise<void> {
+  if (activeFetches < MAX_CONCURRENT) { activeFetches++; return Promise.resolve(); }
+  return new Promise<void>(resolve => slotWaiters.push(resolve));
+}
+function releaseSlot() {
+  const next = slotWaiters.shift();
+  if (next) next();           // transfer the slot (count unchanged)
+  else activeFetches--;       // nobody waiting — free the slot
 }
 
 // In-flight dedup — prevents multiple components from fetching the same player simultaneously
@@ -53,17 +95,20 @@ export async function getPlayerPhoto(playerId: string, name: string): Promise<st
 
   if (inFlight.has(playerId)) return inFlight.get(playerId)!;
 
-  const promise = fetchFromSportsDB(name)
-    .then(url => {
-      // Always cache the result (null = no photo), but with different TTLs (see readCache)
-      writeCache(playerId, url);
+  const searchName = SEARCH_NAME_OVERRIDES[playerId] ?? name;
+  const promise = (async () => {
+    await acquireSlot();
+    try {
+      const url = await fetchFromSportsDB(searchName);
+      writeCache(playerId, url); // cache the result (null = genuinely no photo; short TTL)
       return url;
-    })
-    .catch(() => {
-      // Network error — do NOT cache, so it retries next page load
-      return null;
-    })
-    .finally(() => inFlight.delete(playerId));
+    } catch {
+      return null;               // network/throttle error — do NOT cache, retry next load
+    } finally {
+      releaseSlot();
+      inFlight.delete(playerId);
+    }
+  })();
 
   inFlight.set(playerId, promise);
   return promise;

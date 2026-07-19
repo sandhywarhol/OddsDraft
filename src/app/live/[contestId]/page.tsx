@@ -3405,6 +3405,23 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         };
         htScoreRef.current = { ...scoreRef.current };
         applyStatsBonuses(h1Stats, 45);
+
+        // Demo: feed the Statistics modal with real first-half figures (goals/corners/
+        // cards from the events that have fired) + shots, so it isn't sparse at HT.
+        const perHT = (team: string) => ({
+          goals:   htPastEvents.filter((e: any) => e.type === 'goal'        && e.team === team).length,
+          corners: htPastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === team).length,
+          yellows: htPastEvents.filter((e: any) => e.type === 'yellow_card' && e.team === team).length,
+          reds:    htPastEvents.filter((e: any) => e.type === 'red_card'    && e.team === team).length,
+        });
+        const htHome = perHT(fixture.homeTeam);
+        const htAway = perHT(fixture.awayTeam);
+        const zeroP = { goals: 0, corners: 0, yellows: 0, reds: 0 };
+        setTxlinePeriodStats({
+          home: { h1: htHome, h2: { ...zeroP }, total: { ...htHome } },
+          away: { h1: htAway, h2: { ...zeroP }, total: { ...htAway } },
+        });
+        shotCountRef.current = { home: { total: 6, onTarget: 2 }, away: { total: 4, onTarget: 4 } };
       }
 
       // ── Demo: full_time stats evaluation (H2 stats) ──────────────────────────
@@ -3429,6 +3446,23 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           awayPossessionPct: 100 - homePct2,
         };
         applyStatsBonuses(h2Stats, 90);
+
+        // Demo: finalise the Statistics modal with full-match, per-half figures.
+        const h1Past = matchEvents.slice(0, htIdx >= 0 ? htIdx + 1 : 0);
+        const perFT = (evs: any[], team: string) => ({
+          goals:   evs.filter((e: any) => e.type === 'goal'        && e.team === team).length,
+          corners: evs.filter((e: any) => e.type === 'corner_kick' && e.team === team).length,
+          yellows: evs.filter((e: any) => e.type === 'yellow_card' && e.team === team).length,
+          reds:    evs.filter((e: any) => e.type === 'red_card'    && e.team === team).length,
+        });
+        const sumP = (a: any, b: any) => ({ goals: a.goals + b.goals, corners: a.corners + b.corners, yellows: a.yellows + b.yellows, reds: a.reds + b.reds });
+        const ftH1Home = perFT(h1Past, fixture.homeTeam), ftH2Home = perFT(h2PastEvents, fixture.homeTeam);
+        const ftH1Away = perFT(h1Past, fixture.awayTeam), ftH2Away = perFT(h2PastEvents, fixture.awayTeam);
+        setTxlinePeriodStats({
+          home: { h1: ftH1Home, h2: ftH2Home, total: sumP(ftH1Home, ftH2Home) },
+          away: { h1: ftH1Away, h2: ftH2Away, total: sumP(ftH1Away, ftH2Away) },
+        });
+        shotCountRef.current = { home: { total: 12, onTarget: 6 }, away: { total: 9, onTarget: 4 } };
       }
 
       // At full_time: award clean sheet bonus to eligible lineup players

@@ -99,6 +99,8 @@ export const ARG_ENG_EVENTS: Array<{
     description: 'Trippier 12\' — CORNER · Right-wing delivery into the six-yard box, England\'s first set piece of the game.' },
   { id: 'ae_save1',     minute: 13, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'E. Martínez 13\' — SAVE · Punches Trippier\'s corner clear, strong hands under pressure from Kane.' },
+  { id: 'ae_d7',        minute: 16, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka',        playerId: 'eng-saka',       type: 'danger_attack',   points: 0,  silent: true,
+    description: 'Saka jinks past Acuña and drives to the byline — England building pressure down the right.' },
 
   { id: 'ae_asst1',     minute: 22, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Saka',        playerId: 'eng-saka',       type: 'assist',          points: 6,
     description: 'Saka 22\' — ASSIST · Whipped low cross from right wing into the six-yard box, weighted perfectly for Kane\'s run.' },
@@ -120,10 +122,13 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_save2',     minute: 38, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',    playerId: 'eng-pickford',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'PICKFORD! Incredible reflex save from Romero\'s glancing header — world class!' },
 
-  { id: 'ae_poss1_mes', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'possession_bonus', points: 1, silent: true,
-    description: 'Messi dominated possession in the first half — pulling England out of shape with every touch.' },
-  { id: 'ae_poss1_mac', minute: 44, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-allister',type: 'possession_bonus', points: 1, silent: true,
-    description: 'Mac Allister ran the midfield — dictating rhythm and breaking England\'s press consistently.' },
+  // TxLINE sends high_danger_possession events (→ danger_attack). Possession dominance is
+  // NOT a per-player event TxLINE emits — it's derived from period stats — so we don't fake
+  // "possession_bonus" feed events here; we show the danger-attack pressure TxLINE really sends.
+  { id: 'ae_d2',        minute: 42, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez',       playerId: 'arg-alvarez',    type: 'danger_attack',   points: 0,  silent: true,
+    description: 'Argentina turn the screw before the break — Álvarez drives into the box and forces a scramble.' },
+  { id: 'ae_d3',        minute: 44, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham',  playerId: 'eng-bellingham', type: 'danger_attack',   points: 0,  silent: true,
+    description: 'England break on the counter — Bellingham surges through midfield right on the stroke of half time.' },
 
   { id: 'ae_ht', minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0,
     description: 'HALF TIME · England 1-0 Argentina · Shots: ENG 4 (4 on target) ARG 6 (2 on target) · Possession: ENG 58% ARG 42% · Corners: ENG 1 ARG 1 · Yellow cards: Rice (ENG).' },
@@ -142,6 +147,8 @@ export const ARG_ENG_EVENTS: Array<{
     description: 'Acuña 52\' — CORNER · Left-foot delivery into the six-yard box, Lautaro attacks the near post.' },
   { id: 'ae_save3',     minute: 53, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',    playerId: 'eng-pickford',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'Pickford 53\' — SAVE · Claws Lautaro\'s flicked header off the line at full stretch.' },
+  { id: 'ae_d8',        minute: 55, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'danger_attack',   points: 0,  silent: true,
+    description: 'Messi glides past two challenges and slips Lautaro in — the flag goes up for a tight offside.' },
 
   { id: 'ae_rc1',       minute: 57, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',       playerId: 'arg-romero',     type: 'red_card',        points: -4,
     description: 'Romero 57\' — RED CARD · Reckless two-footed lunge on Bellingham as he broke into the penalty area · Argentina reduced to 10 men.' },
@@ -193,10 +200,10 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_save4',     minute: 82, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez',  playerId: 'arg-emartinez',   type: 'goalkeeper_save', points: 1,  silent: true,
     description: 'E. MARTÍNEZ! Spreads himself brilliantly to deny Bellingham a one-on-one — Argentina survive!' },
 
-  { id: 'ae_poss2_mes', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'possession_bonus', points: 1, silent: true,
-    description: 'Messi controlled this game from start to finish — a goal, two assists, and pure magic.' },
-  { id: 'ae_poss2_bel', minute: 88, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham',  playerId: 'eng-bellingham', type: 'possession_bonus', points: 1, silent: true,
-    description: 'Bellingham gave everything in a losing cause — a performance of immense quality and heart.' },
+  { id: 'ae_d4',        minute: 86, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Foden',       playerId: 'eng-foden',      type: 'danger_attack',   points: 0,  silent: true,
+    description: 'England throw everyone forward — Foden whips a dangerous ball across the six-yard box, nobody there!' },
+  { id: 'ae_d6',        minute: 89, team: 'Argentina', teamFlag: '🇦🇷', player: 'Di María',     playerId: 'arg-dimaria',    type: 'danger_attack',   points: 0,  silent: true,
+    description: 'Di María races clear on the break in stoppage time — Argentina inches from a third.' },
 
   { id: 'ae_ft', minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0,
     description: 'FULL TIME · Argentina 2-1 England · Goals: Kane 22\' (ENG), Messi 60\' (ARG), Lautaro 73\' (ARG) · Shots: ARG 12 ENG 9 · Possession: ARG 54% ENG 46% · Red card: Romero 57\' (ARG) · World Cup 2026 Champions: Argentina 🇦🇷' },
