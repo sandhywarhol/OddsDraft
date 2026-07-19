@@ -483,15 +483,19 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         prevEl.style.boxShadow = '';
         prevEl.style.maxWidth = '';
         prevEl.style.width = '';
-        // Leaving the Skill Card step (7 → 8): clearing the highlight above un-dims the
-        // whole page, so the real skill-card-section would flash fully-lit during the long
-        // scroll up to step 8 (which shows its own demo-card overlay instead). Fade the real
-        // section out now and keep it hidden through step 8; it's restored when the tutorial
-        // closes. opacity keeps its layout box so nothing shifts.
-        if (zoomedElementId === 'skill-card-section' && tutorialStep === 7) {
-          prevEl.style.transition = 'opacity 0.2s ease';
-          prevEl.style.opacity = '0';
-        }
+      }
+    }
+
+    // Leaving the Skill Card step (7 → 8): the dim overlay is opacity 0 during the
+    // transition, so the page is fully lit while it scrolls from the skill-card section
+    // (bottom) up to step 8 (top). That briefly reveals BOTH the skill-card section AND
+    // the lineup grid's player cards — but step 8 shows its own demo skill-card overlay,
+    // so nothing from the page should tag along. Fade those two out now and keep them
+    // hidden through step 8; restored when the tutorial closes. opacity preserves layout.
+    if (tutorialStep === 7) {
+      for (const id of ['skill-card-section', 'lineup-grid']) {
+        const el = document.getElementById(id);
+        if (el) { el.style.transition = 'opacity 0.2s ease'; el.style.opacity = '0'; }
       }
     }
 
@@ -610,9 +614,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       }
     } else {
       localStorage.setItem('hasSeenLineupTutorial', 'true');
-      // Restore the skill-card-section we faded out on the 7 → 8 transition.
-      const skillSection = document.getElementById('skill-card-section');
-      if (skillSection) { skillSection.style.transition = 'opacity 0.2s ease'; skillSection.style.opacity = ''; }
+      // Restore the page content we faded out on the 7 → 8 transition.
+      for (const id of ['skill-card-section', 'lineup-grid']) {
+        const el = document.getElementById(id);
+        if (el) { el.style.transition = 'opacity 0.2s ease'; el.style.opacity = ''; }
+      }
       if (publicKey) {
         fetch('/api/user/data', {
           method: 'POST',
