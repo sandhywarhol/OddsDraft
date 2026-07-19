@@ -175,10 +175,39 @@ export function mergeEvents(events: any[]): Record<string, unknown> {
     }
   }
 
-  // Last event with Participant1/Participant2 score = most recent goal tally
-  for (let i = events.length - 1; i >= 0; i--) {
-    const sc = events[i]?.Score;
-    if (sc?.Participant1 || sc?.Participant2) { merged.Score = sc; break; }
+  // Score selection: use the most authoritative source available.
+  // • game_finalised present → use THAT event's score (it's the official final tally).
+  //   Do NOT use a later array entry — TxLINE sometimes appends discarded/pending goal
+  //   events after game_finalised that inflate the score (VAR reversals, replay loops).
+  // • Non-finalised → prefer the score from the event with the highest Clock.Seconds
+  //   so we always show the most up-to-date tally, not just the last array entry.
+  if (finalEv) {
+    const finalSc = finalEv?.Score;
+    if (finalSc?.Participant1 || finalSc?.Participant2) {
+      merged.Score = finalSc;
+    } else {
+      // game_finalised event had no Score field — fall back to the last pre-finalised score
+      for (let i = events.length - 1; i >= 0; i--) {
+        const sc = events[i]?.Score;
+        if (sc?.Participant1 || sc?.Participant2) { merged.Score = sc; break; }
+      }
+    }
+  } else {
+    // No game_finalised: use score from the event with the highest clock time
+    let bestSecs = -1;
+    for (const ev of events) {
+      const sc = ev?.Score;
+      if (!sc?.Participant1 && !sc?.Participant2) continue;
+      const secs = ev?.Clock?.Seconds ?? -1;
+      if (secs > bestSecs) { bestSecs = secs; merged.Score = sc; }
+    }
+    // If no clock-bearing score event found, fall back to last-in-array
+    if (bestSecs === -1) {
+      for (let i = events.length - 1; i >= 0; i--) {
+        const sc = events[i]?.Score;
+        if (sc?.Participant1 || sc?.Participant2) { merged.Score = sc; break; }
+      }
+    }
   }
 
   // PlayerStats from most recent event that has them
