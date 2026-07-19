@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SCORING_EVENTS, computeParticipantPoints } from '@/lib/contest-scoring';
-import { getPrizeForRank } from '@/lib/fantasy-engine';
+import { computePrizesWithTies } from '@/lib/fantasy-engine';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 const supabase = createClient(
@@ -130,24 +130,43 @@ export async function GET(req: NextRequest) {
       liveComputedPoints: computeParticipantPoints(e.lineup, scoringEvents, null, matchCtx),
       captain: e.lineup?.captain ?? null,
       playerCount: e.lineup?.players?.length ?? 0,
+      createdAt: e.created_at ?? '',
     }));
-    scored.sort((a, b) => b.liveComputedPoints - a.liveComputedPoints);
+    // EXACT same ordering, dense ranks and split-pot prizes as /api/prize/submit, so
+    // the drift check reflects real divergence — not a difference in tie handling.
+    scored.sort((a, b) =>
+      (b.liveComputedPoints - a.liveComputedPoints) || String(a.createdAt).localeCompare(String(b.createdAt))
+    );
+    const prizeByIndex = computePrizesWithTies(scored.map(s => s.liveComputedPoints), ct, scored.length);
+    const rankByIndex: number[] = [];
+    for (let i = 0; i < scored.length; i++) {
+      rankByIndex[i] = (i > 0 && scored[i - 1].liveComputedPoints === scored[i].liveComputedPoints)
+        ? rankByIndex[i - 1]
+        : i + 1;
+    }
 
     const rows = scored.map((s, i) => {
       const stored = storedResult.get(`${ct}:${s.wallet}`);
-      const computedPrize = getPrizeForRank(i + 1, ct, scored.length);
+      const prizeMatches = stored ? Math.abs((stored.prize_sol ?? 0) - prizeByIndex[i]) <= 0.0001 : false;
+      const pointsMatch = stored ? Math.abs((stored.points ?? 0) - s.liveComputedPoints) <= 0.01 : false;
+      const rankMatches = stored ? stored.rank === rankByIndex[i] : false;
       return {
-        ...s,
-        computedRank: i + 1,
-        computedPrizeSol: computedPrize,
+        wallet: s.wallet,
+        shortWallet: s.shortWallet,
+        paid: s.paid,
+        liveComputedPoints: s.liveComputedPoints,
+        captain: s.captain,
+        playerCount: s.playerCount,
+        computedRank: rankByIndex[i],
+        computedPrizeSol: prizeByIndex[i],
         storedRank: stored?.rank ?? null,
         storedPoints: stored?.points ?? null,
         storedPrizeSol: stored?.prize_sol ?? null,
-        drift: stored
-          ? (stored.rank !== i + 1 || Math.abs((stored.points ?? 0) - s.liveComputedPoints) > 0.01
-              ? 'MISMATCH — stored result differs from recomputation'
-              : 'ok')
-          : 'no stored result yet',
+        drift: !stored
+          ? 'no stored result yet — run /api/prize/submit'
+          : (pointsMatch && prizeMatches && rankMatches
+              ? 'ok'
+              : 'MISMATCH — re-run /api/prize/submit to sync'),
       };
     });
     byType[ct] = { participants: rows.length, leaderboard: rows };
