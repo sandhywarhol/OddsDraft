@@ -66,32 +66,29 @@ export default function ContestsPage() {
 
 
   // Sync entered contests from Supabase when wallet connects — ensures JOINED badges
-  // show correctly on a new device where localStorage is empty.
+  // show correctly on a new device where localStorage is empty. One my-entries query
+  // returns ALL of this wallet's entries, replacing the old one-request-per-fixture loop
+  // (100+ requests on a full WC schedule).
   useEffect(() => {
     if (isDemo || !publicKey) return;
     const wallet = publicKey.toString();
-    const fixtureIds = scheduleFixtures.map(f => f.fixtureId);
-    Promise.all(
-      fixtureIds.map(fid =>
-        fetch(`/api/contest/check-entry?fixtureId=${fid}&walletAddress=${wallet}`)
-          .then(r => r.json())
-          .then(({ contestTypes }: { contestTypes?: string[] }) => ({ fid, contestTypes: contestTypes ?? [] }))
-          .catch(() => ({ fid, contestTypes: [] }))
-      )
-    ).then(results => {
-      setEnteredContests(prev => {
-        const next = { ...prev };
-        for (const { fid, contestTypes } of results) {
-          // Supabase is authoritative for the connected wallet — replace rather than
-          // merge-add. The initial local scan isn't wallet-scoped, so on a device
-          // previously used with a different wallet it can carry stale "entered"
-          // flags that don't belong to the wallet connected right now; a merge would
-          // never clear those. An empty result here correctly means "not entered".
-          next[fid] = contestTypes;
+    let cancelled = false;
+    fetch(`/api/contest/my-entries?wallet=${wallet}`)
+      .then(r => r.ok ? r.json() : { entries: [] })
+      .then(({ entries }: { entries?: { fixture_id: string; contest_type: string }[] }) => {
+        if (cancelled) return;
+        const byFixture: Record<string, string[]> = {};
+        for (const e of entries ?? []) {
+          (byFixture[e.fixture_id] ??= []).push(e.contest_type);
         }
-        return next;
-      });
-    });
+        // Supabase is authoritative for the connected wallet, and my-entries returns the
+        // wallet's complete entry set — so replace the (wallet-agnostic) local scan
+        // entirely. This clears stale "entered" flags left by a different wallet last
+        // used on this device, which a merge could never remove.
+        setEnteredContests(byFixture);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [publicKey, isDemo]);
 
   // Fetch real participant counts from Supabase for visible fixtures.

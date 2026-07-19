@@ -52,7 +52,7 @@ export default function ProfilePage() {
   const [saveError, setSaveError] = useState('');
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
-  const [matchHistory, setMatchHistory] = useState<{ contestId: string; players: string[]; captain: string; submittedAt: string }[]>([]);
+  const [matchHistory, setMatchHistory] = useState<{ contestId: string; contestType?: string; players: string[]; captain: string; submittedAt: string }[]>([]);
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,28 +102,29 @@ export default function ProfilePage() {
     fetchBalance();
   }, [connected, publicKey]);
 
-  // Load match history from localStorage
+  // Load contest history from Supabase (contest_entries) — the authoritative per-wallet
+  // source, so it's correct on any device. Previously this scanned localStorage lineups,
+  // which are device-local and showed an empty history after logging in on a new device.
   useEffect(() => {
-    if (!mounted) return;
-    const history: { contestId: string; players: string[]; captain: string; submittedAt: string }[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key?.startsWith('txodds_user_lineup_')) continue;
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const data = JSON.parse(raw);
-        const contestId = key.replace('txodds_user_lineup_', '');
-        history.push({
-          contestId,
-          players: (data.players ?? []).map((p: any) => p.name ?? p.id),
-          captain: data.captain ?? '',
-          submittedAt: data.submittedAt ?? '',
-        });
-      } catch { /* skip corrupt entries */ }
-    }
-    setMatchHistory(history);
-  }, [mounted]);
+    if (!mounted || !connected || !publicKey) { setMatchHistory([]); return; }
+    let cancelled = false;
+    fetch(`/api/contest/my-entries?wallet=${publicKey.toString()}`)
+      .then(r => r.ok ? r.json() : { entries: [] })
+      .then(({ entries }: { entries?: { fixture_id: string; contest_type: string; lineup: any; created_at: string }[] }) => {
+        if (cancelled) return;
+        setMatchHistory(
+          (entries ?? []).map(e => ({
+            contestId: e.fixture_id,
+            contestType: e.contest_type,
+            players: (e.lineup?.players ?? []).map((p: any) => p.name ?? p.id),
+            captain: e.lineup?.captain ?? '',
+            submittedAt: e.created_at ?? '',
+          }))
+        );
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [mounted, connected, publicKey]);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -458,7 +459,7 @@ export default function ProfilePage() {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {matchHistory.map((entry, idx) => (
-                      <div key={entry.contestId} style={{
+                      <div key={`${entry.contestId}_${entry.contestType ?? ''}`} style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '12px 16px',
                         borderBottom: idx < matchHistory.length - 1 ? '1px solid var(--border-subtle)' : 'none',
@@ -467,6 +468,11 @@ export default function ProfilePage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>
                             Match #{entry.contestId.slice(-6)}
+                            {entry.contestType && (
+                              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+                                {' · '}{entry.contestType === 'top3' ? 'Top 3' : entry.contestType === '5050' ? '50/50' : 'Winner Takes All'}
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {entry.players.slice(0, 3).join(', ')}{entry.players.length > 3 ? ` +${entry.players.length - 3}` : ''}
@@ -476,7 +482,7 @@ export default function ProfilePage() {
                           <span style={{ fontSize: '0.7rem', color: '#ffd700', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 4, padding: '2px 8px', fontWeight: 700 }}>
                             0.1 SOL
                           </span>
-                          <Link href={`/live/${entry.contestId}`} style={{ fontSize: '0.72rem', color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}>
+                          <Link href={`/live/${entry.contestId}${entry.contestType ? `?contestType=${entry.contestType}` : ''}`} style={{ fontSize: '0.72rem', color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}>
                             View →
                           </Link>
                         </div>
