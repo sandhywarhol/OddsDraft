@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     const homeGoals = allRows.reduce((mx, r) => Math.max(mx, r.home_score ?? 0), 0);
     const awayGoals = allRows.reduce((mx, r) => Math.max(mx, r.away_score ?? 0), 0);
     const matchCtx = wcFixture
-      ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals, awayGoals, final: true }
+      ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals, awayGoals, started: true, final: true }
       : null;
 
     // 3. Compute points for each entry server-side

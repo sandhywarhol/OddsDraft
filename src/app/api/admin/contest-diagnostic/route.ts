@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   const ctxHomeGoals = eventRows.reduce((mx, r) => Math.max(mx, r.home_score ?? 0), 0);
   const ctxAwayGoals = eventRows.reduce((mx, r) => Math.max(mx, r.away_score ?? 0), 0);
   const matchCtx = wcFixture
-    ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals: ctxHomeGoals, awayGoals: ctxAwayGoals, final: matchFinalForCtx }
+    ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals: ctxHomeGoals, awayGoals: ctxAwayGoals, started: eventRows.length > 0, final: matchFinalForCtx }
     : null;
 
   // 2. Anomaly detection — the fingerprints of a devnet loop corrupting the feed.

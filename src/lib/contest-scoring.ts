@@ -31,6 +31,7 @@ export interface MatchContext {
   awayTeam: string;
   homeGoals: number;  // authoritative home score (use max-seen to survive devnet loops)
   awayGoals: number;  // authoritative away score
+  started: boolean;   // true once ANY event is recorded → award the appearance bonus
   final: boolean;     // true once the match is over → clean-sheet bonus becomes eligible
 }
 
@@ -55,12 +56,14 @@ export function computeParticipantPoints(
 
   let total = 0;
 
-  // Appearance bonus (+2 per player): the client-side engine awards this at kick_off /
-  // starting_xi, but the cron only stores goal/card/etc events in live_match_events —
-  // not the appearance event itself. We infer it: if ANY scoring event exists the match
-  // has started and every confirmed starter in the lineup is owed their appearance bonus.
-  // Captain × 2, then confidence multiplier — same as resolvePlayerDelta(0, {..., appearanceBonus: 2}).
-  if (events.length > 0) {
+  // Appearance bonus (+2 per player): the client-side engine awards this at kick_off,
+  // so opponents on the live leaderboard must get it the moment the match STARTS — not
+  // only once a scoring event (goal/card) happens. Early in a 0-0 match the DB holds only
+  // danger_attack/corner rows (non-scoring), so gating on `events.length` (scoring events)
+  // left every opponent stuck at 0 while the viewer's own client-side score already showed
+  // appearance points. `matchCtx.started` (any event recorded → the match is live) fixes it.
+  const matchStarted = events.length > 0 || !!matchCtx?.started;
+  if (matchStarted) {
     for (const p of lineup.players) {
       // When TxLINE lineup data is available, only real starters get the bonus.
       // Bench players (not in starterIds) are skipped to match client-side behaviour.

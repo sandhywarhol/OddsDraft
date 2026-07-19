@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
   const homeGoals = allRows.reduce((mx, r) => Math.max(mx, r.home_score ?? 0), 0);
   const awayGoals = allRows.reduce((mx, r) => Math.max(mx, r.away_score ?? 0), 0);
   const matchCtx = wcFixture
-    ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals, awayGoals, final: matchFinal }
+    ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals, awayGoals, started: allRows.length > 0, final: matchFinal }
     : null;
 
   const participants = (data ?? []).map(entry => ({
