@@ -27,6 +27,7 @@ import {
   ackSoldListing,
   removeCardFromCollection,
   removeUpgradeCardFromCollection,
+  REMOTE_SYNCED_EVENT,
   type OwnedCard,
   type OwnedUpgradeCard,
 } from '@/lib/card-collection';
@@ -2245,6 +2246,10 @@ export default function CardsPage() {
 
   useEffect(() => {
     reload();
+    // Re-read once SupabaseSyncProvider has pulled this wallet's cards into localStorage
+    // (async after mount), so a fresh device shows the collection without a manual refresh.
+    window.addEventListener(REMOTE_SYNCED_EVENT, reload);
+    return () => window.removeEventListener(REMOTE_SYNCED_EVENT, reload);
   }, [reload]);
 
   const handleDemoOpenCard = () => {

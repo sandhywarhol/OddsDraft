@@ -121,6 +121,22 @@ const UPGRADE_COLLECTION_KEY = 'oddsdraft_upgrade_collection';
 const NEW_CARDS_KEY = 'oddsdraft_new_cards';
 const SOLD_ACKED_KEY = 'oddsdraft_sold_acked';
 
+// Fired after any mutation to the skill/upgrade collections so SupabaseSyncProvider
+// can push the change to Supabase immediately (not only on tab close). Without this,
+// cards earned this session reach Supabase solely via an unreliable unload flush —
+// which frequently never fires on mobile — so a different device sees an empty wallet.
+export const COLLECTION_CHANGED_EVENT = 'oddsdraft:collection-changed';
+// Fired by SupabaseSyncProvider once it has pulled a wallet's data from Supabase into
+// localStorage. Collection views (e.g. /cards) that read localStorage on mount listen
+// for this to re-read after the async pull lands — otherwise a fresh device shows an
+// empty collection until a manual refresh.
+export const REMOTE_SYNCED_EVENT = 'oddsdraft:remote-synced';
+function emitCollectionChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(COLLECTION_CHANGED_EVENT));
+  }
+}
+
 export function getCollection(): CardCollection {
   if (typeof window === 'undefined') return { cards: [] };
   try {
@@ -132,6 +148,7 @@ export function getCollection(): CardCollection {
 
 function saveCollection(col: CardCollection): void {
   localStorage.setItem(COLLECTION_KEY, JSON.stringify(col));
+  emitCollectionChanged();
 }
 
 // ── Upgrade Card Collection Storage ─────────────────────────────────────────
@@ -146,6 +163,7 @@ export function getUpgradeCollection(): UpgradeCardCollection {
 
 function saveUpgradeCollection(col: UpgradeCardCollection): void {
   localStorage.setItem(UPGRADE_COLLECTION_KEY, JSON.stringify(col));
+  emitCollectionChanged();
 }
 
 export function addUpgradeCardToCollection(upgradeCardId: string, soulbound = false): OwnedUpgradeCard {
@@ -367,6 +385,9 @@ function readLineup(contestId: string): Record<string, unknown> | null {
 
 function writeLineup(contestId: string, data: Record<string, unknown>): void {
   localStorage.setItem(`txodds_user_lineup_${contestId}`, JSON.stringify(data));
+  // Equip/unequip lives inside the lineup entry — mark dirty so the change syncs to
+  // Supabase (SupabaseSyncProvider's payload includes lineups), not just the collection.
+  emitCollectionChanged();
 }
 
 export function getEquippedCardInstance(contestId: string, playerId: string): OwnedCard | null {
