@@ -483,6 +483,15 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         prevEl.style.boxShadow = '';
         prevEl.style.maxWidth = '';
         prevEl.style.width = '';
+        // Leaving the Skill Card step (7 → 8): clearing the highlight above un-dims the
+        // whole page, so the real skill-card-section would flash fully-lit during the long
+        // scroll up to step 8 (which shows its own demo-card overlay instead). Fade the real
+        // section out now and keep it hidden through step 8; it's restored when the tutorial
+        // closes. opacity keeps its layout box so nothing shifts.
+        if (zoomedElementId === 'skill-card-section' && tutorialStep === 7) {
+          prevEl.style.transition = 'opacity 0.2s ease';
+          prevEl.style.opacity = '0';
+        }
       }
     }
 
@@ -601,6 +610,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       }
     } else {
       localStorage.setItem('hasSeenLineupTutorial', 'true');
+      // Restore the skill-card-section we faded out on the 7 → 8 transition.
+      const skillSection = document.getElementById('skill-card-section');
+      if (skillSection) { skillSection.style.transition = 'opacity 0.2s ease'; skillSection.style.opacity = ''; }
       if (publicKey) {
         fetch('/api/user/data', {
           method: 'POST',
