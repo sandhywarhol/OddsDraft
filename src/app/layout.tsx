@@ -7,6 +7,7 @@ import ClientWalletProvider from '@/components/ClientWalletProvider';
 import VideoBackground from '@/components/VideoBackground';
 import MobileSplash from '@/components/MobileSplash';
 import MobileTabBar from '@/components/MobileTabBar';
+import ChunkReloadGuard from '@/components/ChunkReloadGuard';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const bebasNeue = Bebas_Neue({ weight: '400', subsets: ['latin'], variable: '--font-bebas', display: 'swap' });
@@ -45,6 +46,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${bebasNeue.variable} ${spaceMono.variable}`}>
       <head />
       <body>
+        <ChunkReloadGuard />
         <ClientWalletProvider>
           <AudioProvider>
             <MobileSplash />
