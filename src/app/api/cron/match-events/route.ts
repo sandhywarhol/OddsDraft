@@ -195,6 +195,41 @@ export async function GET(req: NextRequest) {
       const scoreHome: number = (raw as any)?.Score?.Participant1?.Total?.Goals ?? 0;
       const scoreAway: number = (raw as any)?.Score?.Participant2?.Total?.Goals ?? 0;
 
+      // ── Devnet loop / regression guard ───────────────────────────────────────
+      // The TxLINE devnet feed REPLAYS finished matches: it plays kickoff → goals →
+      // full_time, then resets to 0-0 and loops. Without this guard every loop would
+      // overwrite the stored final score with a lower one and re-accumulate duplicate
+      // events at shifted minutes — corrupting the leaderboard and, worse, the prize
+      // payouts derived from live_match_events. A real match never regresses (score
+      // only climbs, minutes only advance), so a feed showing LESS progress than we've
+      // already recorded is a loop artifact and must be ignored. Skipping a tick is
+      // always safe — it never deletes data; the next non-regressed tick resumes.
+      const incomingGoals = scoreHome + scoreAway;
+      const incomingMaxMinute = allEvents.reduce((mx: number, ev: any) => {
+        const m = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : (parseInt(ev.minute) || 0);
+        return Math.max(mx, m);
+      }, 0);
+      {
+        const { data: storedRows } = await supabase
+          .from('live_match_events')
+          .select('event_type, home_score, away_score, minute')
+          .eq('fixture_id', fixture.fixtureId);
+        const rows = storedRows ?? [];
+        // Definitive end already recorded → freeze this fixture: never process it again.
+        // (game_finalised is only written on a real/ESPN-confirmed match end.)
+        if (rows.some(r => r.event_type === 'game_finalised')) {
+          continue;
+        }
+        const storedGoals = rows.reduce((mx, r) => Math.max(mx, (r.home_score ?? 0) + (r.away_score ?? 0)), 0);
+        const storedMaxMinute = rows.reduce((mx, r) => Math.max(mx, r.minute ?? 0), 0);
+        // Regression in either dimension = the feed looped back. The +5 minute buffer
+        // tolerates minor clock jitter; the guard only engages once real progress exists.
+        if (rows.length > 0 && (incomingGoals < storedGoals || incomingMaxMinute + 5 < storedMaxMinute)) {
+          console.log(`[CronMatchEvents] Loop replay ignored for ${fixture.fixtureId}: incoming ${incomingGoals}g/${incomingMaxMinute}' < stored ${storedGoals}g/${storedMaxMinute}'`);
+          continue;
+        }
+      }
+
       // Filter confirmed events only — TxLINE sends Confirmed=false first, then Confirmed=true.
       const confirmedEvents = allEvents.filter(ev => ev.Confirmed !== false);
 

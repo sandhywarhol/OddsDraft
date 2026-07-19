@@ -1059,6 +1059,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const isFirstTxLinePollRef = useRef(true);
   // Mirrors matchCompleted state so poll closures can read it without stale capture
   const matchCompletedRef = useRef(false);
+  // Highest match progress (total goals + minute) the live poll has ever displayed.
+  // The TxLINE devnet feed replays finished matches from kickoff; this lets the poll
+  // detect a loop (progress went BACKWARDS) and freeze the last good state instead of
+  // showing the score/events regress to 0. Real matches never regress.
+  const maxProgressRef = useRef<{ goals: number; minute: number }>({ goals: 0, minute: 0 });
   // True only once the commentators finish reading out the full-time stats dialogue —
   // gates the card pack reveal so it can't pop up mid-commentary
   const fullTimeStatsDoneRef = useRef(false);
@@ -2273,6 +2278,14 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         if (latestSnap?.score) {
           setScore({ home: latestSnap.score.home ?? 0, away: latestSnap.score.away ?? 0 });
           scoreRef.current = { home: latestSnap.score.home ?? 0, away: latestSnap.score.away ?? 0 };
+          // Seed the regression guard's high-water mark so a subsequent poll that catches
+          // the devnet feed mid-loop (reset to kickoff) is recognised as a regression.
+          const snapGoals = (latestSnap.score.home ?? 0) + (latestSnap.score.away ?? 0);
+          const snapMin = typeof latestSnap.clockSeconds === 'number' ? Math.floor(latestSnap.clockSeconds / 60) : 0;
+          maxProgressRef.current = {
+            goals: Math.max(maxProgressRef.current.goals, snapGoals),
+            minute: Math.max(maxProgressRef.current.minute, snapMin),
+          };
         }
         // Cache period stats from snapshot so retroactive bonus logic can use them immediately.
         if (latestSnap?.periodStats) {
@@ -2425,6 +2438,27 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         // Authoritative state comes from the merged object, not the last individual event
         const mergedState = normalizeUpdate(raw);
         const latest = mergedState;
+
+        // ── Devnet loop / regression guard (mirrors the cron) ────────────────────
+        // The devnet feed replays finished matches from kickoff. Never let the live
+        // display go backwards: if this poll reports fewer goals or an earlier minute
+        // than we've already shown, it's a loop replay — freeze the last good state
+        // (score, events, minute) and skip the rest of this tick. Real matches only
+        // ever move forward, so this can't hide legitimate updates.
+        {
+          const inGoals = (latest?.score?.home ?? 0) + (latest?.score?.away ?? 0);
+          const hasClock = typeof latest?.clockSeconds === 'number';
+          const inMinute = hasClock ? Math.floor((latest!.clockSeconds as number) / 60) : null;
+          const mp = maxProgressRef.current;
+          const goalsRegressed = inGoals < mp.goals;
+          const minuteRegressed = inMinute !== null && inMinute + 5 < mp.minute;
+          if ((mp.goals > 0 || mp.minute >= 45) && (goalsRegressed || minuteRegressed)) {
+            return; // loop replay — keep the frozen final/last-good state
+          }
+          mp.goals = Math.max(mp.goals, inGoals);
+          if (inMinute !== null) mp.minute = Math.max(mp.minute, inMinute);
+        }
+
         if (latest?.score) {
           setScore({ home: latest.score.home ?? 0, away: latest.score.away ?? 0 });
           scoreRef.current = { home: latest.score.home ?? 0, away: latest.score.away ?? 0 };
