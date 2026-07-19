@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { computePrizesWithTies } from '@/lib/fantasy-engine';
 import { SCORING_EVENTS, computeParticipantPoints } from '@/lib/contest-scoring';
+import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,19 +39,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, inserted: 0, reason: 'no entries' });
     }
 
-    // 2. Fetch scoring events stored by the cron job
+    // 2. Fetch scoring events stored by the cron job (incl. score fields for the
+    //    authoritative final score used by the team-level conceding/clean-sheet math).
     const { data: dbEvents } = await supabase
       .from('live_match_events')
-      .select('event_type, player_name, team_name, minute')
+      .select('event_type, player_name, team_name, minute, home_score, away_score')
       .eq('fixture_id', fixtureId)
       .order('minute', { ascending: true });
 
-    const events = (dbEvents ?? []).filter(e => SCORING_EVENTS.has(e.event_type));
+    const allRows = dbEvents ?? [];
+    const events = allRows.filter(e => SCORING_EVENTS.has(e.event_type));
+
+    // Build the team-level match context. Final score = the MAX score seen across all
+    // rows: real scores only ever climb, so max survives the devnet loop that pushes
+    // lower replayed scores into the feed. This endpoint only runs at match end, so
+    // final = true (clean-sheet bonus eligible).
+    const wcFixture = WC2026_FIXTURES.find(f => f.fixtureId === fixtureId);
+    const homeGoals = allRows.reduce((mx, r) => Math.max(mx, r.home_score ?? 0), 0);
+    const awayGoals = allRows.reduce((mx, r) => Math.max(mx, r.away_score ?? 0), 0);
+    const matchCtx = wcFixture
+      ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals, awayGoals, final: true }
+      : null;
 
     // 3. Compute points for each entry server-side
     const scored = entries.map(entry => ({
       walletAddress: entry.wallet_address,
-      points: computeParticipantPoints(entry.lineup, events),
+      points: computeParticipantPoints(entry.lineup, events, null, matchCtx),
       createdAt: entry.created_at ?? '',
     }));
 

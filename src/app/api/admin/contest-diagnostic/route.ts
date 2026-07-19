@@ -43,6 +43,15 @@ export async function GET(req: NextRequest) {
   const eventRows = allEventRows ?? [];
   const scoringEvents = eventRows.filter(e => SCORING_EVENTS.has(e.event_type));
 
+  // Team-level match context — same construction as prize/submit so the leaderboard we
+  // recompute here is exactly what payouts use.
+  const matchFinalForCtx = eventRows.some(e => e.event_type === 'game_finalised' || e.event_type === 'full_time');
+  const ctxHomeGoals = eventRows.reduce((mx, r) => Math.max(mx, r.home_score ?? 0), 0);
+  const ctxAwayGoals = eventRows.reduce((mx, r) => Math.max(mx, r.away_score ?? 0), 0);
+  const matchCtx = wcFixture
+    ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals: ctxHomeGoals, awayGoals: ctxAwayGoals, final: matchFinalForCtx }
+    : null;
+
   // 2. Anomaly detection — the fingerprints of a devnet loop corrupting the feed.
   const anomalies: string[] = [];
 
@@ -118,7 +127,7 @@ export async function GET(req: NextRequest) {
       wallet: e.wallet_address,
       shortWallet: `${e.wallet_address.slice(0, 4)}…${e.wallet_address.slice(-4)}`,
       paid: !!e.entry_tx_sig,
-      liveComputedPoints: computeParticipantPoints(e.lineup, scoringEvents),
+      liveComputedPoints: computeParticipantPoints(e.lineup, scoringEvents, null, matchCtx),
       captain: e.lineup?.captain ?? null,
       playerCount: e.lineup?.players?.length ?? 0,
     }));

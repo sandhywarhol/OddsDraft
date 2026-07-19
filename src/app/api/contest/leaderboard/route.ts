@@ -105,10 +105,11 @@ export async function GET(req: NextRequest) {
   // function as /api/prize/submit so this preview never silently drifts from payouts.
   const { data: dbEvents } = await supabase
     .from('live_match_events')
-    .select('event_type, player_name, team_name, minute')
+    .select('event_type, player_name, team_name, minute, home_score, away_score')
     .eq('fixture_id', fixtureId)
     .order('minute', { ascending: true });
-  const events = (dbEvents ?? []).filter(e => SCORING_EVENTS.has(e.event_type));
+  const allRows = dbEvents ?? [];
+  const events = allRows.filter(e => SCORING_EVENTS.has(e.event_type));
 
   // Fetch real starting XI from TxLINE so bench players are excluded from appearance bonus.
   // Look up home/away team names from the static fixture list.
@@ -117,11 +118,21 @@ export async function GET(req: NextRequest) {
     ? await fetchStarterIds(fixtureId, wcFixture.homeTeam, wcFixture.awayTeam)
     : null;
 
+  // Team-level match context — same as prize/submit so the live board matches payouts.
+  // Score = max seen (survives devnet loop). final = a completion event is present, so
+  // the clean-sheet bonus only appears once the match is actually over.
+  const matchFinal = allRows.some(r => r.event_type === 'game_finalised' || r.event_type === 'full_time');
+  const homeGoals = allRows.reduce((mx, r) => Math.max(mx, r.home_score ?? 0), 0);
+  const awayGoals = allRows.reduce((mx, r) => Math.max(mx, r.away_score ?? 0), 0);
+  const matchCtx = wcFixture
+    ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals, awayGoals, final: matchFinal }
+    : null;
+
   const participants = (data ?? []).map(entry => ({
     wallet_address: entry.wallet_address,
     contest_type: entry.contest_type,
     created_at: entry.created_at,
-    points: computeParticipantPoints(entry.lineup, events, starterIds),
+    points: computeParticipantPoints(entry.lineup, events, starterIds, matchCtx),
   }));
 
   // Deterministic order: points DESC, ties broken by entry time (earliest first).

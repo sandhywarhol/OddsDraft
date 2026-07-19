@@ -1,5 +1,6 @@
 import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
 import { matchPlayerName } from '@/lib/txline-bridge';
+import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 // Event types that can move a fantasy score — mirrors what /api/cron/match-events
 // records as "significant" and what /api/prize/submit finalizes with.
@@ -18,8 +19,24 @@ export interface ScoringEvent {
 export interface ContestLineup {
   captain?: string;
   confidence?: Record<string, number>;
-  players?: { id: string; name?: string; position?: string }[];
+  players?: { id: string; name?: string; position?: string; team?: string }[];
 }
+
+// Team-level match context. When supplied, computeParticipantPoints also applies the
+// TEAM-based scoring the live page shows the user — goals/penalties conceded and clean
+// sheets — so the authoritative server score reflects lineup composition even when the
+// (devnet) feed sends no player names to attribute individual goals to.
+export interface MatchContext {
+  homeTeam: string;
+  awayTeam: string;
+  homeGoals: number;  // authoritative home score (use max-seen to survive devnet loops)
+  awayGoals: number;  // authoritative away score
+  final: boolean;     // true once the match is over → clean-sheet bonus becomes eligible
+}
+
+// Registry: internal player id → { team, position }. Lets us resolve a lineup player's
+// team for conceding/clean-sheet math even when the lineup row omits it.
+const PLAYER_REGISTRY = new Map(WC2026_PLAYERS.map(p => [p.id, p]));
 
 // Same player-matching + point-resolution logic used to finalize real prize payouts
 // in /api/prize/submit — kept here as the single source of truth so a live leaderboard
@@ -32,6 +49,7 @@ export function computeParticipantPoints(
   lineup: ContestLineup | null | undefined,
   events: ScoringEvent[],
   starterIds?: Set<string> | null,
+  matchCtx?: MatchContext | null,
 ): number {
   if (!lineup?.players?.length) return 0;
 
@@ -73,6 +91,65 @@ export function computeParticipantPoints(
     const isCaptain = lineup.captain === matched.id;
     const stars = (lineup.confidence ?? {})[matched.id] ?? 3;
     total += resolvePlayerDelta(basePts, { isCaptain, confidenceStars: stars });
+  }
+
+  // ── Team-level scoring (mirrors the live page) ────────────────────────────────
+  // The individual-goal loop above attributes goals to their scorer — but the (devnet)
+  // feed usually sends no player name, so nothing matches and everyone ties on the
+  // appearance bonus alone. Here we add the TEAM-based points the live page already
+  // shows the user, derived purely from the team names + final score (no per-player
+  // attribution needed): goals conceded and penalties conceded hurt the conceding
+  // team's GK/DEF, and a clean sheet rewards them. This is what makes lineups
+  // differentiate on the devnet feed, and keeps the payout aligned with the live view.
+  if (matchCtx && (matchCtx.homeTeam || matchCtx.awayTeam)) {
+    // Penalties each team WON (a penalty a team concedes = one the opponent won).
+    let homePenWon = 0, awayPenWon = 0;
+    for (const ev of events) {
+      if (ev.event_type !== 'penalty_won' || !ev.team_name) continue;
+      if (ev.team_name === matchCtx.homeTeam) homePenWon++;
+      else if (ev.team_name === matchCtx.awayTeam) awayPenWon++;
+    }
+
+    // Goals a team CONCEDED = goals the OTHER team scored: home concedes awayGoals.
+    const concededBy = (team: string) => team === matchCtx.homeTeam ? matchCtx.awayGoals : matchCtx.homeGoals;
+    // Penalties a team conceded = penalties the opponent WON: home concedes awayPenWon.
+    const penaltiesConcededBy = (team: string) => team === matchCtx.homeTeam ? awayPenWon : homePenWon;
+
+    for (const p of lineup.players) {
+      const known = PLAYER_REGISTRY.get(p.id);
+      const team = p.team ?? known?.team;
+      const pos = p.position ?? known?.position ?? 'ATT';
+      // Only players actually in this fixture participate in conceding/clean-sheet math.
+      if (!team || (team !== matchCtx.homeTeam && team !== matchCtx.awayTeam)) continue;
+      // Bench players don't concede — mirror the appearance-bonus starter gate.
+      if (starterIds && !starterIds.has(p.id)) continue;
+
+      const isCaptain = lineup.captain === p.id;
+      const stars = (lineup.confidence ?? {})[p.id] ?? 3;
+
+      const totalAgainst = Math.max(0, concededBy(team));
+      const pensAgainst = Math.min(penaltiesConcededBy(team), totalAgainst);
+      const nonPenAgainst = Math.max(0, totalAgainst - pensAgainst);
+
+      // goal_conceded: GK/DEF −1 each, applied as one batch × non-penalty goals
+      // (matches the live page's full-time retro batching so rounding can't drift).
+      if (nonPenAgainst > 0) {
+        const gcBase = calculateEventPoints('goal_conceded', pos);
+        if (gcBase !== 0) total += resolvePlayerDelta(gcBase * nonPenAgainst, { isCaptain, confidenceStars: stars });
+      }
+      // penalty_conceded: GK/DEF −3 each, applied once per penalty (as the live page does).
+      if (pensAgainst > 0) {
+        const pcBase = calculateEventPoints('penalty_conceded', pos);
+        if (pcBase !== 0) {
+          for (let k = 0; k < pensAgainst; k++) total += resolvePlayerDelta(pcBase, { isCaptain, confidenceStars: stars });
+        }
+      }
+      // clean_sheet: only once the match is over and the team conceded nothing.
+      if (matchCtx.final && totalAgainst === 0) {
+        const csBase = calculateEventPoints('clean_sheet', pos);
+        if (csBase > 0) total += resolvePlayerDelta(csBase, { isCaptain, confidenceStars: stars });
+      }
+    }
   }
 
   return Math.round(total * 100) / 100;
