@@ -124,5 +124,12 @@ export async function GET(req: NextRequest) {
     points: computeParticipantPoints(entry.lineup, events, starterIds),
   }));
 
+  // Deterministic order: points DESC, ties broken by entry time (earliest first).
+  // Without a stable tie-break the leaderboard visibly reshuffles equal-score rows on
+  // every 20s poll — exactly the "leaderboard keeps changing" the users reported.
+  participants.sort((a, b) =>
+    (b.points - a.points) || String(a.created_at).localeCompare(String(b.created_at))
+  );
+
   return NextResponse.json({ participants }, { headers: { 'Cache-Control': 'no-store' } });
 }

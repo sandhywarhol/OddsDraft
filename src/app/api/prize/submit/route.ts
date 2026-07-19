@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getPrizeForRank } from '@/lib/fantasy-engine';
+import { computePrizesWithTies } from '@/lib/fantasy-engine';
 import { SCORING_EVENTS, computeParticipantPoints } from '@/lib/contest-scoring';
 
 const supabase = createClient(
@@ -21,10 +21,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'fixtureId and contestType required' }, { status: 400 });
     }
 
-    // 1. Fetch all entries for this contest from DB
+    // 1. Fetch all entries for this contest from DB.
+    // created_at is the deterministic tie-breaker (earliest entry ranks higher),
+    // so re-running this endpoint always produces the same ordering.
     const { data: entries, error: entriesErr } = await supabase
       .from('contest_entries')
-      .select('wallet_address, lineup')
+      .select('wallet_address, lineup, created_at')
       .eq('fixture_id', fixtureId)
       .eq('contest_type', contestType);
 
@@ -49,19 +51,35 @@ export async function POST(req: NextRequest) {
     const scored = entries.map(entry => ({
       walletAddress: entry.wallet_address,
       points: computeParticipantPoints(entry.lineup, events),
+      createdAt: entry.created_at ?? '',
     }));
 
-    // 4. Sort descending, assign ranks (ties share the higher rank)
-    scored.sort((a, b) => b.points - a.points);
+    // 4. Sort by points DESC, breaking ties deterministically by entry time (earliest
+    //    first). Deterministic ordering means re-running this never reshuffles a tie.
+    scored.sort((a, b) => (b.points - a.points) || String(a.createdAt).localeCompare(String(b.createdAt)));
     const participantCount = scored.length;
+
+    // 5. Prizes with split-pot tie handling: players on equal points share the pooled
+    //    prize for the ranks they occupy, so nobody wins/loses a tie by sort order alone.
+    const prizeByIndex = computePrizesWithTies(scored.map(s => s.points), contestType, participantCount);
+
+    // Display rank: tied players share the SAME rank number (the position of the first
+    // member of their tie group), so the leaderboard never implies an order between
+    // equal scores.
+    const rankByIndex: number[] = [];
+    for (let i = 0; i < scored.length; i++) {
+      rankByIndex[i] = (i > 0 && scored[i - 1].points === scored[i].points)
+        ? rankByIndex[i - 1]
+        : i + 1;
+    }
 
     const rows = scored.map((e, i) => ({
       fixture_id: fixtureId,
       contest_type: contestType,
       wallet_address: e.walletAddress,
-      rank: i + 1,
+      rank: rankByIndex[i],
       points: e.points,
-      prize_sol: getPrizeForRank(i + 1, contestType, participantCount),
+      prize_sol: prizeByIndex[i],
     }));
 
     // 5. Upsert — allow updates if called again (more events may have arrived)

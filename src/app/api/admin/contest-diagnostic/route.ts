@@ -46,15 +46,24 @@ export async function GET(req: NextRequest) {
   // 2. Anomaly detection — the fingerprints of a devnet loop corrupting the feed.
   const anomalies: string[] = [];
 
-  //   a) Score regression: home/away score should be monotonically non-decreasing
-  //      as minute advances. A drop means a loop replay overwrote a finished match.
+  //   a) Score regression across in-play events. Terminal/flow events (kick_off,
+  //      half_time, full_time, game_finalised) are excluded: they can carry the final
+  //      score but are stored at minute 0/90 out of chronological order, which would
+  //      otherwise flood this with false positives. We count how many in-play events
+  //      show a lower running score than an earlier one — the devnet loop fingerprint.
+  const FLOW_EVENTS = new Set(['kick_off', 'half_time', 'full_time', 'game_finalised', 'extra_time']);
   let prevTotal = -1;
+  let regressionCount = 0;
+  let maxSeenTotal = 0;
   for (const e of eventRows) {
+    if (FLOW_EVENTS.has(e.event_type)) continue;
     const total = (e.home_score ?? 0) + (e.away_score ?? 0);
-    if (prevTotal >= 0 && total < prevTotal) {
-      anomalies.push(`Score regression at minute ${e.minute}: total goals dropped ${prevTotal} → ${total} (devnet loop signature).`);
-    }
-    prevTotal = Math.max(prevTotal, total);
+    if (prevTotal >= 0 && total < prevTotal) regressionCount++;
+    maxSeenTotal = Math.max(maxSeenTotal, total);
+    prevTotal = total;
+  }
+  if (regressionCount > 0) {
+    anomalies.push(`${regressionCount} in-play score regressions detected (peak ${maxSeenTotal} goals) — classic TxLINE devnet loop signature. The per-event score fields are unreliable, but the stored FINAL score below is what scoring uses.`);
   }
 
   //   b) Duplicate goals: same scorer + team appearing more times than the final

@@ -270,6 +270,40 @@ export function getPrizeForRank(rank: number, contestType: string, participantCo
   return 0;
 }
 
+// Split-pot prize distribution with fair tie handling.
+//
+// getPrizeForRank pays each DISTINCT rank a fixed share, so when players tie on
+// points a naive "rank = array index + 1" assignment is unfair: for WTA/50-50 one
+// arbitrarily-ordered tied player takes the whole prize and the rest get nothing,
+// even though they scored identically. This pools the prizes for every rank a tie
+// group collectively occupies and splits them equally — the standard "split pot"
+// rule. Input must be points sorted DESCENDING. Returns a prize per entry, aligned
+// to the input order.
+export function computePrizesWithTies(
+  sortedPointsDesc: number[],
+  contestType: string,
+  participantCount: number,
+  entryFeeSol = ENTRY_FEE_SOL,
+): number[] {
+  const prizes = new Array(sortedPointsDesc.length).fill(0);
+  let i = 0;
+  while (i < sortedPointsDesc.length) {
+    // Tie group = contiguous run of equal points [i, j).
+    let j = i;
+    while (j < sortedPointsDesc.length && sortedPointsDesc[j] === sortedPointsDesc[i]) j++;
+    const groupSize = j - i;
+    // Sum the prizes for the ranks (i+1 … j) this group occupies, then split evenly.
+    let pooled = 0;
+    for (let rank = i + 1; rank <= j; rank++) {
+      pooled += getPrizeForRank(rank, contestType, participantCount, entryFeeSol);
+    }
+    const share = Math.round((pooled / groupSize) * 10000) / 10000;
+    for (let k = i; k < j; k++) prizes[k] = share;
+    i = j;
+  }
+  return prizes;
+}
+
 // Legacy — kept for callers that pass a pre-computed pool total.
 // Caller is responsible for passing the distributable (post-fee) pool.
 export function calculatePrizes(prizePool: number): { first: number; second: number; third: number } {
