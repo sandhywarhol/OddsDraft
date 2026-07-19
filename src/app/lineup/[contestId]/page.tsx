@@ -1292,17 +1292,20 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           }
         `}</style>
 
-        {/* Background Blur Overlay */}
+        {/* Background Blur Overlay.
+            Other steps darken the page via the box-shadow "spotlight" on the zoomed
+            element; the final step 9 has no zoom target, so darken the whole page here
+            to 0.85 (matching that spotlight) — the guides + dialog sit above this layer. */}
         {tutorialStep > 0 && (
           <div style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            backgroundColor: tutorialStep === 9 ? 'rgba(0, 0, 0, 0.85)' : 'rgba(0, 0, 0, 0.4)',
             backdropFilter: shouldBlurLineupBg ? 'blur(8px)' : 'none',
-            zIndex: 9990, 
+            zIndex: 9990,
             pointerEvents: 'none',
             opacity: isTransitioning ? 0 : 1,
-            transition: 'opacity 0.4s ease',
+            transition: 'opacity 0.4s ease, background-color 0.4s ease',
           }} />
         )}
 
@@ -1456,14 +1459,32 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 gap: '16px',
               }}>
                 <div className="npc-jrpg-dialog-text">
                   {tutorialData.text}
                 </div>
+                {/* Final step: clickable Telegram badge → opens the @OddsDraftBot bot.
+                    stopPropagation so tapping it doesn't advance/close the tutorial. */}
+                {tutorialStep === 9 && (
+                  <a
+                    href="https://telegram.me/OddsDraftBot"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Open the OddsDraft Telegram bot"
+                    style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                      style={{ width: 'clamp(46px, 7vw, 64px)', height: 'auto', display: 'block', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.35))' }}>
+                      <circle cx="12" cy="12" r="12" fill="#2AABEE" />
+                      <path d="M17.5 7.9l-2 9.4c-.15.63-.53.79-1.07.49l-2.94-2.16-1.42 1.37c-.16.16-.29.29-.59.29l.21-2.98 5.46-4.93c.24-.21-.05-.33-.37-.12L7.1 13.97 4.27 13.1c-.62-.19-.63-.62.13-.92L16.9 7.45c.52-.18.98.13.6.45z" fill="white" />
+                    </svg>
+                  </a>
+                )}
               </div>
-              
+
               <div className="npc-jrpg-dialog-footer">
                 <div style={{ 
                   color: 'rgba(26,16,8,0.5)', 
