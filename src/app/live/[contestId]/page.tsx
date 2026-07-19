@@ -1247,7 +1247,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     };
 
     loadLeaderboard();
-    const interval = setInterval(loadLeaderboard, 20_000);
+    // Poll every 12s so opponents' server-computed points feel live during the match.
+    // (Freshness is ultimately bounded by the ~60s cron that records events to the DB.)
+    const interval = setInterval(loadLeaderboard, 12_000);
     return () => clearInterval(interval);
   }, [appMode, contestId, contestType, publicKey]);
 

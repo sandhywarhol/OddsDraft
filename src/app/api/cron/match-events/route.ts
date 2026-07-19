@@ -65,8 +65,14 @@ const ACTION_MAP: Record<string, string> = {
 // Called by an external cron service (e.g. cron-job.org) every 60 seconds.
 // Polls TxLINE for live match events and sends Telegram notifications to subscribers.
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get('secret');
-  if (secret !== process.env.CRON_SECRET) {
+  // Auth accepts BOTH triggers so the live feed has a backup during matches:
+  //   - external cron (cron-job.org): ?secret=<CRON_SECRET>
+  //   - Vercel Cron: Authorization: Bearer <CRON_SECRET> (sent automatically by Vercel)
+  const cronSecret = process.env.CRON_SECRET;
+  const querySecret = req.nextUrl.searchParams.get('secret');
+  const authHeader = req.headers.get('authorization');
+  const authorized = !!cronSecret && (querySecret === cronSecret || authHeader === `Bearer ${cronSecret}`);
+  if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
