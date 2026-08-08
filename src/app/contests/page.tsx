@@ -919,7 +919,7 @@ function SwitchToLiveButton() {
 function ContestCard({ fixture, onSelect, counts, hasEntered, firstContestType, enteredTypes, walletConnected }: {
   fixture: DemoFixture;
   onSelect?: (f: DemoFixture) => void;
-  counts?: { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number };
+  counts?: { total: number; prizePool: number; top3: number; '5050': number; wta: number; usdc_pool: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number; usdcPool: number };
   hasEntered?: boolean;
   firstContestType?: string;
   enteredTypes?: string[];
