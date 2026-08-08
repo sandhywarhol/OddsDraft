@@ -161,7 +161,7 @@ function HeroSection() {
           zIndex: 5
         }}>
           Collect Skill Cards. Equip upgrades. Build your lineup, pick your captain,<br />
-          and win USDC — the more you play, the stronger your squad gets.
+          and win USDC or SOL (any amount!) — the more you play, the stronger your squad gets.
         </p>
 
         {/* CTA Buttons */}
