@@ -124,7 +124,7 @@ function HeroSection() {
               display: 'inline-block'
           }}>
             <img 
-              src="/hero%202.svg" 
+              src="/hero-2.svg" 
               alt="Fantasy Football Meets On-Chain Prizes" 
               style={{ 
                 maxWidth: '100%', 
@@ -140,7 +140,7 @@ function HeroSection() {
               left: 0,
               width: '100%',
               height: '100%',
-              WebkitMaskImage: 'url("/hero%202.svg")',
+              WebkitMaskImage: 'url("/hero-2.svg")',
               WebkitMaskSize: '100% 100%',
               WebkitMaskRepeat: 'no-repeat',
               pointerEvents: 'none',
