@@ -85,7 +85,7 @@ function getTutorialData(step: number): TutorialStep | null {
     };
     case 6: return {
       speakerTitle: 'Guide',
-      text: `"Once your squad is ready, lock it in by paying the 0.1 SOL entry fee. Then, head to the Live Match screen to watch your points update! Good luck!"`,
+      text: `Once your squad is ready, lock it in by paying the entry fee. Then, head to the Live Match screen to watch your points update! Good luck!`,
 
       position: 'right', targetId: 'submit-button',
     };
@@ -477,7 +477,7 @@ export default function TutorialPage() {
               <div style={{ marginBottom: 32 }}>
                 <div id="lineup-header" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   <h1 style={{ fontSize: '1.8rem', fontWeight: 800 }}>
-                    Tutorial Match — World Cup 2026
+                    Tutorial Match — Global Leagues
                   </h1>
                   <span className="badge badge--upcoming" style={{ fontFamily: 'monospace', letterSpacing: '0.04em' }}>
                     DEMO MODE
@@ -759,7 +759,7 @@ export default function TutorialPage() {
                           border: '2px solid rgba(255,255,255,0.15)', borderRadius: 4, cursor: 'not-allowed',
                         }}
                       >
-                        LOCK IN LINEUP — 0.1 SOL
+                        LOCK IN LINEUP — USDC / SOL
                       </button>
                       <p style={{ textAlign: 'center', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
                         Demo mode — real entry available on the Match Schedule

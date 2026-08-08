@@ -8,11 +8,12 @@ import type { WCFixture } from '@/lib/wc2026-fixtures';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useTxLine } from '@/context/TxLineContext';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { hasOpenedPack, openCardPack } from '@/lib/card-collection';
 import CardPackOpener from '@/components/CardPackOpener';
 import FlagImage from '@/components/FlagImage';
+import { LEAGUES } from '@/lib/leagues';
 
 type FixtureScore = { home: number; away: number; completed?: boolean; penaltyHome?: number; penaltyAway?: number };
 
@@ -21,13 +22,25 @@ export default function ContestsPage() {
   const { appMode, liveFixtures, allFixtures } = useTxLine();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleScrollLeagues = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const scrollAmount = 250;
+      scrollContainerRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const isDemo = appMode === 'demo';
 
   const [scheduleFixtures, setScheduleFixtures] = useState<WCFixture[]>(WC2026_FIXTURES);
+  const [selectedLeague, setSelectedLeague] = useState<string>('all');
   const [enteredContests, setEnteredContests] = useState<Record<string, string[]>>({});
   const [selectedFixture, setSelectedFixture] = useState<DemoFixture | null>(null);
-  const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number; top3: number; '5050': number; wta: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number }>>({});
+  const [contestCounts, setContestCounts] = useState<Record<string, { total: number; prizePool: number; top3: number; '5050': number; wta: number; usdc_pool: number; top3Pool: number; fiftyFiftyPool: number; wtaPool: number; usdcPool: number; }>>({});
 
   const handleReplayTutorial = useCallback(() => {
     // Force tutorial using the Argentina vs Germany demo match so it's always upcoming and not locked
@@ -96,9 +109,7 @@ export default function ContestsPage() {
   // may purge a static ID (e.g. 18230001) when TxLINE assigns its own knockout ID, but
   // existing Supabase contest_entries are still stored under the original static ID.
   useEffect(() => {
-    const dynamicIds = scheduleFixtures.map(f => f.fixtureId);
-    const staticIds = WC2026_FIXTURES.map(f => f.fixtureId);
-    const ids = [...new Set([...dynamicIds, ...staticIds])].join(',');
+    const ids = [...new Set(scheduleFixtures.map(f => f.fixtureId))].join(',');
     if (!ids) return;
     fetch(`/api/contest/counts?fixtures=${ids}`)
       .then(r => r.json())
@@ -106,16 +117,16 @@ export default function ContestsPage() {
       .catch(() => {});
   }, [scheduleFixtures]);
 
-  // Extract scores from TxLINE allFixtures snapshot
+  // Extract scores from ESPN allFixtures
   useEffect(() => {
     if (isDemo || allFixtures.length === 0) return;
     const scores: Record<string, FixtureScore> = {};
     for (const f of allFixtures) {
-      const id = String(f.FixtureId ?? f.fixtureId ?? '');
+      // EspnFixture uses espnId as the key
+      const id = (f as any).espnId ?? String((f as any).FixtureId ?? (f as any).fixtureId ?? '');
       if (!id) continue;
-      // TxLINE native: Score.Participant1.Total.Goals
-      const h = f.Score?.Participant1?.Total?.Goals ?? f.Score?.Participant1?.Goals ?? f.score?.home;
-      const a = f.Score?.Participant2?.Total?.Goals ?? f.Score?.Participant2?.Goals ?? f.score?.away;
+      const h = (f as any).homeScore;
+      const a = (f as any).awayScore;
       if (typeof h === 'number') scores[id] = { home: h, away: typeof a === 'number' ? a : 0 };
     }
     if (Object.keys(scores).length > 0) setFinishedScores(prev => ({ ...scores, ...prev }));
@@ -125,11 +136,13 @@ export default function ContestsPage() {
   // The schedule API also embeds ESPN scores for completed matches, so we seed
   // finishedScores from those to cover cases where TxLINE devnet returns empty Score.
   useEffect(() => {
-    fetch('/api/schedule/wc2026')
+    fetch('/api/schedule/all')
       .then(r => r.json())
       .then((data: WCFixture[]) => {
-        if (!Array.isArray(data) || data.length === 0) return;
-        setScheduleFixtures(data);
+        const liveFixtures = Array.isArray(data) ? data : [];
+        // Combine live ESPN fixtures with the World Cup history
+        const combined = [...liveFixtures, ...WC2026_FIXTURES];
+        setScheduleFixtures(combined);
         // Seed finishedScores from ESPN-backed schedule data (fallback for TxLINE devnet gaps)
         const scheduleScores: Record<string, { home: number; away: number; penaltyHome?: number; penaltyAway?: number; completed?: boolean }> = {};
         for (const f of data) {
@@ -182,16 +195,14 @@ export default function ContestsPage() {
 
     // Status: prefer API live data (authoritative), fallback to time-based calculation
     const timeStatus = getFixtureStatus(f);
-    // Check allFixtures for clock-based finished detection
-    // TxLINE devnet always reports GameState:"scheduled" so we use Clock.Running + Clock.Seconds
+    // Check allFixtures for live status from ESPN
     const apiAllMatch = allFixtures?.find((lf: any) => {
-      const lfId = String(lf.FixtureId ?? lf.fixtureId ?? lf.fixture_id ?? lf.id ?? '');
+      const lfId = String(lf.espnId ?? lf.FixtureId ?? lf.fixtureId ?? lf.id ?? '');
       return lfId === fid;
     });
-    const apiClockSeconds: number | null = apiAllMatch?.Clock?.Seconds ?? apiAllMatch?.clock?.seconds ?? null;
-    const apiClockRunning: boolean = apiAllMatch?.Clock?.Running === true || apiAllMatch?.clock?.running === true;
-    // If clock stopped and ≥90 min elapsed → match is over regardless of GameState field
-    const apiIsFinished = !apiClockRunning && apiClockSeconds !== null && apiClockSeconds >= 90 * 60;
+    const apiClockSeconds: number | null = null; // ESPN doesn't expose clock seconds in scoreboard
+    const apiClockRunning: boolean = (apiAllMatch as any)?.statusState === 'in';
+    const apiIsFinished = (apiAllMatch as any)?.statusState === 'post' || (apiAllMatch as any)?.completed === true;
     // timeStatus is wall-clock based and always reliable.
     // It takes priority over TxLINE liveFixtures so TxLINE devnet bugs
     // (Clock.Running stuck true, late GameState updates) can't override a match
@@ -217,17 +228,19 @@ export default function ContestsPage() {
       awayScore = fs.away;
       penaltyHome = fs.penaltyHome;
       penaltyAway = fs.penaltyAway;
-    } else if (!isDemo && apiLiveMatch) {
-      // Fallback: TxLINE live data — Score.Participant1 may not be home, check IsHome flag
-      const isP1Home = apiLiveMatch.Participant1IsHome !== false;
-      const p1G = apiLiveMatch.Score?.Participant1?.Total?.Goals ?? apiLiveMatch.Score?.Participant1?.Goals;
-      const p2G = apiLiveMatch.Score?.Participant2?.Total?.Goals ?? apiLiveMatch.Score?.Participant2?.Goals;
-      homeScore = p1G !== undefined ? (isP1Home ? p1G : p2G) : undefined;
-      awayScore = p1G !== undefined ? (isP1Home ? p2G : p1G) : undefined;
+    } else if (!isDemo && apiAllMatch) {
+      // Fallback: ESPN live data
+      const h = (apiAllMatch as any).homeScore;
+      const a = (apiAllMatch as any).awayScore;
+      homeScore = typeof h === 'number' ? h : undefined;
+      awayScore = typeof a === 'number' ? a : undefined;
     }
+
+    const leagueId = (f as any).leagueId || 'fifa.world';
 
     return {
       fixtureId: f.fixtureId,
+      leagueId,
       kickoffAt: f.kickoffAt,
       homeTeam: f.homeTeam,
       homeFlag: f.homeFlag,
@@ -254,12 +267,89 @@ export default function ContestsPage() {
     } as any);
   }
 
-  const upcoming = mappedFixtures.filter((f) => f.status === 'upcoming');
-  const live = mappedFixtures.filter((f) => f.status === 'live');
+  const filteredFixtures = mappedFixtures.filter((f) => {
+    if (selectedLeague === 'all') return true;
+    return (f as any).leagueId === selectedLeague;
+  });
+
+  const upcoming = filteredFixtures.filter((f) => f.status === 'upcoming');
+  const live = filteredFixtures.filter((f) => f.status === 'live');
   // Newest match first — most recently finished at the top
-  const finished = mappedFixtures
+  const finished = filteredFixtures
     .filter((f) => f.status === 'finished')
     .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
+
+  const renderGroupedFixtures = (fixturesToGroup: DemoFixture[], isCompleted: boolean) => {
+    if (fixturesToGroup.length === 0) return null;
+
+    const leagueGroups = new Map<string, DemoFixture[]>();
+    for (const f of fixturesToGroup) {
+      const lId = f.leagueId || 'fifa.world';
+      if (!leagueGroups.has(lId)) leagueGroups.set(lId, []);
+      leagueGroups.get(lId)!.push(f);
+    }
+
+    const leagueOrder = new Map(LEAGUES.map((l, i) => [l.id, i]));
+    const sortedLeagueIds = Array.from(leagueGroups.keys()).sort((a, b) => {
+      return (leagueOrder.get(a) ?? 999) - (leagueOrder.get(b) ?? 999);
+    });
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 56 }}>
+        {sortedLeagueIds.map(lId => {
+          const league = LEAGUES.find(l => l.id === lId) || { id: lId, name: 'Other', flag: '⚽', color: '#888' } as any;
+          const leagueFixes = leagueGroups.get(lId)!;
+          
+          const monthGroups = new Map<string, DemoFixture[]>();
+          for (const f of leagueFixes) {
+            const date = new Date(f.kickoffAt);
+            const monthYear = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+            if (!monthGroups.has(monthYear)) monthGroups.set(monthYear, []);
+            monthGroups.get(monthYear)!.push(f);
+          }
+
+          const sortedMonths = Array.from(monthGroups.keys()).sort((a, b) => {
+            const dateA = new Date(monthGroups.get(a)![0].kickoffAt).getTime();
+            const dateB = new Date(monthGroups.get(b)![0].kickoffAt).getTime();
+            return isCompleted ? dateB - dateA : dateA - dateB;
+          });
+
+          return (
+            <div key={lId} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, background: '#fff', padding: '12px 24px', borderRadius: 12, marginBottom: 16 }}>
+                {league.logo ? <img src={league.logo} alt={league.name} width={36} height={36} style={{ objectFit: 'contain' }} /> : <span style={{ fontSize: '1.8rem' }}>{league.flag}</span>}
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#000', margin: 0 }}>{league.name}</h3>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+                {sortedMonths.map(month => (
+                  <div key={month}>
+                    <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 16, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                      {month}
+                    </h4>
+                    <div className="grid-contests">
+                      {monthGroups.get(month)!.map(fixture => (
+                        <ContestCard
+                          key={fixture.fixtureId}
+                          fixture={fixture}
+                          onSelect={setSelectedFixture}
+                          counts={contestCounts[fixture.fixtureId]}
+                          hasEntered={!!(enteredContests[fixture.fixtureId]?.length)}
+                          firstContestType={enteredContests[fixture.fixtureId]?.[0]}
+                          enteredTypes={enteredContests[fixture.fixtureId] ?? []}
+                          walletConnected={connected}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (!mounted) return null;
 
@@ -276,7 +366,7 @@ export default function ContestsPage() {
                 <span style={{ fontSize: '1.1rem' }}>🎮</span>
                 <div>
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffaa00', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Demo Mode Active</div>
-                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Match data is simulated. Switch to Live Mode to play with real-time WC2026 data.</div>
+                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Match data is simulated. Switch to Live Mode to play with real-time match data.</div>
                 </div>
               </div>
               <SwitchToLiveButton />
@@ -354,7 +444,7 @@ export default function ContestsPage() {
                   textTransform: 'uppercase',
                   borderRadius: 0
                 }}>
-                  2026 World Cup
+                  Global Tournaments
                 </span>
               </div>
               <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 8, lineHeight: 1.1 }}>
@@ -365,8 +455,8 @@ export default function ContestsPage() {
               </p>
             </div>
             <img 
-              src="/fifa_world_cup_2026_logo.webp" 
-              alt="FIFA World Cup 2026 Logo" 
+              src="/logo_oddsdraft.svg" 
+              alt="OddsDraft Logo" 
               style={{ height: '100px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'absolute', top: 24, right: 24, zIndex: 2 }}
             />
           </div>
@@ -416,10 +506,10 @@ export default function ContestsPage() {
           <div className="card card--glass" style={{ marginBottom: 32, padding: 'var(--space-4) var(--space-6)' }}>
             <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center' }}>
               {[
-                { label: 'Entry Fee', value: '0.1 SOL', icon: '💰' },
-                { label: 'Prize Modes', value: 'Top 3, 50/50, WTA', icon: '🏆' },
+                { label: 'Entry Fee', value: 'Any USDC / 0.1 SOL', icon: '💰' },
+                { label: 'Prize Modes', value: 'USDC Pool, Top 3, 50/50, WTA', icon: '🏆' },
                 { label: 'Network', value: 'Solana', icon: 'SOL' },
-                { label: 'Data', value: 'TxODDS Live', icon: '⚡' },
+                { label: 'Data', value: 'ESPN Live', icon: '⚡' },
               ].map((item) => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {item.icon === 'SOL' ? (
@@ -448,6 +538,118 @@ export default function ContestsPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* League Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, width: '100%' }}>
+            {/* Left Button */}
+            <button
+              onClick={() => handleScrollLeagues('left')}
+              style={{
+                background: 'rgba(20, 20, 20, 0.75)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 36,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '1.4rem',
+                fontWeight: 'bold',
+                backdropFilter: 'blur(4px)',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                transition: 'all 0.2s',
+                flexShrink: 0,
+              }}
+            >
+              ‹
+            </button>
+
+            {/* Scrollable Container */}
+            <div
+              ref={scrollContainerRef}
+              style={{
+                display: 'flex',
+                gap: 12,
+                overflowX: 'auto',
+                padding: '4px 0',
+                flex: 1,
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+                scrollBehavior: 'smooth',
+              }}
+            >
+              <button
+                onClick={() => setSelectedLeague('all')}
+                style={{
+                  padding: '10px 22px',
+                  borderRadius: 30,
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  background: selectedLeague === 'all' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.4)',
+                  color: selectedLeague === 'all' ? '#fff' : 'rgba(255,255,255,0.7)',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s ease',
+                  boxShadow: selectedLeague === 'all' ? '0 4px 12px rgba(255,255,255,0.1)' : 'none',
+                }}
+              >
+                🌍 All Leagues
+              </button>
+              {LEAGUES.map(league => (
+                <button
+                  key={league.id}
+                  onClick={() => setSelectedLeague(league.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '10px 22px',
+                    borderRadius: 30,
+                    border: `1px solid ${selectedLeague === league.id ? league.color : 'rgba(255,255,255,0.15)'}`,
+                    background: selectedLeague === league.id ? `${league.color}50` : 'rgba(0,0,0,0.4)',
+                    color: selectedLeague === league.id ? '#fff' : 'rgba(255,255,255,0.7)',
+                    fontWeight: 700,
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s ease',
+                    boxShadow: selectedLeague === league.id ? `0 4px 12px ${league.color}40` : 'none',
+                  }}
+                >
+                  {league.logo ? <img src={league.logo} alt={league.name} width={20} height={20} style={{ objectFit: 'contain' }} /> : <span style={{ fontSize: '1.1rem' }}>{league.flag}</span>} {league.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Right Button */}
+            <button
+              onClick={() => handleScrollLeagues('right')}
+              style={{
+                background: 'rgba(20, 20, 20, 0.75)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 36,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '1.4rem',
+                fontWeight: 'bold',
+                backdropFilter: 'blur(4px)',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                transition: 'all 0.2s',
+                flexShrink: 0,
+              }}
+            >
+              ›
+            </button>
           </div>
 
           {/* LIVE Contests */}
@@ -482,12 +684,12 @@ export default function ContestsPage() {
                         <div className="ro-window__body" style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto' }}>
                           {[
                             { id: '1', minute: 42, teamFlag: '🇦🇷', player: 'Messi', points: 10, description: 'GOAL! Messi curls a stunning shot into the top corner!' },
-                            { id: '2', minute: 38, teamFlag: '🇦🇷', player: 'Messi', points: 0, description: 'TxLINE: HighDanger possession for Argentina in the box!' },
+                            { id: '2', minute: 38, teamFlag: '🇦🇷', player: 'Messi', points: 0, description: 'ESPN: HighDanger possession for Argentina in the box!' },
                             { id: '3', minute: 33, teamFlag: '🇦🇷', player: 'Mac Allister', points: 1, description: 'Argentina dominant in possession. Mac Allister controls midfield.' },
                             { id: '4', minute: 28, teamFlag: '🇫🇷', player: 'Mbappé', points: 3, description: 'Mbappé is brought down in the box — penalty awarded!' },
                             { id: '5', minute: 21, teamFlag: '🇫🇷', player: 'Griezmann', points: -2, description: 'Yellow card for Griezmann after a late challenge.' },
                             { id: '6', minute: 12, teamFlag: '🇫🇷', player: 'Mbappé', points: 10, description: 'GOAL! Mbappé fires into the top corner on the counter!' },
-                            { id: '7', minute: 8, teamFlag: '🇫🇷', player: 'Mbappé', points: 0, description: 'TxLINE: HighDanger — France pressing high, Mbappé causing havoc.' },
+                            { id: '7', minute: 8, teamFlag: '🇫🇷', player: 'Mbappé', points: 0, description: 'ESPN: HighDanger — France pressing high, Mbappé causing havoc.' },
                             { id: '8', minute: 3, teamFlag: '🇫🇷', player: 'Dembélé', points: 0, description: 'Corner kick awarded to France.' },
                             { id: '9', minute: 1, teamFlag: '', player: '', points: 0, description: 'Kick Off! Argentina vs France has begun!' },
                           ].map((event) => (
@@ -557,35 +759,18 @@ export default function ContestsPage() {
           {/* UPCOMING Contests */}
           {upcoming.length > 0 && (
             <section style={{ marginBottom: 48 }}>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 20 }}>Upcoming</h2>
-              <div className="grid-contests">
-                {upcoming.map((fixture) => (
-                  <ContestCard key={fixture.fixtureId} fixture={fixture} onSelect={setSelectedFixture} counts={contestCounts[fixture.fixtureId]} firstContestType={enteredContests[fixture.fixtureId]?.[0]} walletConnected={connected} />
-                ))}
-              </div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 24, textAlign: 'center', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Upcoming</h2>
+              {renderGroupedFixtures(upcoming, false)}
             </section>
           )}
 
           {/* FINISHED Contests */}
           {finished.length > 0 && (
             <section>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 20, color: 'var(--text-secondary)' }}>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 24, textAlign: 'center', color: 'var(--text-secondary)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 Completed
               </h2>
-              <div className="grid-contests">
-                {finished.map((fixture) => (
-                  <ContestCard
-                    key={fixture.fixtureId}
-                    fixture={fixture}
-                    onSelect={setSelectedFixture}
-                    counts={contestCounts[fixture.fixtureId]}
-                    hasEntered={!!(enteredContests[fixture.fixtureId]?.length)}
-                    firstContestType={enteredContests[fixture.fixtureId]?.[0]}
-                    enteredTypes={enteredContests[fixture.fixtureId] ?? []}
-                    walletConnected={connected}
-                  />
-                ))}
-              </div>
+              {renderGroupedFixtures(finished, true)}
             </section>
           )}
         </div>
@@ -628,6 +813,7 @@ export default function ContestsPage() {
                   { id: 'top3',  title: 'Top 3 Classic',      desc: '50% / 30% / 20% split to ranks 1, 2, 3.', icon: '🏆', poolKey: 'top3Pool'  as const, ctKey: 'top3'  as const },
                   { id: '5050',  title: 'Double Up (50/50)',   desc: 'Top 50% of the leaderboard splits the prize pool equally.', icon: '⚖️', poolKey: 'fiftyFiftyPool' as const, ctKey: '5050' as const },
                   { id: 'wta',   title: 'Winner Takes All',    desc: 'Rank 1 takes 100% of the prize pool. High risk, high reward.', icon: '💀', poolKey: 'wtaPool' as const, ctKey: 'wta' as const },
+                  { id: 'usdc_pool', title: 'USDC Pool',       desc: 'Stake any amount of USDC. Prizes distributed proportionally based on your fantasy score.', icon: '💎', poolKey: 'usdcPool' as const, ctKey: 'usdc_pool' as const },
                 ].map(ct => {
                   const fixtureCount = contestCounts[selectedFixture.fixtureId];
                   const ctPlayers = fixtureCount?.[ct.ctKey] ?? 0;
@@ -659,12 +845,12 @@ export default function ContestsPage() {
                           <>
                             <div>
                               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Entry</div>
-                              <div style={{ fontWeight: 700, color: 'var(--color-accent)' }}>0.1 SOL</div>
+                              <div style={{ fontWeight: 700, color: ct.id === 'usdc_pool' ? '#3b82f6' : 'var(--color-accent)' }}>{ct.id === 'usdc_pool' ? 'Any Amount' : '0.1 SOL'}</div>
                             </div>
                             {showCount || selectedFixture.isNonDemo ? (
                               <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{ctPlayers} joined</div>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ffd700' }}>Pool: {ctPool.toFixed(2)} SOL</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: ct.id === 'usdc_pool' ? '#3b82f6' : '#ffd700' }}>Pool: {ctPool.toFixed(2)} {ct.id === 'usdc_pool' ? 'USDC' : 'SOL'}</div>
                               </div>
                             ) : (
                               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'right' }}>
@@ -756,6 +942,7 @@ function ContestCard({ fixture, onSelect, counts, hasEntered, firstContestType, 
 
   const participants = counts?.total ?? 0;
   const prizePool = counts?.prizePool?.toFixed(2) ?? '0.00';
+  const usdcPool = counts?.usdcPool?.toFixed(2) ?? '0.00';
 
   return (
     <div
@@ -781,24 +968,23 @@ function ContestCard({ fixture, onSelect, counts, hasEntered, firstContestType, 
         background: isLive 
           ? 'linear-gradient(to right, #ea6b6b 0%, #b71c1c 100%)'
           : (isFinished ? 'linear-gradient(to right, #4f5f70 0%, #2c353f 100%)' : 'linear-gradient(to right, var(--color-ro-blue-header) 0%, var(--color-ro-blue-header-light) 100%)'),
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
       }}>
-        <span>{fixture.homeTeam} vs {fixture.awayTeam}</span>
-        <span style={{ fontSize: '0.7rem', opacity: 0.9 }}>
+        <span style={{ fontSize: '0.75rem', opacity: 0.9, fontWeight: 700, letterSpacing: '0.05em' }}>
           {isLive ? '🔴 LIVE' : isUpcoming ? '⏳ UPCOMING' : '🏁 COMPLETED'}
+        </span>
+        <span style={{ fontSize: '0.75rem', opacity: 0.8, fontWeight: 500, textTransform: 'none', letterSpacing: '0' }}>
+          {isUpcoming
+            ? `Starts in ${formatDistanceToNow(kickoff)}`
+            : isLive
+            ? `Started ${formatDistanceToNow(kickoff)} ago`
+            : format(kickoff, 'MMM d, yyyy')}
         </span>
       </div>
 
       <div className="ro-window__body">
-        {/* Time info */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-            {isUpcoming
-              ? `Starts in ${formatDistanceToNow(kickoff)}`
-              : isLive
-              ? `Started ${formatDistanceToNow(kickoff)} ago`
-              : format(kickoff, 'MMM d, yyyy')}
-          </span>
-        </div>
 
         {/* Teams */}
         <div style={{
@@ -836,6 +1022,7 @@ function ContestCard({ fixture, onSelect, counts, hasEntered, firstContestType, 
                 }}>
                   {fixture.homeScore ?? '?'} — {fixture.awayScore ?? '?'}
                 </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>FT</div>
                 {fixture.penaltyHome !== undefined && fixture.penaltyAway !== undefined && (
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.04em' }}>
                     ({fixture.penaltyHome}–{fixture.penaltyAway} pens)
@@ -875,8 +1062,14 @@ function ContestCard({ fixture, onSelect, counts, hasEntered, firstContestType, 
           marginBottom: 16,
         }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.3rem', color: participants > 0 ? 'var(--color-primary)' : 'var(--text-muted)' }}>
-              {participants > 0 ? `${prizePool} SOL` : '–'}
+            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.1rem', color: participants > 0 ? 'var(--color-primary)' : 'var(--text-muted)' }}>
+              {participants > 0 ? (
+                <>
+                  <span style={{ color: '#3b82f6' }}>{usdcPool} USDC</span>
+                  <span style={{ margin: '0 4px', fontSize: '0.8rem', opacity: 0.5 }}>•</span>
+                  <span>{prizePool} SOL</span>
+                </>
+              ) : '–'}
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Prize Pool
@@ -891,8 +1084,8 @@ function ContestCard({ fixture, onSelect, counts, hasEntered, firstContestType, 
             </div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.3rem', color: 'var(--color-accent)' }}>
-              0.1 SOL
+            <div style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.2rem', color: 'var(--color-accent)' }}>
+              <span style={{ color: '#3b82f6' }}>Any USDC</span> / 0.1 SOL
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Entry Fee

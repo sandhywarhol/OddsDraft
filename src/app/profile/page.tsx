@@ -369,7 +369,7 @@ export default function ProfilePage() {
                             </div>
                             {solBalance !== null && solBalance < 0.105 && !balanceLoading && (
                               <div style={{ fontSize: '0.72rem', color: '#ffaa00', marginTop: 2 }}>
-                                Requires min. 0.1 SOL to play
+                                Requires USDC or SOL to play
                               </div>
                             )}
                           </div>
@@ -480,7 +480,7 @@ export default function ProfilePage() {
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                           <span style={{ fontSize: '0.7rem', color: '#ffd700', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 4, padding: '2px 8px', fontWeight: 700 }}>
-                            0.1 SOL
+                            USDC / SOL
                           </span>
                           <Link href={`/live/${entry.contestId}${entry.contestType ? `?contestType=${entry.contestType}` : ''}`} style={{ fontSize: '0.72rem', color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}>
                             View →

@@ -16,7 +16,8 @@ import { useTxLine } from '@/context/TxLineContext';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { buildJoinContestIx } from '@/lib/oddsdraft-anchor';
+import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { buildJoinContestIx, getUsdcMint, buildJoinUsdcContestIx } from '@/lib/oddsdraft-anchor';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import FlagImage from '@/components/FlagImage';
 import { prefetchPlayerPhotos } from '@/lib/player-photos';
@@ -150,10 +151,12 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   const contestType = (searchParamsObj.contestType as string) || 'top3';
   const isReplayTutorial = searchParamsObj.replay === '1';
   const isGuestDemo = searchParamsObj.guest_demo === '1';
-  const { appMode, liveFixtures } = useTxLine();
+  const { appMode, liveFixtures, allFixtures } = useTxLine();
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // isGuestDemo: URL-based demo for non-admin users accessing the guest demo flow
   // isReplayTutorial: "Replay Tutorial" button must work even when no wallet is connected
@@ -185,11 +188,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   };
 
   // When the static fixture has TBD or placeholder teams, resolve real names from the live schedule
-  const [teamOverride, setTeamOverride] = useState<{ homeTeam: string; homeFlag: string; awayTeam: string; awayFlag: string } | null>(null);
+  const [teamOverride, setTeamOverride] = useState<{ homeTeam: string; homeFlag: string; awayTeam: string; awayFlag: string; leagueId?: string; homeTeamId?: string; awayTeamId?: string } | null>(null);
   if (teamOverride) fixture = { ...fixture, ...teamOverride };
 
   const isTxLineLive = !isDemo && liveFixtures?.some(f =>
-    f.homeTeam?.name === fixture.homeTeam || f.awayTeam?.name === fixture.awayTeam
+    f.homeTeam === fixture.homeTeam || f.awayTeam === fixture.awayTeam
   );
   const kickoffTime = new Date(fixture.kickoffAt);
   const isPastKickoff = !isDemo && Date.now() > kickoffTime.getTime();
@@ -206,6 +209,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
     } catch {}
     return '';
   });
+  const [usdcStakeAmount, setUsdcStakeAmount] = useState('10');
   // Saved players — used to display captain name on the Already Entered / Submitted screen
   const [savedLineupPlayers] = useState<LineupPlayer[]>(() => {
     if (typeof window === 'undefined' || isGuestDemo) return [];
@@ -226,6 +230,23 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   type MatchOdds = { home: number | null; draw: number | null; away: number | null; ts?: number };
   const [matchOdds, setMatchOdds] = useState<MatchOdds | null>(null);
 
+  const [matchSummary, setMatchSummary] = useState<import('@/lib/espn').EspnSummary | null>(null);
+
+  useEffect(() => {
+    const isTbd = (t: string) => !t || t === 'TBD' || t === 'Home' || t === 'Away';
+    if (isTbd(fixture.homeTeam) || isTbd(fixture.awayTeam)) return;
+    
+    if ((fixture as any).leagueId && contestId) {
+      const espnId = (fixture as any).espnId || contestId;
+      fetch(`/api/espn/summary?leagueId=${(fixture as any).leagueId}&eventId=${espnId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.error) setMatchSummary(data);
+        })
+        .catch(console.error);
+    }
+  }, [fixture.homeTeam, fixture.awayTeam, (fixture as any).leagueId, contestId]);
+
   const getPlayers = (team: string): import('@/lib/players').Player[] => {
     const fromApi = dynamicPlayers.filter(p => p.team === team);
     if (fromApi.length > 0) return fromApi;
@@ -235,14 +256,54 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   useEffect(() => {
     const isTbd = (t: string) => !t || t === 'TBD' || t === 'Home' || t === 'Away';
     if (isTbd(fixture.homeTeam) || isTbd(fixture.awayTeam)) return;
-    setPlayersLoading(true);
-    fetch(`/api/players?team=${encodeURIComponent(fixture.homeTeam)}&team=${encodeURIComponent(fixture.awayTeam)}`)
-      .then(r => r.json())
-      .then((data: import('@/lib/players').Player[]) => {
+    
+    const fetchRoster = async () => {
+      setPlayersLoading(true);
+      try {
+        const fix: any = fixture;
+        if (fix.leagueId && fix.homeTeamId && fix.awayTeamId) {
+          const [homeRes, awayRes] = await Promise.all([
+            fetch(`/api/teams/${fix.homeTeamId}/roster?league=${fix.leagueId}`),
+            fetch(`/api/teams/${fix.awayTeamId}/roster?league=${fix.leagueId}`)
+          ]);
+          const homeData = await homeRes.json();
+          const awayData = await awayRes.json();
+          
+          const mapEspnPlayer = (p: any, teamName: string, teamFlag: string): import('@/lib/players').Player => ({
+            id: p.id,
+            name: p.name,
+            team: teamName,
+            teamFlag: teamFlag,
+            position: (p.positionAbbr === 'G' ? 'GK' : p.positionAbbr === 'D' ? 'DEF' : p.positionAbbr === 'M' ? 'MID' : p.positionAbbr === 'F' ? 'ATT' : 'SWG'),
+            photoUrl: p.headshotUrl,
+            nationality: p.nationality,
+            jerseyNumber: p.jersey !== '-' ? parseInt(p.jersey, 10) : undefined,
+            rating: 75 + (parseInt(p.id.substring(p.id.length-2)) % 20) // deterministic pseudo-random rating
+          });
+          
+          const combined = [
+            ...(homeData.players || []).map((p: any) => mapEspnPlayer(p, fix.homeTeam, fix.homeFlag)),
+            ...(awayData.players || []).map((p: any) => mapEspnPlayer(p, fix.awayTeam, fix.awayFlag))
+          ];
+          
+          if (combined.length > 0) {
+            setDynamicPlayers(combined);
+            setPlayersLoading(false);
+            return;
+          }
+        }
+        
+        // Fallback
+        const fallbackRes = await fetch(`/api/players?team=${encodeURIComponent(fix.homeTeam)}&team=${encodeURIComponent(fix.awayTeam)}`);
+        const data = await fallbackRes.json();
         if (Array.isArray(data) && data.length > 0) setDynamicPlayers(data);
-      })
-      .catch(() => {})
-      .finally(() => setPlayersLoading(false));
+      } catch (err) {
+        console.error('Error fetching roster:', err);
+      } finally {
+        setPlayersLoading(false);
+      }
+    };
+    fetchRoster();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixture.homeTeam, fixture.awayTeam]);
 
@@ -250,20 +311,23 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
   useEffect(() => {
     const isTbd = (t: string) => !t || t === 'TBD' || t === 'Home' || t === 'Away';
     if (!isTbd(fixture.homeTeam) && !isTbd(fixture.awayTeam)) return;
-    fetch('/api/schedule/wc2026')
-      .then(r => r.json())
-      .then((fixtures: any[]) => {
-        if (!Array.isArray(fixtures)) { setPlayersLoading(false); return; }
-        const liveMatch = fixtures.find((f: any) => f.fixtureId === contestId);
-        if (liveMatch && !isTbd(liveMatch.homeTeam) && !isTbd(liveMatch.awayTeam)) {
-          setTeamOverride({ homeTeam: liveMatch.homeTeam, homeFlag: liveMatch.homeFlag, awayTeam: liveMatch.awayTeam, awayFlag: liveMatch.awayFlag });
-        } else {
-          setPlayersLoading(false); // teams still TBD in live schedule — stop spinner
-        }
-      })
-      .catch(() => { setPlayersLoading(false); });
+    
+    // Instead of fetching a hardcoded wc2026 route, look in allFixtures
+    if (!allFixtures || allFixtures.length === 0) return;
+    const match = allFixtures.find((f: any) => f.espnId === contestId || f.fixtureId === contestId);
+    if (match && !isTbd(match.homeTeam) && !isTbd(match.awayTeam)) {
+      setTeamOverride({ 
+        homeTeam: match.homeTeam, homeFlag: match.homeLogo || '🏳️', 
+        awayTeam: match.awayTeam, awayFlag: match.awayLogo || '🏳️',
+        leagueId: match.leagueId,
+        homeTeamId: match.homeTeamId,
+        awayTeamId: match.awayTeamId
+      });
+    } else {
+      setPlayersLoading(false); // teams still TBD in live schedule — stop spinner
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contestId]);
+  }, [contestId, allFixtures]);
   const enteredContestsKey = `txodds_entered_contests_${contestId}`;
   // `typeof window` is always undefined during SSR, so this differed between the server
   // (always false) and the client's first render (true if actually already entered) —
@@ -835,8 +899,8 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
       } catch { /* ignore */ }
 
       // ── Steps 1-4: Payment ────────────────────────────────────────────
-      if (process.env.NEXT_PUBLIC_SMART_CONTRACT_ENABLED === 'true') {
-        // Smart contract path: call join_contest on the Anchor program.
+      if (process.env.NEXT_PUBLIC_SMART_CONTRACT_ENABLED === 'true' || contestType === 'usdc_pool') {
+        // Smart contract path: call join_contest or join_usdc_contest on the Anchor program.
         // Step 1: ensure Contest PDA exists on-chain, then get blockhash.
         setStep(1, { status: 'loading', detail: 'Preparing contest on-chain…' });
         try {
@@ -866,9 +930,24 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           }
           setStep(1, { status: 'ok', detail: `${blockhash.slice(0, 8)}…` });
 
-          // Step 2: build join_contest tx and get wallet approval
+          // Step 2: build tx and get wallet approval
           setStep(2, { status: 'loading', detail: attempt > 1 ? `Approve in wallet (attempt ${attempt}/${MAX_ATTEMPTS})…` : 'Approve in your wallet…' });
-          const joinIx = buildJoinContestIx(contestId, contestType, publicKey);
+          let joinIx;
+          if (contestType === 'usdc_pool') {
+            const usdcMint = getUsdcMint();
+            const userTokenAccount = getAssociatedTokenAddressSync(usdcMint, publicKey);
+            const microUsdc = BigInt(Math.floor(parseFloat(usdcStakeAmount) * 1_000_000));
+            joinIx = buildJoinUsdcContestIx(
+              contestId,
+              publicKey,
+              userTokenAccount,
+              microUsdc,
+              TOKEN_PROGRAM_ID,
+              SystemProgram.programId
+            );
+          } else {
+            joinIx = buildJoinContestIx(contestId, contestType, publicKey);
+          }
           const tx = new Transaction().add(joinIx);
           tx.recentBlockhash = blockhash;
           tx.feePayer = publicKey;
@@ -879,6 +958,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
               skipPreflight: true,
               preflightCommitment: 'confirmed',
               maxRetries: 5,
+
             });
           } catch (signErr: any) {
             const msg: string = signErr?.message ?? '';
@@ -1047,16 +1127,25 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
         try { localStorage.setItem(`txodds_pending_sig_${contestId}_${contestType}`, entryTxSig); } catch { /* ignore */ }
       }
       try {
-        const res = await fetch('/api/contest/enter', {
+        const endpoint = contestType === 'usdc_pool' ? '/api/contest/enter-usdc' : '/api/contest/enter';
+        const bodyPayload = contestType === 'usdc_pool' ? {
+          fixtureId: contestId,
+          walletAddress: publicKey.toString(),
+          lineup: lineupData,
+          microUsdc: String(Math.floor(parseFloat(usdcStakeAmount) * 1_000_000)),
+          txSignature: entryTxSig,
+        } : {
+          fixtureId: contestId,
+          walletAddress: publicKey.toString(),
+          contestType,
+          lineup: lineupData,
+          entryTxSig,
+        };
+
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fixtureId: contestId,
-            walletAddress: publicKey.toString(),
-            contestType,
-            lineup: lineupData,
-            entryTxSig,
-          }),
+          body: JSON.stringify(bodyPayload),
         });
         if (!res.ok) {
           // For validation errors (4xx), surface the server message so we know what went wrong.
@@ -1065,10 +1154,10 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           const msg = body?.error ?? `Server error (HTTP ${res.status})`;
           console.error('[contest/enter] Save failed:', msg);
           // Attempt one retry in case it was a transient error
-          const retry = await fetch('/api/contest/enter', {
+          const retry = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fixtureId: contestId, walletAddress: publicKey.toString(), contestType, lineup: lineupData, entryTxSig }),
+            body: JSON.stringify(bodyPayload),
           });
           if (!retry.ok) {
             const retryBody = await retry.json().catch(() => ({}));
@@ -1224,9 +1313,9 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
           <div style={{ fontSize: '3rem' }}>🔒</div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 800, margin: 0 }}>Connect Wallet to Play</h1>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 380, margin: 0 }}>
-            You need a Solana wallet to build a lineup and enter this contest. Entry fee is <strong>0.1 SOL</strong>.
+            You need a Solana wallet to build a lineup and enter this contest. Entry fee is <strong>{contestType === 'usdc_pool' ? 'USDC (Any Amount)' : '0.1 SOL'}</strong>.
           </p>
-          <WalletMultiButton style={{ borderRadius: 8, fontWeight: 700, fontSize: '1rem', padding: '12px 28px' }} />
+          {mounted ? <WalletMultiButton style={{ borderRadius: 8, fontWeight: 700, fontSize: '1rem', padding: '12px 28px' }} /> : <div style={{ height: 48 }} />}
           {isDevnet && (
             <div style={{ background: 'rgba(255, 170, 0, 0.08)', border: '1px solid rgba(255,170,0,0.35)', borderRadius: 8, padding: '10px 16px', maxWidth: 400, textAlign: 'left' }}>
               <div style={{ fontSize: '0.8rem', color: '#ffaa00', fontWeight: 700, marginBottom: 4 }}>Devnet Mode — Switch Your Wallet</div>
@@ -1590,6 +1679,88 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                   </div>
                 </div>
               )}
+
+              {/* ESPN Match Insights */}
+              {matchSummary && (
+                <div style={{ marginTop: 24, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  {/* Odds Widget */}
+                  {matchSummary.odds && (
+                    <div style={{ background: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: 12, flex: '1 1 200px' }}>
+                      <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Match Odds</span>
+                        <span>{matchSummary.odds.provider}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', padding: '6px 8px', borderRadius: 4, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.65rem', color: '#60a5fa' }}>{fixture.homeTeam.substring(0,3).toUpperCase()}</div>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{matchSummary.odds.homeMoneyline || '—'}</div>
+                        </div>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', padding: '6px 8px', borderRadius: 4, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>DRAW</div>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{matchSummary.odds.drawMoneyline || '—'}</div>
+                        </div>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', padding: '6px 8px', borderRadius: 4, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.65rem', color: '#f87171' }}>{fixture.awayTeam.substring(0,3).toUpperCase()}</div>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 700 }}>{matchSummary.odds.awayMoneyline || '—'}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 8, fontSize: '0.75rem' }}>
+                        <span><span style={{ color: 'var(--text-muted)' }}>Over {matchSummary.odds.overUnder.replace(/[ou]/, '')}:</span> <strong>{matchSummary.odds.overOdds}</strong></span>
+                        <span><span style={{ color: 'var(--text-muted)' }}>Under {matchSummary.odds.overUnder.replace(/[ou]/, '')}:</span> <strong>{matchSummary.odds.underOdds}</strong></span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Form Guide Widget */}
+                  {matchSummary.form && (
+                    <div style={{ background: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: 12, flex: '1 1 240px' }}>
+                      <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 8 }}>
+                        Form Guide (Last 5)
+                      </div>
+                      
+                      {/* Home Form */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 600 }}>
+                          <FlagImage flag={fixture.homeFlag} size={14} />
+                          {fixture.homeTeam}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {matchSummary.form.home.events.map((e, i) => (
+                            <span key={i} title={`${e.result} vs ${e.opponentName} (${e.score})`} style={{
+                              width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              borderRadius: '50%', fontSize: '0.6rem', fontWeight: 800,
+                              background: e.result === 'W' ? '#15803d' : e.result === 'L' ? '#b91c1c' : '#475569',
+                              color: '#fff'
+                            }}>
+                              {e.result}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Away Form */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 600 }}>
+                          <FlagImage flag={fixture.awayFlag} size={14} />
+                          {fixture.awayTeam}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {matchSummary.form.away.events.map((e, i) => (
+                            <span key={i} title={`${e.result} vs ${e.opponentName} (${e.score})`} style={{
+                              width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              borderRadius: '50%', fontSize: '0.6rem', fontWeight: 800,
+                              background: e.result === 'W' ? '#15803d' : e.result === 'L' ? '#b91c1c' : '#475569',
+                              color: '#fff'
+                            }}>
+                              {e.result}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -1634,7 +1805,7 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       </div>
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8, fontStyle: 'italic' }}>
-                      ⚡ Based on demo World Cup match events
+                      ⚡ Based on demo match events
                     </div>
                   </div>
                 )}
@@ -2358,6 +2529,23 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       Balance: <span style={{ color: '#4ade80', fontWeight: 700 }}>{walletBalance.toFixed(3)} SOL</span>
                     </div>
                   )}
+                  {contestType === 'usdc_pool' && (
+                    <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>USDC Stake Amount</label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={usdcStakeAmount}
+                        onChange={(e) => setUsdcStakeAmount(e.target.value)}
+                        style={{
+                          width: '100%', padding: '12px 16px', borderRadius: 8,
+                          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)',
+                          color: 'white', fontSize: '1rem', fontWeight: 700
+                        }}
+                      />
+                    </div>
+                  )}
                   <button
                     className="btn btn--primary btn--lg"
                     onClick={handleSubmit}
@@ -2369,11 +2557,11 @@ export default function LineupBuilderPage({ params, searchParams }: { params: Pr
                       maxWidth: '400px',
                     }}
                   >
-                    {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? '🔒 Lock Lineup & Pay 0.1 SOL' : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}
+                    {submitting ? '⏳ Processing...' : isLineupFull ? (captain ? (contestType === 'usdc_pool' ? `🔒 Lock Lineup & Pay ${usdcStakeAmount || 0} USDC` : '🔒 Lock Lineup & Pay 0.1 SOL') : '⭐ Select a Captain First') : `Fill ${MAX_PLAYERS - totalPlayers} More Slots`}
                   </button>
                   {isLineupFull && captain && (
                     <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      Entry fee: 0.1 SOL • {contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}
+                      {contestType === 'usdc_pool' ? 'Entry fee: Any USDC amount • Proportional Prize Pool' : `Entry fee: 0.1 SOL • ${contestType === '5050' ? 'Top 50% Double Up' : contestType === 'wta' ? 'Winner Takes All' : 'Top 3 win prizes'}`}
                     </p>
                   )}
                 </div>
