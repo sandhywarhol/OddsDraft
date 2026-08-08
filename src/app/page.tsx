@@ -34,6 +34,22 @@ export default function HomePage() {
           background-color: #080f1c;
           color: #f8fafc;
         }
+
+        .shine-sweep {
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 40%;
+          height: 100%;
+          background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0) 100%);
+          transform: skewX(-30deg);
+          animation: sweep-animation 8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes sweep-animation {
+          0% { left: -100%; }
+          25% { left: 150%; }
+          100% { left: 150%; }
+        }
       `}</style>
     </main>
   );
@@ -72,35 +88,80 @@ function HeroSection() {
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
           <span className="badge badge--live">
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-            World Cup 2026
+            Live Now
           </span>
-          <span className="badge badge--primary">Powered by TxODDS</span>
+          <span className="badge badge--primary">Powered by ESPN</span>
         </div>
 
         {/* Main Headline */}
-        <h1 className="text-shine-glow" style={{
-          fontSize: 'clamp(2.2rem, 5.5vw, 4.5rem)',
-          fontWeight: 900,
-          lineHeight: 1.1,
-          marginBottom: 24,
-          letterSpacing: '-0.01em',
+        <h1 style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 20,
+          marginTop: 10,
         }}>
-          <span style={{ display: 'block', fontSize: '1rem', color: '#ffd700', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 'bold' }}>ファンタジーフットボール</span>
-          <span className="white-text-shiny">Fantasy F</span>
-          <span className="bounce-ball" style={{ display: 'inline-block', fontSize: '0.62em', verticalAlign: 'middle', lineHeight: 1, position: 'relative', top: '-0.01em' }}>⚽</span>
-          <span className="white-text-shiny">otball</span>
-          <br />
-          <span className="meets-onchain-prizes-shiny">Meets On-Chain Prizes</span>
+          <span style={{ 
+            display: 'block', 
+            fontSize: '1.4rem', 
+            color: '#ffd700', 
+            letterSpacing: '0.2em', 
+            textTransform: 'uppercase', 
+            marginBottom: '-60px', 
+            fontWeight: 'bold',
+            position: 'relative',
+            top: '-20px',
+            zIndex: 10
+          }}>ファンタジーフットボール</span>
+          <div style={{
+              position: 'relative',
+              marginTop: '-50px',
+              marginBottom: '-130px',
+              zIndex: 1,
+              transform: 'scale(1.1)',
+              transformOrigin: 'center center',
+              display: 'inline-block'
+          }}>
+            <img 
+              src="/hero%202.svg" 
+              alt="Fantasy Football Meets On-Chain Prizes" 
+              style={{ 
+                maxWidth: '100%', 
+                height: 'auto',
+                maxHeight: '900px',
+                display: 'block',
+                filter: 'drop-shadow(0 0 20px rgba(255, 255, 255, 0.35)) brightness(1.15) contrast(1.1)'
+              }} 
+            />
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              WebkitMaskImage: 'url("/hero%202.svg")',
+              WebkitMaskSize: '100% 100%',
+              WebkitMaskRepeat: 'no-repeat',
+              pointerEvents: 'none',
+              overflow: 'hidden'
+            }}>
+              <div className="shine-sweep" />
+            </div>
+          </div>
         </h1>
 
         <p style={{
           fontSize: 'clamp(1rem, 2vw, 1.25rem)',
-          color: 'var(--text-secondary)',
-          maxWidth: 600,
+          color: '#ffffff',
+          maxWidth: 800,
           margin: '0 auto 40px',
           lineHeight: 1.7,
+          position: 'relative',
+          zIndex: 5
         }}>
-          Collect Skill Cards. Equip upgrades. Build your lineup, pick your captain, and win SOL — the more you play, the stronger your squad gets.
+          Collect Skill Cards. Equip upgrades. Build your lineup, pick your captain,<br />
+          and win USDC — the more you play, the stronger your squad gets.
         </p>
 
         {/* CTA Buttons */}
@@ -127,9 +188,9 @@ function HeroSection() {
           flexWrap: 'wrap',
         }}>
           {[
-            { icon: <span>⚡</span>, text: 'Live TxODDS Data' },
+            { icon: <span>⚡</span>, text: 'Live ESPN Data' },
             { icon: <span>🔗</span>, text: 'On-Chain Prizes' },
-            { icon: <span>🏆</span>, text: 'World Cup 2026' },
+            { icon: <span>🏆</span>, text: 'Multi-League' },
             { icon: (
                 <svg viewBox="0 0 508.07 398.17" width="14" height="12" style={{ display: 'block' }}>
                   <defs>
@@ -184,9 +245,9 @@ function RecentlyFinishedBar() {
       <div className="container">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <img src="/2026_FIFA_World_Cup_emblem.svg" alt="World Cup 2026" style={{ height: '36px', objectFit: 'contain' }} />
+            <img src="/icon.png" alt="OddsDraft" style={{ height: '28px', objectFit: 'contain' }} />
             <span style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
-              FIFA WORLD CUP 2026 - RECENTLY FINISHED:
+              RECENTLY FINISHED:
             </span>
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -195,7 +256,7 @@ function RecentlyFinishedBar() {
                 <FlagImage flag={match.homeFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.homeTeam}</span>
                 <span style={{ fontFamily: 'Bebas Neue, cursive', fontSize: '1.1rem', color: '#00e5ff', margin: '0 2px', textShadow: '0 0 6px rgba(0,229,255,0.6)' }}>
-                  {match.scoreHome ?? '-'} - {match.scoreAway ?? '-'}
+                  {match.scoreHome ?? '-'} - {match.scoreAway ?? '-'} (FT)
                 </span>
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.05em', color: '#f8fafc' }}>{match.awayTeam}</span>
                 <FlagImage flag={match.awayFlag} size={20} style={{ filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.2))' }} />
@@ -208,14 +269,14 @@ function RecentlyFinishedBar() {
   );
 }
 
-// UpcomingBar — fetches from /api/schedule/wc2026 (TxLINE primary, backup fallback)
+// UpcomingBar — fetches from /api/schedule/all (ESPN primary, backup fallback)
 // and shows the next 3 upcoming WC 2026 fixtures in the same white WC-logo style
 // as the "recently finished" bar. Rendered independently of the live ticker state.
 function UpcomingBar() {
   const [upcoming, setUpcoming] = useState<{ homeTeam: string; awayTeam: string; homeFlag: string; awayFlag: string; kickoffAt: string }[]>([]);
 
   useEffect(() => {
-    fetch('/api/schedule/wc2026')
+    fetch('/api/schedule/all')
       .then(r => r.json())
       .then((fixtures: any[]) => {
         const now = Date.now();
@@ -235,17 +296,13 @@ function UpcomingBar() {
   if (upcoming.length === 0) return null;
 
   return (
-    <div style={{ padding: '6px 0', overflow: 'hidden' }}>
+    <div style={{ background: '#ffffff', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', padding: '6px 0', color: '#0f172a', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
       <div className="container">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <img
-              src="/2026_FIFA_World_Cup_emblem.svg"
-              alt="World Cup 2026"
-              style={{ height: '36px', objectFit: 'contain' }}
-            />
-            <span style={{ fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
-              FIFA WORLD CUP 2026 - UPCOMING:
+            <img src="/logo_oddsdraft.svg" alt="OddsDraft" style={{ height: '28px', objectFit: 'contain', filter: 'invert(1)' }} />
+            <span style={{ color: '#0f172a', fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+              UPCOMING MATCHES:
             </span>
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -279,10 +336,10 @@ function UpcomingBar() {
 
 function StatsSection() {
   const stats = [
-    { value: '48', label: 'Teams', sub: 'Qualified Nations' },
-    { value: '104', label: 'Matches', sub: 'Total Tournament Games' },
-    { value: '0.1 SOL', label: 'Entry Fee', sub: 'Low Entry Cost' },
-    { value: '100%', label: 'Prizes', sub: 'Distributed On-Chain' },
+    { value: '100+', label: 'Teams', sub: 'Top Global Clubs' },
+    { value: '1000+', label: 'Matches', sub: 'Weekly League Games' },
+    { value: 'Custom', label: 'Entry Fee', sub: 'USDC Flexible Stakes' },
+    { value: '100%', label: 'Prizes', sub: 'USDC Distributed On-Chain' },
   ];
 
   return (
@@ -326,7 +383,7 @@ function StatsSection() {
               </span>
             </div>
             <h2 style={{ fontSize: 'clamp(1.4rem, 2.5vw, 2rem)', fontWeight: 800, margin: 0, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-              2026 World Cup by the Numbers
+              Fantasy Football by the Numbers
             </h2>
           </div>
 
@@ -361,6 +418,54 @@ function StatsSection() {
               </div>
             ))}
           </div>
+
+          {/* League Logos Row */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '32px',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginTop: '24px',
+            paddingTop: '24px',
+            borderTop: '1px solid rgba(255,255,255,0.1)'
+          }}>
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px' }}>Covered Leagues</span>
+            {[
+              { id: 'eng.1', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/23.png', name: 'Premier League' },
+              { id: 'esp.1', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/15.png', name: 'La Liga' },
+              { id: 'ger.1', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/10.png', name: 'Bundesliga' },
+              { id: 'ita.1', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/12.png', name: 'Serie A' },
+              { id: 'fra.1', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/9.png', name: 'Ligue 1' },
+              { id: 'uefa.champions', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/2.png', name: 'Champions League' },
+              { id: 'fifa.world', logo: 'https://a.espncdn.com/i/leaguelogos/soccer/500/4.png', name: 'World Cup' }
+            ].map(l => (
+              <img 
+                key={l.id} 
+                src={l.logo} 
+                alt={l.name} 
+                title={l.name}
+                style={{ 
+                  height: '48px', 
+                  width: '48px', 
+                  objectFit: 'contain',
+                  background: '#ffffff',
+                  padding: '4px',
+                  borderRadius: '50%',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              />
+            ))}
+          </div>
+
         </div>
       </div>
     </section>
@@ -392,9 +497,9 @@ function HowItWorksSection() {
     },
     {
       step: '04',
-      title: 'Lock & Pay Entry',
-      desc: 'Submit lineup before kickoff. Pay 0.1 SOL entry fee to the prize pool.',
-      icon: '🔒',
+      title: 'Submit & Stake',
+      desc: 'Submit lineup before kickoff. Stake any amount of USDC into the prize pool.',
+      icon: '✓',
       color: '#e056fd',
     },
     {
@@ -406,8 +511,8 @@ function HowItWorksSection() {
     },
     {
       step: '06',
-      title: 'Win SOL Prizes',
-      desc: 'Prizes distributed on Solana: Top 3 Classic (50/30/20%), Double Up 50/50, or Winner Takes All — ranked by total fantasy points.',
+      title: 'Win USDC Prizes',
+      desc: 'Prizes distributed on Solana: Proportional USDC Pool, Top 3 Classic, Double Up 50/50, or Winner Takes All — ranked by total fantasy points.',
       icon: '🏆',
       color: '#ff8a00',
     },
@@ -483,8 +588,8 @@ function HowItWorksSection() {
 function FeaturesSection() {
   const features = [
     {
-      title: 'Live TxODDS Data',
-      desc: 'Real-time match data from TxODDS — goals, cards, and events as they happen.',
+      title: 'Live ESPN Data',
+      desc: 'Real-time match data from ESPN — goals, cards, and events as they happen.',
       icon: '⚡',
       color: '#00e5ff',
       tag: 'SYS_LIVE'
@@ -668,16 +773,9 @@ function CTASection() {
             <span>🎮</span>
           </div>
           <div className="ro-window__body" style={{ padding: '48px 32px', textAlign: 'center' }}>
-            <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)', fontWeight: 800, marginBottom: 16 }}>
-              Ready to Play?
-            </h2>
-            <p style={{
-              color: 'var(--text-secondary)',
-              fontSize: '1.05rem',
-              lineHeight: 1.7,
-              marginBottom: 32,
-            }}>
-              World Cup 2026 is happening now. Join a contest, build your lineup, and compete for SOL prizes using live match data.
+            <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: 16 }}>Ready to Draft?</h2>
+            <p style={{ color: '#94a3b8', fontSize: '1.1rem', marginBottom: 32, maxWidth: 400, margin: '0 auto 32px' }}>
+              Top European Leagues are happening now. Join a contest, build your lineup, and compete for USDC prizes using live match data.
             </p>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Link href="/contests" className="btn btn--primary btn--lg" id="cta-join-btn">
@@ -688,10 +786,11 @@ function CTASection() {
                   href="https://faucet.solana.com/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn btn--secondary btn--lg"
+                  className="btn btn--outline"
+                  style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
                   id="cta-airdrop-btn"
                 >
-                  💧 Get Testnet SOL
+                  💧 Get Devnet USDC & SOL
                 </a>
               )}
             </div>
@@ -734,11 +833,7 @@ function Footer() {
           {/* Logo + tagline */}
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#030810', borderRadius: 8, padding: '6px 12px', border: '1px solid rgba(41,182,246,0.2)', marginBottom: 10, width: 'fit-content' }}>
-              <img
-                src="/2026_FIFA_World_Cup_emblem.svg"
-                alt="World Cup 26 Logo"
-                style={{ height: '40px', objectFit: 'contain', display: 'block' }}
-              />
+              <span style={{ fontSize: '40px' }}>⚽</span>
               <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.2)' }} />
               <img
                 src="/logo_oddsdraft.svg"
@@ -747,16 +842,16 @@ function Footer() {
               />
             </div>
             <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5, maxWidth: 240 }}>
-              Fantasy Football.<br />On-chain. Real-time. World Cup '26.
+              Fantasy Football.<br />On-chain. Real-time. Global Leagues.
             </p>
           </div>
 
           {/* Center — power stats */}
           <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center', flex: 1 }}>
             {[
-              { label: 'DATA SOURCE', value: 'TxODDS', sub: 'Live Football API' },
+              { label: 'DATA SOURCE', value: 'ESPN', sub: 'Live Football API' },
               { label: 'BLOCKCHAIN', value: 'SOLANA', sub: 'Ultra-fast L1' },
-              { label: 'TOURNAMENT', value: 'WC 2026', sub: 'USA · CAN · MEX' },
+              { label: 'TOURNAMENT', value: 'GLOBAL', sub: 'Premier League & More' },
             ].map(({ label, value, sub }) => (
               <div key={label} style={{ textAlign: 'center', minWidth: 80 }}>
                 <div style={{ fontSize: '0.55rem', color: '#29b6f6', fontWeight: 700, letterSpacing: '0.15em', marginBottom: 4 }}>{label}</div>
@@ -787,12 +882,12 @@ function Footer() {
                 </svg>
                 @OddsDraft
               </a>
-              <a href="https://txline-docs.txodds.com" target="_blank" rel="noopener noreferrer"
+              <a href="https://www.espn.com/soccer/" target="_blank" rel="noopener noreferrer"
                 style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'color 0.2s' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#ffd700')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z"/></svg>
-                TxODDS Docs
+                ESPN Soccer
               </a>
             </div>
             </div>
