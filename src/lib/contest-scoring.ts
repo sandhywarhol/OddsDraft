@@ -1,5 +1,5 @@
 import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
-import { matchPlayerName } from '@/lib/txline-bridge';
+import { matchPlayerName } from '@/lib/espn-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 // Event types that can move a fantasy score — mirrors what /api/cron/match-events

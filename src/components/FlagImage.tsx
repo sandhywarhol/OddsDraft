@@ -35,7 +35,28 @@ function emojiToCode(emoji: string): string | null {
 export default function FlagImage({ flag, size = 20, style, className }: FlagImageProps) {
   if (!flag) return null;
   const code = emojiToCode(flag);
-  if (!code) return <span style={style} className={className}>{flag}</span>;
+  if (!code) {
+    if (flag.startsWith('http')) {
+      return (
+        <img
+          src={flag}
+          width={Math.round(size * 1.5)}
+          height={size}
+          alt="Club Logo"
+          style={{
+            display: 'inline-block',
+            verticalAlign: 'middle',
+            objectFit: 'contain',
+            borderRadius: 2,
+            flexShrink: 0,
+            ...style,
+          }}
+          className={className}
+        />
+      );
+    }
+    return <span style={style} className={className}>{flag}</span>;
+  }
   const cdnW = size <= 10 ? 20 : size <= 20 ? 40 : size <= 40 ? 80 : 160;
   return (
     <img

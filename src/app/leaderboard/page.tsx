@@ -137,7 +137,7 @@ export default function LeaderboardPage() {
             </div>
             <img 
               src="/fifa_world_cup_2026_logo.webp" 
-              alt="FIFA World Cup 2026 Logo" 
+              alt="Football Leagues Logo" 
               style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'relative', zIndex: 2 }}
             />
           </div>

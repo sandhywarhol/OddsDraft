@@ -1,10 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { resolveEspnEventId } from './espn';
+import { LEAGUES } from './leagues';
 
-// Fallback used when Supabase is unreachable — keep only current unknowns.
-// Spain vs Belgium QF (18210002→18218149) is done; Norway/Argentina QFs now
-// have correct TxLINE IDs directly in wc2026-fixtures.ts. Only SF/Final
-// placeholder IDs need remapping — filled in automatically by discoverAndSync().
-const FALLBACK: Record<string, string> = {};
+// fixture_id_remap table now stores: our_id → espn_id (was: our_id → txline_id)
+// If you have old rows with txline_id, they can coexist — we only look up espn_id here.
 
 // Server-side process-level cache — survives across requests, invalidates every 5 min
 let _cache: Record<string, string> | null = null;
@@ -24,16 +23,20 @@ export async function getFixtureIdRemap(): Promise<Record<string, string>> {
   try {
     const { data, error } = await makeClient()
       .from('fixture_id_remap')
-      .select('our_id, txline_id');
+      .select('our_id, espn_id');
 
     if (!error && data?.length) {
-      _cache = Object.fromEntries(data.map((r: { our_id: string; txline_id: string }) => [r.our_id, r.txline_id]));
+      _cache = Object.fromEntries(
+        data
+          .filter((r: { our_id: string; espn_id: string | null }) => r.espn_id)
+          .map((r: { our_id: string; espn_id: string }) => [r.our_id, r.espn_id])
+      );
       _cacheTime = Date.now();
-      return _cache;
+      return _cache!;
     }
-  } catch { /* fall through to hardcoded fallback */ }
+  } catch { /* fall through */ }
 
-  return FALLBACK;
+  return {};
 }
 
 /** Resolve a single ID — returns ourId unchanged if no mapping exists. */
@@ -42,53 +45,73 @@ export async function getTxLineId(ourId: string): Promise<string> {
   return remap[ourId] ?? ourId;
 }
 
-/** Invalidate the server-side cache (call after a POST /api/fixture-remap). */
+/** Invalidate the server-side cache. */
 export function invalidateRemapCache() {
   _cache = null;
   _cacheTime = 0;
 }
 
 /**
- * Discover the real TxLINE fixture ID for a match we only know by kickoff time.
- * Matches any TxLINE fixture whose StartTime is within ±40 minutes of kickoffISO.
- * If found and different from ourId, writes the mapping to Supabase and returns the TxLINE ID.
- * Returns null when nothing is found (TxLINE may not have the fixture yet).
+ * Discover the real ESPN Event ID for a match we only know by kickoff time.
+ * Searches all tracked leagues for a fixture with matching teams or timing.
+ * If found and different from ourId, writes the espn_id to Supabase.
+ * Returns null when nothing is found.
  */
 export async function discoverAndSync(
   ourId: string,
   kickoffISO: string,
-  appUrl: string,
+  _appUrl: string,   // kept for backward compat but not used — we call ESPN directly
+  leagueSlug?: string,
 ): Promise<string | null> {
   try {
     const kickoffMs = new Date(kickoffISO).getTime();
     if (!kickoffMs) return null;
-    const WINDOW = 90 * 60 * 1000; // ±90 min tolerance (SF kickoffs can be ≥1h off from our static time)
 
-    const res = await fetch(`${appUrl}/api/txline/api/fixtures/snapshot`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const raw = await res.json();
-    const fixtures: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
+    // Try the provided league first, then all leagues
+    const slugsToTry = leagueSlug
+      ? [leagueSlug, ...LEAGUES.map(l => l.espnSlug).filter(s => s !== leagueSlug)]
+      : LEAGUES.map(l => l.espnSlug);
 
-    const match = fixtures.find(f => {
-      const startMs = new Date(f.StartTime ?? '').getTime();
-      return startMs > 0 && Math.abs(startMs - kickoffMs) < WINDOW;
-    });
-    if (!match) return null;
+    // We don't have team names here, so we use resolveEspnEventId differently:
+    // Scan the scoreboard for each league and find by kickoff time proximity.
+    const { fetchEspnFixtures } = await import('./espn');
+    const dateStr = (ms: number) => {
+      const d = new Date(ms);
+      return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+    };
+    const dates = [dateStr(kickoffMs), dateStr(kickoffMs + 24 * 3_600_000)].join(',');
+    const WINDOW = 90 * 60 * 1000; // ±90 min
 
-    const txlineId = String(match.FixtureId ?? match.fixtureId ?? '');
-    if (!txlineId || txlineId === ourId) return txlineId || null;
+    for (const slug of slugsToTry) {
+      try {
+        const fixtures = await fetchEspnFixtures(slug, dates, slug);
+        const match = fixtures.find(f => {
+          const fMs = new Date(f.kickoffAt).getTime();
+          return fMs > 0 && Math.abs(fMs - kickoffMs) < WINDOW;
+        });
+        if (!match) continue;
 
-    // Persist to Supabase so all subsequent requests use the correct ID without re-discovery
-    try {
-      await makeClient()
-        .from('fixture_id_remap')
-        .upsert({ our_id: ourId, txline_id: txlineId }, { onConflict: 'our_id' });
-      invalidateRemapCache();
-      console.log(`[fixture-remap] Auto-synced: ${ourId} → ${txlineId} (${match.Participant1} vs ${match.Participant2})`);
-    } catch (dbErr) {
-      console.warn('[fixture-remap] Supabase write failed (continuing anyway):', dbErr);
+        const espnId = match.espnId;
+        if (!espnId || espnId === ourId) return espnId || null;
+
+        // Persist to Supabase
+        try {
+          await makeClient()
+            .from('fixture_id_remap')
+            .upsert({ our_id: ourId, espn_id: espnId }, { onConflict: 'our_id' });
+          invalidateRemapCache();
+          console.log(`[fixture-remap] Auto-synced: ${ourId} → ESPN ${espnId} (${match.homeTeam} vs ${match.awayTeam})`);
+        } catch (dbErr) {
+          console.warn('[fixture-remap] Supabase write failed (continuing):', dbErr);
+        }
+
+        return espnId;
+      } catch { /* try next league */ }
     }
 
-    return txlineId;
+    return null;
   } catch { return null; }
 }
+
+// ── Backward compat alias ─────────────────────────────────────────────────────
+export { discoverAndSync as discoverAndSyncEspn };

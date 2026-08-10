@@ -72,7 +72,8 @@ export default function Navbar() {
         <div className="navbar__nav">
           <Link href="/contests" className={`navbar__link ${pathname === '/contests' || pathname?.startsWith('/lineup') ? 'navbar__link--active' : ''}`}>Match Schedule</Link>
           <Link href="/teams" className={`navbar__link ${pathname === '/teams' ? 'navbar__link--active' : ''}`}>Teams</Link>
-          <Link href="/leaderboard" className={`navbar__link ${pathname === '/leaderboard' ? 'navbar__link--active' : ''}`}>Leaderboard</Link>
+          <Link href="/standings" className={`navbar__link ${pathname === '/standings' ? 'navbar__link--active' : ''}`}>Standings</Link>
+          {/* <Link href="/leaderboard" className={`navbar__link ${pathname === '/leaderboard' ? 'navbar__link--active' : ''}`}>Leaderboard</Link> */}
           <Link href="/cards" className={`navbar__link ${pathname === '/cards' ? 'navbar__link--active' : ''}`}>My Cards</Link>
           <Link href="/how-it-works" className={`navbar__link ${pathname === '/how-it-works' ? 'navbar__link--active' : ''}`}>How It Works</Link>
         </div>

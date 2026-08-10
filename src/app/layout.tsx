@@ -15,13 +15,13 @@ const spaceMono = Space_Mono({ weight: ['400', '700'], subsets: ['latin'], varia
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.oddsdraft.fun'),
-  title: 'OddsDraft — Predictive Fantasy Football | World Cup 2026',
+  title: 'OddsDraft — Predictive Fantasy Football',
   description:
     'Build your fantasy lineup, predict match outcomes, and win SOL prizes. Powered by TxODDS live football data on Solana.',
-  keywords: ['fantasy football', 'world cup 2026', 'solana', 'prediction market', 'crypto gaming'],
+  keywords: ['fantasy football', 'solana', 'prediction market', 'crypto gaming', 'soccer'],
   openGraph: {
     title: 'OddsDraft — Predictive Fantasy Football',
-    description: 'Fantasy football meets prediction markets. Live World Cup data. On-chain prizes.',
+    description: 'Fantasy football meets prediction markets. Live match data. On-chain prizes.',
     type: 'website',
     url: 'https://www.oddsdraft.fun',
     siteName: 'OddsDraft',
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'OddsDraft — Predictive Fantasy Football',
-    description: 'Fantasy football meets prediction markets. Live World Cup data. On-chain prizes.',
+    description: 'Fantasy football meets prediction markets. Live match data. On-chain prizes.',
     images: ['/homepage.webp'],
     creator: '@oddsdraft',
     site: '@oddsdraft',

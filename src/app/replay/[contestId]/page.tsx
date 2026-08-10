@@ -14,7 +14,7 @@ import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
 import FantasyToast, { type FantasyNotificationItem } from '@/components/FantasyToast';
 import { useTxLine } from '@/context/TxLineContext';
-import { buildPlayerIdMap, convertTxLineUpdates } from '@/lib/txline-bridge';
+import { buildPlayerIdMap, convertTxLineUpdates } from '@/lib/espn-bridge';
 import { fetchLiveScoreUpdates } from '@/lib/txline';
 import CardPackOpener from '@/components/CardPackOpener';
 import FlagImage from '@/components/FlagImage';
@@ -179,7 +179,7 @@ const LIVE_EVENTS = [
   { id: 'xi_fra_demb',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Dembélé',      playerId: 'fra-dembele',   type: 'starting_xi', points: 2, description: 'Dembélé starts on the right wing.' },
   { id: 'xi_fra_giro',  minute: 0, team: 'France',    teamFlag: '🇫🇷', player: 'Giroud',       playerId: 'fra-giroud',    type: 'starting_xi', points: 2, description: 'Giroud leads the line for France.' },
   // Danger signal before Mbappé goal
-  { id: 'e0_d1', minute: 10, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'danger_attack', points: 0, description: 'France pressing high! TxLINE signals HIGH DANGER zone for France.' },
+  { id: 'e0_d1', minute: 10, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'danger_attack', points: 0, description: 'France pressing high! ESPN signals HIGH DANGER zone for France.' },
   // Griezmann assists Mbappé's opener — dataSoccer.assistPlayerId
   { id: 'e_asst_mbap', minute: 11, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'assist', points: 6, description: 'Griezmann threads a perfect through ball into Mbappé\'s path.' },
   { id: 'e1', minute: 12, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'goal', points: 10, goalType: 'Shot', description: 'GOAL! Mbappé fires a powerful shot into the top corner!' },
@@ -189,7 +189,7 @@ const LIVE_EVENTS = [
   { id: 'e3_1', minute: 24, team: 'France', teamFlag: '🇫🇷', player: 'Mbappé', playerId: 'fra-mbappe', type: 'corner_kick', points: 0, description: 'Corner kick awarded to France' },
   { id: 'e4', minute: 31, team: 'France', teamFlag: '🇫🇷', player: 'Dembélé', playerId: 'fra-dembele', type: 'yellow_card', points: -2, description: 'Yellow card for Dembélé after a late challenge.' },
   // Danger signal before Argentina equalizer
-  { id: 'e4_d1', minute: 36, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Argentina in the DANGER zone! TxLINE signals high-danger possession.' },
+  { id: 'e4_d1', minute: 36, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'danger_attack', points: 0, description: 'Argentina in the DANGER zone! ESPN signals high-danger possession.' },
   // Messi assists Lautaro's equaliser header — dataSoccer.assistPlayerId
   { id: 'e_asst_laut', minute: 37, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'Messi delivers a pinpoint cross right onto Lautaro\'s head.' },
   { id: 'e5', minute: 38, team: 'Argentina', teamFlag: '🇦🇷', player: 'L. Martínez', playerId: 'arg-lautaro', type: 'goal', points: 10, goalType: 'Head', description: 'GOAL! Lautaro rises highest and heads it home!' },
@@ -202,7 +202,7 @@ const LIVE_EVENTS = [
   { id: 'e4_5', minute: 45, team: '', teamFlag: '', player: '', type: 'half_time', points: 0, description: 'Half Time! The first half concludes!' },
   { id: 'e4_6', minute: 46, team: '', teamFlag: '', player: '', type: 'kick_off', points: 0, description: 'Second Half Kick Off! We are underway again!' },
   // Danger signal before Giroud goal
-  { id: 'e6_d1', minute: 50, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', playerId: 'fra-giroud', type: 'danger_attack', points: 0, description: 'France building pressure! TxLINE: HighDanger possession for France in the box.' },
+  { id: 'e6_d1', minute: 50, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', playerId: 'fra-giroud', type: 'danger_attack', points: 0, description: 'France building pressure! ESPN: HighDanger possession for France in the box.' },
   // Griezmann assists Giroud header — dataSoccer.assistPlayerId
   { id: 'e_asst_giro', minute: 51, team: 'France', teamFlag: '🇫🇷', player: 'Griezmann', playerId: 'fra-griezmann', type: 'assist', points: 6, description: 'Griezmann whips in a dangerous cross from the right — Giroud is waiting.' },
   { id: 'e7', minute: 52, team: 'France', teamFlag: '🇫🇷', player: 'Giroud', playerId: 'fra-giroud', type: 'goal', points: 10, goalType: 'Head', description: 'GOAL! Giroud powers a towering header into the net!' },
@@ -232,7 +232,7 @@ const LIVE_EVENTS = [
   // E. Martínez saves from Coman — dataSoccer.save
   { id: 'e_save_mart3', minute: 85, team: 'Argentina', teamFlag: '🇦🇷', player: 'E. Martínez', playerId: 'arg-martinez', type: 'goalkeeper_save', points: 1, description: 'E. Martínez pulls off a brilliant save to deny Coman a second!' },
   // Danger signal before Álvarez late goal
-  { id: 'e9_d1', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'danger_attack', points: 0, description: 'Argentina desperate! TxLINE: sustained Danger possession in French half.' },
+  { id: 'e9_d1', minute: 88, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'danger_attack', points: 0, description: 'Argentina desperate! ESPN: sustained Danger possession in French half.' },
   // Messi assists Álvarez late goal — dataSoccer.assistPlayerId
   { id: 'e_asst_alva', minute: 89, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi', playerId: 'arg-messi', type: 'assist', points: 6, description: 'Messi picks out Álvarez with a defence-splitting through ball.' },
   { id: 'e10', minute: 90, team: 'Argentina', teamFlag: '🇦🇷', player: 'Álvarez', playerId: 'arg-alvarez', type: 'goal', points: 10, goalType: 'Shot', description: '90th minute! Álvarez drives a low shot into the bottom corner!' },
@@ -422,7 +422,7 @@ function getDialogData(event: any, step: number, fixture: any, score: { home: nu
       } else if (step === 2) {
         return {
           speakerTitle: 'Alan',
-          text: `"And that's the whistle for the break! It's been an intense first 45 minutes. Let's take a quick look at the midway TxODDS statistics."`,
+          text: `"And that's the whistle for the break! It's been an intense first 45 minutes. Let's take a quick look at the midway ESPN statistics."`,
           commentator2Image: '/NPC/Comentator%202%20Calm.svg',
         };
       } else if (step === 3) {
@@ -1046,7 +1046,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
 
     Promise.all([
       fetchLiveScoreUpdates(apiToken, contestId, guestJwt),
-      buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, guestJwt),
+      buildPlayerIdMap(apiToken, contestId, fixture.homeTeam, fixture.awayTeam, (fixture as any).leagueId || 'fifa.world'),
       fetch('/api/scores/txline').then(r => r.ok ? r.json() : {}).catch(() => ({})),
       fetch(`/api/txline/api/fixtures/lineups/${contestId}`).then(r => r.ok ? r.json() : null).catch(() => null),
       // TxLINE's dedicated lineup endpoint sometimes only lists starters + whichever subs
@@ -1430,7 +1430,7 @@ export default function ReplayPage({ params }: { params: Promise<{ contestId: st
           <div style={{ fontSize: '3rem' }}>⚽</div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>Match Not Found</h1>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 380, lineHeight: 1.7 }}>
-            This fixture is not in the WC 2026 schedule. It may have been a demo match.
+            This fixture is not in the active schedule. It may have been a demo match.
           </p>
           <Link href="/contests" className="btn btn--primary">← Back to Schedule</Link>
         </div>

@@ -153,11 +153,14 @@ export const ARG_ENG_EVENTS: Array<{
   { id: 'ae_rc1',       minute: 57, team: 'Argentina', teamFlag: '🇦🇷', player: 'Romero',       playerId: 'arg-romero',     type: 'red_card',        points: -4,
     description: 'Romero 57\' — RED CARD · Reckless two-footed lunge on Bellingham as he broke into the penalty area · Argentina reduced to 10 men.' },
 
+  { id: 'ae_inj1',      minute: 58, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Bellingham',  playerId: 'eng-bellingham', type: 'injury',          points: 0,
+    description: 'Bellingham 58\' — INJURY · Still feeling the effects of Romero\'s crunching tackle · England\'s physio comes on for treatment.' },
+
   { id: 'ae_asst2',     minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Mac Allister', playerId: 'arg-allister',type: 'assist',          points: 6,
     description: 'Mac Allister 60\' — ASSIST · Disguised through ball, splits England\'s back four, Messi clean through on goal.' },
   { id: 'ae_goal2',     minute: 60, team: 'Argentina', teamFlag: '🇦🇷', player: 'Messi',        playerId: 'arg-messi',      type: 'goal',            points: 11, goalType: 'Shot',
     description: 'Messi 60\' — GOAL · Curling left-foot shot into the top corner from 20 yards · Pickford got fingertips to it · Argentina 1-1 England.' },
-  { id: 'ae_conc2_pic', minute: 60, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',    playerId: 'eng-pickford',   type: 'goal_conceded',   points: -1, silent: true,
+  { id: 'ae_conc2_pic', minute: 60, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Pickford',    playerId: 'eng-pickford',   type: 'goal_conceded',   points: -1,
     description: 'Pickford got a fingertip to Messi\'s curler but couldn\'t keep it out.' },
   { id: 'ae_conc2_sto', minute: 60, team: 'England',   teamFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', player: 'Stones',      playerId: 'eng-stones',     type: 'goal_conceded',   points: -1, silent: true,
     description: 'Stones caught flat-footed by Mac Allister\'s pass — Messi needs no second invitation.' },

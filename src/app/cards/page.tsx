@@ -2438,8 +2438,8 @@ export default function CardsPage() {
             </div>
           </div>
           <img 
-            src="/fifa_world_cup_2026_logo.webp" 
-            alt="FIFA World Cup 2026 Logo" 
+            src="/logo_oddsdraft.svg" 
+            alt="OddsDraft Logo" 
             style={{ height: '100px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'absolute', top: 24, right: 24, zIndex: 2 }}
           />
         </div>

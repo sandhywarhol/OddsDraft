@@ -1,28 +1,39 @@
 'use client';
 
+// MatchContext — replaces the old TxLineContext
+// All live fixture data now comes from the ESPN free API (no auth needed).
+// The context interface is intentionally backward-compatible so existing consumers
+// (live page, page.tsx) continue to work with minimal changes.
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
+// NOTE: subscribeToFreeTier / activateApiAccess are Solana on-chain subscription
+// functions that remain unchanged — they have nothing to do with the data API.
 import { subscribeToFreeTier, activateApiAccess, fetchGuestToken } from '@/lib/txline';
+import type { EspnFixture } from '@/lib/espn';
+import { LEAGUES } from '@/lib/leagues';
 
-interface TxLineContextProps {
+interface MatchContextProps {
   appMode: 'demo' | 'live';
   toggleAppMode: () => void;
   isAdmin: boolean;
 
+  // Kept for backward compat — no longer meaningful with ESPN (no token needed)
   apiToken: string | null;
   guestJwt: string | null;
   isSubscribing: boolean;
   subscribeAndActivate: () => Promise<void>;
   getGuestToken: () => Promise<void>;
   setManualApiToken: (token: string) => void;
-  liveFixtures: any[];
-  allFixtures: any[];
+
+  // ESPN-sourced fixture state
+  liveFixtures: EspnFixture[];   // Currently live matches
+  allFixtures: EspnFixture[];    // All matches for today
   isLoadingFixtures: boolean;
-  /** false when devnet /fixtures returns 404 (live-only mode) */
   fixturesAvailable: boolean;
 }
 
-const TxLineContext = createContext<TxLineContextProps>({
+const MatchContext = createContext<MatchContextProps>({
   appMode: 'demo',
   toggleAppMode: () => {},
   isAdmin: false,
@@ -33,13 +44,14 @@ const TxLineContext = createContext<TxLineContextProps>({
   subscribeAndActivate: async () => {},
   getGuestToken: async () => {},
   setManualApiToken: () => {},
+
   liveFixtures: [],
   allFixtures: [],
   isLoadingFixtures: false,
   fixturesAvailable: true,
 });
 
-export const useTxLine = () => useContext(TxLineContext);
+export const useTxLine = () => useContext(MatchContext);
 
 // Read localStorage safely (SSR guard)
 function lsGet(key: string): string | null {
@@ -54,9 +66,9 @@ function lsSet(key: string, value: string) {
 const ADMIN_WALLET = process.env.NEXT_PUBLIC_ADMIN_WALLET ?? 'FwHtKFZY6jRqhtczE7Nkwq7pkR7fb3vWq6YqYSYtGcMv';
 
 export const TxLineProvider = ({ children }: { children: ReactNode }) => {
+  // Token kept for Solana subscription flow (not for ESPN — ESPN needs no auth)
   const ENV_TOKEN = process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
 
-  // Initialise synchronously so render #1 already has the token — no async gap.
   const [apiToken, setApiToken] = useState<string | null>(() => {
     const saved = lsGet('txline_api_token') || ENV_TOKEN || null;
     if (saved) lsSet('txline_api_token', saved);
@@ -65,7 +77,6 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
 
   const [appMode, setAppMode] = useState<'demo' | 'live'>(() => {
     const saved = lsGet('txline_app_mode');
-    // Default to live — proxy handles auth server-side, no client token needed
     const isDemo = saved === 'demo';
     if (!isDemo) lsSet('txline_app_mode', 'live');
     return isDemo ? 'demo' : 'live';
@@ -79,14 +90,13 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
 
   const [guestJwt, setGuestJwt] = useState<string | null>(() => lsGet('txline_guest_jwt'));
   const [isSubscribing, setIsSubscribing] = useState(false);
-  const [liveFixtures, setLiveFixtures] = useState<any[]>([]);
-  const [allFixtures, setAllFixtures] = useState<any[]>([]);
+  const [liveFixtures, setLiveFixtures] = useState<EspnFixture[]>([]);
+  const [allFixtures, setAllFixtures] = useState<EspnFixture[]>([]);
   const [isLoadingFixtures, setIsLoadingFixtures] = useState(false);
   const [fixturesAvailable, setFixturesAvailable] = useState(true);
 
   const wallet = useWallet();
   const { connection } = useConnection();
-
   const isAdmin = !!(wallet.publicKey && wallet.publicKey.toString() === ADMIN_WALLET);
 
   // Force non-admin users out of demo mode
@@ -97,75 +107,69 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isAdmin, appMode]);
 
-  // Persist apiToken changes (e.g. after subscription activation)
   useEffect(() => {
     if (apiToken) lsSet('txline_api_token', apiToken);
   }, [apiToken]);
 
-  // Persist guestJwt changes
   useEffect(() => {
     if (guestJwt) lsSet('txline_guest_jwt', guestJwt);
   }, [guestJwt]);
 
-  // Fetch live fixtures periodically — always runs, proxy handles auth server-side
+  // ── Fetch live fixtures from ESPN periodically ─────────────────────────────
+  // ESPN is polled via the schedule API (server-side) so we don't expose raw
+  // ESPN requests from the client browser.
   useEffect(() => {
     let isMounted = true;
-    let consecutive403 = 0;
 
     const fetchFixtures = async () => {
       try {
         setIsLoadingFixtures(true);
 
-        // Use proxy so no client-side token is needed
-        const proxyRes = await fetch('/api/txline/api/fixtures/snapshot', { cache: 'no-store' });
-        if (!proxyRes.ok) throw Object.assign(new Error('fixtures fetch failed'), { response: { status: proxyRes.status } });
-        const raw = await proxyRes.json();
-        const all: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
+        // Fetch from our multi-league schedule endpoint
+        // We pass 'all' to get every league, defaulting to today + next 30 days
+        const res = await fetch('/api/schedule/all', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Schedule fetch failed: ${res.status}`);
 
-        consecutive403 = 0; // reset on success
+        const data: any[] = await res.json();
         if (!isMounted) return;
 
-        // Live states per TxLINE documentation (string names from score updates)
-        const liveStateStrings = ['firsthalf', 'secondhalf', 'halftime', 'extratimefirsthalf',
-          'extratimehalftime', 'extratimesecondhalf', 'penalties', 'inprogress', 'live'];
-        // TxLINE fixture snapshot uses integer GameState codes (2=FirstHalf, 3=HalfTime, 4=SecondHalf, etc.)
-        const liveStateInts = new Set([2, 3, 4, 5, 6, 7, 8]);
-        const live = all.filter((f: any) => {
-          const rawState = f.GameState ?? f.gameState ?? f.Status ?? f.status;
-          const intState = typeof rawState === 'number' ? rawState : null;
-          const strState = typeof rawState === 'string' ? rawState.toLowerCase() : '';
-          const stateMatch = (intState !== null && liveStateInts.has(intState))
-            || liveStateStrings.some(s => strState.includes(s));
-          // TxLINE sometimes reports "scheduled" even when match is running — use Clock as fallback
-          const clockRunning = f.Clock?.Running === true || f.clock?.running === true;
-          // Do NOT use kickoff time as a live signal — a delayed match will still have
-          // past StartTime but TxLINE correctly keeps it as "Scheduled".
-          return stateMatch || clockRunning;
-        });
+        const all: EspnFixture[] = data.map((f: any): EspnFixture => ({
+          espnId: f.fixtureId,
+          leagueId: f.leagueId,
+          homeTeam: f.homeTeam,
+          awayTeam: f.awayTeam,
+          homeTeamId: f.homeTeamId ?? '',
+          awayTeamId: f.awayTeamId ?? '',
+          homeLogo: f.homeFlag?.startsWith('http') ? f.homeFlag : '',
+          awayLogo: f.awayFlag?.startsWith('http') ? f.awayFlag : '',
+          homeScore: f.homeScore ?? null,
+          awayScore: f.awayScore ?? null,
+          kickoffAt: f.kickoffAt,
+          statusState: f.completed ? 'post' : (f.statusState ?? 'pre'),
+          statusDescription: f.statusDescription ?? '',
+          completed: !!f.completed,
+          clockDisplay: f.clockDisplay ?? '',
+          period: f.period ?? 0,
+        }));
 
-        console.log(`[TxLINE] Fixtures: ${all.length} total, ${live.length} live`);
+        const live = all.filter(f => f.statusState === 'in');
+
+        console.log(`[ESPN] Fixtures: ${all.length} total, ${live.length} live`);
         setAllFixtures(all);
         setLiveFixtures(live);
         setFixturesAvailable(true);
       } catch (error: any) {
-        const status = error.response?.status ?? 0;
-        if (status === 404) {
-          setFixturesAvailable(false);
-        } else if (status >= 400) {
-          consecutive403++;
-          if (consecutive403 > 3) {
-            console.warn('[TxLINE] Repeated fixture errors, backing off');
-          }
-        } else {
-          console.log('[TxLINE] Error fetching fixtures:', error.message);
-        }
+        if (!isMounted) return;
+        console.error('[ESPN] Error fetching fixtures:', error.message);
+        setFixturesAvailable(false);
       } finally {
         if (isMounted) setIsLoadingFixtures(false);
       }
     };
 
     fetchFixtures();
-    const pollRate = appMode === 'live' ? 10000 : 60000;
+    // Poll every 60s in live mode, every 5min in demo
+    const pollRate = appMode === 'live' ? 60_000 : 5 * 60_000;
     const interval = setInterval(fetchFixtures, pollRate);
 
     return () => {
@@ -174,6 +178,7 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [appMode]);
 
+  // ── Solana subscription (unchanged — not ESPN related) ────────────────────
   const getGuestToken = async () => {
     try {
       setIsSubscribing(true);
@@ -197,33 +202,19 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   const subscribeAndActivate = async () => {
     try {
       setIsSubscribing(true);
-
-      // Check if there's a pending txSig from a previous failed activation
       let txSig = lsGet('txline_pending_txsig');
-
       if (!txSig) {
-        console.log('[TxLINE] Subscribing on-chain...');
         txSig = await subscribeToFreeTier(wallet, connection);
-        console.log('[TxLINE] Subscription tx:', txSig);
         lsSet('txline_pending_txsig', txSig);
-      } else {
-        console.log('[TxLINE] Reusing pending txSig from previous attempt:', txSig);
       }
-
-      console.log('[TxLINE] Activating API access...');
       const { token, guestJwt: jwt } = await activateApiAccess(wallet, txSig);
-      console.log('[TxLINE] Activated! Token:', `${token.substring(0, 20)}...`);
-
       setApiToken(token);
       setGuestJwt(jwt);
       lsSet('txline_guest_jwt', jwt);
       try { localStorage.removeItem('txline_pending_txsig'); } catch { /* ignore */ }
     } catch (error: any) {
-      // Log full details so we can diagnose the exact failure in browser DevTools
-      console.error('[TxLINE] Failed to subscribe & activate:', error);
-      if (error?.logs?.length) console.error('[TxLINE] TX logs:', error.logs.join('\n'));
-      if (error?.message) console.error('[TxLINE] message:', error.message);
-      if (error?.code) console.error('[TxLINE] code:', error.code);
+      console.error('[TxLine Subscription] Failed:', error);
+      if (error?.logs?.length) console.error('TX logs:', error.logs.join('\n'));
       throw error;
     } finally {
       setIsSubscribing(false);
@@ -231,8 +222,17 @@ export const TxLineProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <TxLineContext.Provider value={{ appMode, toggleAppMode, isAdmin, apiToken, guestJwt, isSubscribing, subscribeAndActivate, getGuestToken, setManualApiToken, liveFixtures, allFixtures, isLoadingFixtures, fixturesAvailable }}>
+    <MatchContext.Provider value={{
+      appMode, toggleAppMode, isAdmin,
+      apiToken, guestJwt, isSubscribing,
+      subscribeAndActivate, getGuestToken, setManualApiToken,
+      liveFixtures, allFixtures, isLoadingFixtures, fixturesAvailable,
+    }}>
       {children}
-    </TxLineContext.Provider>
+    </MatchContext.Provider>
   );
 };
+
+// ── MatchContext export (new name) ─────────────────────────────────────────────
+export const useMatch = () => useContext(MatchContext);
+export const MatchProvider = TxLineProvider; // alias

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { mergeEvents } from '@/lib/txline';
-import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
+import { matchPlayerName, buildPlayerIdMap } from '@/lib/espn-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 const supabase = createClient(

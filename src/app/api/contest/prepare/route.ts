@@ -15,12 +15,17 @@ import {
   Keypair,
   Transaction,
   sendAndConfirmTransaction,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   deriveContestPDA,
   buildInitializeContestIx,
   ODDSDRAFT_PROGRAM_ID,
+  deriveUsdcContestPDA,
+  buildInitUsdcContestIx,
 } from '@/lib/oddsdraft-anchor';
 
 const SMART_CONTRACT_ENABLED =
@@ -51,6 +56,61 @@ export async function GET(req: NextRequest) {
   const rpc = isDevnet ? 'https://api.devnet.solana.com' : (process.env.SERVER_SOLANA_RPC ?? 'https://api.mainnet-beta.solana.com');
   const connection = new Connection(rpc, 'confirmed');
 
+  if (contestType === 'usdc_pool') {
+    const [usdcContestPDA] = deriveUsdcContestPDA(fixtureId);
+    
+    // Check if the USDC Contest PDA already exists
+    const existing = await connection.getAccountInfo(usdcContestPDA);
+    if (existing) {
+      return NextResponse.json({
+        contestPDA: usdcContestPDA.toBase58(),
+        programId: ODDSDRAFT_PROGRAM_ID.toBase58(),
+        initialized: true,
+      });
+    }
+
+    let admin: Keypair;
+    try {
+      admin = loadAdminKeypair();
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message }, { status: 503 });
+    }
+
+    try {
+      const ix = buildInitUsdcContestIx(
+        fixtureId,
+        admin.publicKey,
+        TOKEN_PROGRAM_ID,
+        SystemProgram.programId,
+        SYSVAR_RENT_PUBKEY
+      );
+      const tx = new Transaction().add(ix);
+      const txSig = await sendAndConfirmTransaction(connection, tx, [admin], {
+        commitment: 'confirmed',
+      });
+
+      console.log(`[contest/prepare] initialized usdc_pool ${fixtureId} → ${usdcContestPDA.toBase58()} (${txSig})`);
+
+      return NextResponse.json({
+        contestPDA: usdcContestPDA.toBase58(),
+        programId: ODDSDRAFT_PROGRAM_ID.toBase58(),
+        initialized: true,
+        initTx: txSig,
+      });
+    } catch (err: any) {
+      if (err.message?.includes('already in use') || err.message?.includes('custom program error: 0x0')) {
+        return NextResponse.json({
+          contestPDA: usdcContestPDA.toBase58(),
+          programId: ODDSDRAFT_PROGRAM_ID.toBase58(),
+          initialized: true,
+        });
+      }
+      console.error('[contest/prepare] usdc_pool error:', err);
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+  }
+
+  // --- NATIVE SOL CONTEST FLOW ---
   const [contestPDA] = deriveContestPDA(fixtureId, contestType);
 
   // Check if the Contest PDA already exists

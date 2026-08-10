@@ -55,14 +55,10 @@ export default function HowItWorksPage() {
                 How OddsDraft Works
               </h1>
               <p style={{ color: 'rgba(255,255,255,0.85)', margin: 0 }}>
-                Everything you need to know to start building lineups and winning SOL.
+                Everything you need to know to start building lineups and winning USDC.
               </p>
             </div>
-            <img 
-              src="/fifa_world_cup_2026_logo.webp" 
-              alt="FIFA World Cup 2026 Logo" 
-              style={{ height: '120px', objectFit: 'contain', opacity: 0.95, margin: 0, position: 'relative', zIndex: 2 }}
-            />
+            <img src="/logo_oddsdraft.svg" alt="OddsDraft Logo" style={{ height: '80px', objectFit: 'contain', position: 'relative', zIndex: 2 }} />
           </div>
         </div>
 
@@ -168,22 +164,25 @@ export default function HowItWorksPage() {
               </div>
               <div className="ro-window__body" style={{ padding: 24 }}>
                 <p style={{ color: '#cbd5e1', marginBottom: 20, lineHeight: 1.6 }}>
-                  Once the match ends, the smart contract automatically distributes the prize pool based on the contest type you selected:
+                  Once the match ends, the smart contract automatically distributes the USDC prize pool based on the contest type you selected:
                 </p>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 150, background: 'linear-gradient(135deg, rgba(255,215,0,0.1), transparent)', border: '1px solid rgba(255,215,0,0.3)', padding: 20, borderRadius: 8, textAlign: 'center', boxShadow: 'inset 0 1px 1px rgba(255,215,0,0.1)' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏆</div>
-                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#ffd700' }}>Top 3 Classic</div>
-                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>50% / 30% / 20%</div>
+                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>💎</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#ffd700' }}>USDC Pool</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>Custom Entry Amount</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>Proportional Payout based on Total Stake & Rank</div>
                   </div>
                   <div style={{ flex: 1, minWidth: 150, background: 'linear-gradient(135deg, rgba(16,185,129,0.1), transparent)', border: '1px solid rgba(16,185,129,0.3)', padding: 20, borderRadius: 8, textAlign: 'center', boxShadow: 'inset 0 1px 1px rgba(16,185,129,0.1)' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚖️</div>
-                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#10b981' }}>Double Up 50/50</div>
-                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>Top 50% Win</div>
+                    <div style={{ fontSize: '2rem', marginBottom: 8 }}>🏆</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#10b981' }}>Top 3 Classic</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>Fixed Entry</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>50% / 30% / 20%</div>
                   </div>
                   <div style={{ flex: 1, minWidth: 150, background: 'linear-gradient(135deg, rgba(255,77,109,0.1), transparent)', border: '1px solid rgba(255,77,109,0.3)', padding: 20, borderRadius: 8, textAlign: 'center', boxShadow: 'inset 0 1px 1px rgba(255,77,109,0.1)' }}>
                     <div style={{ fontSize: '2rem', marginBottom: 8 }}>💀</div>
                     <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#ff4d6d' }}>Winner Takes All</div>
+                    <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>Fixed Entry</div>
                     <div style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: 4 }}>1st gets 100%</div>
                   </div>
                 </div>
@@ -211,7 +210,7 @@ export default function HowItWorksPage() {
                   </div>
                   <div style={{ background: 'rgba(0,232,122,0.05)', padding: 16, borderRadius: 8, border: '1px solid rgba(0,232,122,0.15)' }}>
                     <strong style={{ color: '#00e87a', display: 'block', marginBottom: 6 }}>Solana — Settlement Layer</strong>
-                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Entry fees are sent to a Solana treasury wallet. Final rankings are computed server-side from live TxLINE event data, then prize SOL is distributed on-chain — verifiable on Solana Explorer by any participant.</span>
+                    <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Entry fees are sent to a Solana treasury wallet. Final rankings are computed server-side from live TxLINE event data, then prize USDC/SOL is distributed on-chain — verifiable on Solana Explorer by any participant.</span>
                   </div>
                 </div>
               </div>

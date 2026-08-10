@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SCORING_EVENTS, computeParticipantPoints } from '@/lib/contest-scoring';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
-import { matchPlayerName } from '@/lib/txline-bridge';
+import { matchPlayerName } from '@/lib/espn-bridge';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -85,12 +85,14 @@ export async function GET(req: NextRequest) {
   }
 
   let query = supabase
-    .from('contest_entries')
-    .select('wallet_address, contest_type, created_at, lineup')
+    .from(contestType === 'usdc_pool' ? 'usdc_entries' : 'contest_entries')
+    .select(contestType === 'usdc_pool' 
+      ? 'wallet_address:wallet, created_at, lineup, usdc_amount' 
+      : 'wallet_address, contest_type, created_at, lineup')
     .eq('fixture_id', fixtureId)
     .order('created_at', { ascending: true });
 
-  if (contestType) {
+  if (contestType && contestType !== 'usdc_pool') {
     query = query.eq('contest_type', contestType);
   }
 
@@ -128,9 +130,10 @@ export async function GET(req: NextRequest) {
     ? { homeTeam: wcFixture.homeTeam, awayTeam: wcFixture.awayTeam, homeGoals, awayGoals, started: allRows.length > 0, final: matchFinal }
     : null;
 
-  const participants = (data ?? []).map(entry => ({
+  const participants = (data ?? []).map((entry: any) => ({
     wallet_address: entry.wallet_address,
-    contest_type: entry.contest_type,
+    contest_type: entry.contest_type || 'usdc_pool',
+    usdc_amount: entry.usdc_amount,
     created_at: entry.created_at,
     points: computeParticipantPoints(entry.lineup, events, starterIds, matchCtx),
   }));

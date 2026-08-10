@@ -1,11 +1,14 @@
-// TxODDS API Client — OddsDraft
-// Free tier: SERVICE_LEVEL_ID=12 (World Cup real-time, no TxL tokens needed)
+// OddsDraft Event Utilities
+// TxLINE removed — all live data now comes from ESPN free API.
+// This file retains mapEventToFantasyType (used by cron + live page)
+// and the TxODDS client stub for backward compatibility.
 
 import axios, { AxiosInstance } from 'axios';
 
-const BASE_URL = process.env.TXODDS_BASE_URL || 'https://txline.txodds.com/api';
-const GUEST_AUTH_URL = 'https://txline.txodds.com/auth/guest/start';
-const ACTIVATE_URL = 'https://txline.txodds.com/api/token/activate';
+// No longer used — ESPN is free and needs no auth
+const BASE_URL = '';
+const GUEST_AUTH_URL = '';
+const ACTIVATE_URL = '';
 
 export interface TxODDSFixture {
   FixtureId: string;
@@ -183,63 +186,85 @@ export function parseSoccerEvents(updates: ScoreUpdate[]): SoccerEvent[] {
   return events;
 }
 
-// Map TxODDS event type to fantasy event type
-// All keys come directly from TxLINE dataSoccer field names (lowercased)
+// Map event type string → internal fantasy event type
+// Handles BOTH TxLINE legacy strings (for backward compat with any stored data)
+// AND ESPN event type strings (the active data source).
 export function mapEventToFantasyType(txoddsEvent: SoccerEvent, gameState?: string): string | null {
-  const type = txoddsEvent.type.toLowerCase();
+  const type = txoddsEvent.type.toLowerCase().replace(/\s+/g, '-');
 
-  // Penalty shootout goals and misses — distinguished by gameState
+  // Penalty shootout goals and misses
   if (type === 'goal' && gameState === 'Penalties') return 'penalty_scored';
-  if (type === 'penaltymiss' && gameState === 'Penalties') return 'penalty_missed_shootout';
+  if ((type === 'penaltymiss' || type === 'penalty---missed') && gameState === 'Penalties') return 'penalty_missed_shootout';
 
   const map: Record<string, string> = {
-    goal:              'goal',
-    penalty_outcome:   'goal',   // TxLINE sends penalty_outcome instead of goal for penalties
-    penaltyoutcome:    'goal',
-    penalty_goal:      'goal',
-    penaltygoal:       'goal',
-    goal_penalty:      'goal',
-    penalty_scored:    'goal',
-    penaltyscored:     'goal',
-    yellowcard:        'yellow_card',
-    yellow_card:    'yellow_card',
-    redcard:        'red_card',
-    red_card:       'red_card',
-    owngoal:        'own_goal',
-    own_goal:       'own_goal',
-    substitution:   'substitution',
-    sub:            'substitution',
-    sub_appearance: 'sub_appearance',
-    penaltysave:    'penalty_save',
-    penalty_save:   'penalty_save',
-    save:           'goalkeeper_save',
-    assist:         'assist',
-    var:            'var_review',
-    var_review:     'var_review',
-    penalty:        'penalty_won',
-    penaltymiss:    'penalty_missed',
-    penalty_miss:   'penalty_missed',
-    corner:         'corner_kick',
-    corner_kick:    'corner_kick',
-    // Non-fantasy-scoring events — shown in feed with 0 pts, usable for future stat-based scoring
-    shot:           'shot',
-    shot_on_target: 'shot_on_target',
-    free_kick:      'free_kick',
-    offside:        'offside',
-    // Match flow events — synthesized from GameState but also handle if TxLINE sends them explicitly
-    kickoff:           'kick_off',
-    kick_off:          'kick_off',
-    halftime:          'half_time',
-    half_time:         'half_time',
-    secondhalf:        'kick_off',
-    fulltime:          'full_time',
-    full_time:         'full_time',
-    startingxi:        'starting_xi',
-    starting_xi:       'starting_xi',
-    hydration_break:   'hydration_break',
-    drinks_break:      'hydration_break',
-    waterbreak:        'hydration_break',
-    water_break:       'hydration_break',
+    // ESPN event types (primary source, hyphen-separated)
+    'goal':                    'goal',
+    'penalty---scored':        'goal',
+    'penalty-scored':          'goal',
+    'own-goal':                'own_goal',
+    'yellow-card':             'yellow_card',
+    'red-card':                'red_card',
+    'substitution':            'substitution',
+    'halftime':                'half_time',
+    'half-time':               'half_time',
+    'end-regular-time':        'full_time',
+    'full-time':               'full_time',
+    'kickoff':                 'kick_off',
+    'kick-off':                'kick_off',
+    'start-2nd-half':          'kick_off',
+    'second-half':             'kick_off',
+    'penalty---missed':        'penalty_missed',
+    'missed-penalty':          'penalty_missed',
+    'penalty-save':            'penalty_save',
+    'penalty---save':          'penalty_save',
+    'var-review':              'var_review',
+    'corner-kick':             'corner_kick',
+    'corner':                  'corner_kick',
+    'offside':                 'offside',
+    'free-kick':               'free_kick',
+    'injury':                  'injury',
+    'extra-time':              'extra_time',
+    // Legacy TxLINE event types (underscore-separated, kept for backward compat)
+    'penalty_outcome':         'goal',
+    'penaltyoutcome':          'goal',
+    'penalty_goal':            'goal',
+    'penaltygoal':             'goal',
+    'goal_penalty':            'goal',
+    'penalty_scored':          'goal',
+    'penaltyscored':           'goal',
+    'yellowcard':              'yellow_card',
+    'yellow_card':             'yellow_card',
+    'redcard':                 'red_card',
+    'red_card':                'red_card',
+    'owngoal':                 'own_goal',
+    'own_goal':                'own_goal',
+    'sub':                     'substitution',
+    'sub_appearance':          'sub_appearance',
+    'penaltysave':             'penalty_save',
+    'penalty_save':            'penalty_save',
+    'save':                    'goalkeeper_save',
+    'assist':                  'assist',
+    'var':                     'var_review',
+    'var_review':              'var_review',
+    'penalty':                 'penalty_won',
+    'penaltymiss':             'penalty_missed',
+    'penalty_miss':            'penalty_missed',
+    'corner_kick':             'corner_kick',
+    'shot':                    'shot',
+    'shot_on_target':          'shot_on_target',
+    'free_kick':               'free_kick',
+    'kick_off':                'kick_off',
+    'half_time':               'half_time',
+    'secondhalf':              'kick_off',
+    'full_time':               'full_time',
+    'fulltime':                'full_time',
+    'startingxi':              'starting_xi',
+    'starting_xi':             'starting_xi',
+    'hydration_break':         'hydration_break',
+    'drinks_break':            'hydration_break',
+    'waterbreak':              'hydration_break',
+    'water_break':             'hydration_break',
+    'extra_time':              'extra_time',
   };
   return map[type] || null;
 }

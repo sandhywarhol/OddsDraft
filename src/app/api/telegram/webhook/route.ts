@@ -4,7 +4,7 @@ import { sendMessage, answerCallbackQuery, formatKickoff } from '@/lib/telegram-
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 import { mergeEvents } from '@/lib/txline';
 import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
-import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
+import { matchPlayerName, buildPlayerIdMap } from '@/lib/espn-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 
 const supabase = createClient(

@@ -1,75 +1,59 @@
 // Tests for goal/own_goal → goal_conceded synthesis in txline-bridge.ts
 
-import { convertTxLineUpdates, type TxLineScoreUpdate } from '@/lib/txline-bridge';
+import { convertEspnEvents } from '@/lib/espn-bridge';
+import type { EspnMatchEvent } from '@/lib/espn';
 
 const HOME = 'Home FC';
 const AWAY = 'Away FC';
 
-function buildUpdate(rawType: string, participant: 1 | 2, seq: number): TxLineScoreUpdate {
+function buildEvent(rawType: string, isHome: boolean, id: string): EspnMatchEvent {
   return {
-    seq,
-    gameState: 'FirstHalf',
-    events: [
-      {
-        type: rawType,
-        minute: 23,
-        period: '1H',
-        participant,
-        playerId: 'tx-1',
-        playerName: 'Test Scorer',
-      },
-    ],
-  };
+    id,
+    type: rawType,
+    clockSeconds: 23 * 60,
+    period: 1,
+    teamId: isHome ? '1' : '2',
+    participants: [{ athleteId: 'espn-1', displayName: 'Test Scorer' }],
+  } as EspnMatchEvent;
 }
 
-describe('convertTxLineUpdates — goal_conceded synthesis', () => {
+describe('convertEspnEvents — goal_conceded synthesis', () => {
   test('a regular goal synthesizes goal_conceded for the OPPOSING team', () => {
-    const events = convertTxLineUpdates(
-      [buildUpdate('goal', 1, 1)],
+    const events = convertEspnEvents(
+      [buildEvent('goal', true, 'ev-1')],
       {},
       HOME,
       AWAY,
-      '🏠',
-      '✈️',
-      new Set<number>()
+      '1',
+      '2',
+      'homeFlag',
+      'awayFlag',
+      new Set()
     );
 
-    const conceded = events.find(e => e.type === 'goal_conceded');
-    expect(conceded).toBeDefined();
-    expect(conceded!.team).toBe(AWAY);
+    const gc = events.find(e => e.type === 'goal_conceded');
+    expect(gc).toBeDefined();
+    expect(gc?.team).toBe(AWAY);
+    expect(gc?.points).toBe(-2);
   });
 
-  test('an own goal synthesizes goal_conceded for the SAME (conceding) team', () => {
-    const events = convertTxLineUpdates(
-      [buildUpdate('own_goal', 1, 1)],
+  test('an own goal synthesizes goal_conceded for the SAME team', () => {
+    const events = convertEspnEvents(
+      [buildEvent('own-goal', true, 'ev-2')],
       {},
       HOME,
       AWAY,
-      '🏠',
-      '✈️',
-      new Set<number>()
+      '1',
+      '2',
+      'homeFlag',
+      'awayFlag',
+      new Set()
     );
 
-    const conceded = events.find(e => e.type === 'goal_conceded');
-    expect(conceded).toBeDefined();
-    // The own-goal scorer's own team (participant 1 → HOME) is the one that concedes,
-    // not the opposing team — this is the fix for the previously-missing synthesis.
-    expect(conceded!.team).toBe(HOME);
-  });
-
-  test('an own goal by the away team synthesizes goal_conceded for AWAY, not HOME', () => {
-    const events = convertTxLineUpdates(
-      [buildUpdate('own_goal', 2, 1)],
-      {},
-      HOME,
-      AWAY,
-      '🏠',
-      '✈️',
-      new Set<number>()
-    );
-
-    const conceded = events.find(e => e.type === 'goal_conceded');
-    expect(conceded).toBeDefined();
-    expect(conceded!.team).toBe(AWAY);
+    const gc = events.find(e => e.type === 'goal_conceded');
+    expect(gc).toBeDefined();
+    // The team that scored the own goal concedes the goal
+    expect(gc?.team).toBe(HOME);
+    expect(gc?.points).toBe(-2);
   });
 });

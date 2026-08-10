@@ -713,8 +713,11 @@ export function searchPlayers(query: string, team?: string): Player[] {
 // Demo fixtures (World Cup 2026 - using real match IDs where possible)
 export interface DemoFixture {
   fixtureId: string;
+  leagueId?: string;
   homeTeam: string;
   awayTeam: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
   homeFlag: string;
   awayFlag: string;
   kickoffAt: string;

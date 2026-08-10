@@ -8,7 +8,8 @@ import { DEMO_FIXTURES, getDynamicEvents, ARG_GER_EVENTS } from '@/lib/players';
 import { ARG_ENG_EVENTS, DEMO_ARG_ENG_HOME_LINEUP, DEMO_ARG_ENG_AWAY_LINEUP } from '@/lib/demo-arg-eng';
 import { WC2026_FIXTURES, getFixtureStatus } from '@/lib/wc2026-fixtures';
 import { calculateEventPoints, POINT_MAP, getPrizeForRank, resolvePlayerDelta, ENTRY_FEE_SOL, calculateDistributablePool } from '@/lib/fantasy-engine';
-import { evaluateHalfStats, getPositionScore, STAT_BONUS_LABELS, type HalfStats } from '@/lib/scoring-bank';
+import { computeProportionalPrizes } from '@/lib/usdc';
+import { evaluateFullTimeStats, getPositionScore, STAT_BONUS_LABELS, type FullTimeStats } from '@/lib/scoring-bank';
 import { getRandomTeamFact } from '@/lib/commentaryKnowledge';
 import { useAudio } from '@/context/AudioContext';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -18,7 +19,7 @@ import SkillCardDisplay from '@/components/SkillCardDisplay';
 import { openCardPack, hasOpenedPack, getCardDefByInstanceId, getCardBonusForEvent, getCardInstanceById, type OwnedCard } from '@/lib/card-collection';
 import { type SkillCard, RARITY_COLOR, RARITY_STARS } from '@/lib/skill-cards';
 import { useTxLine } from '@/context/TxLineContext';
-import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName } from '@/lib/txline-bridge';
+import { buildPlayerIdMap, convertTxLineUpdates, matchPlayerName, convertEspnEvents } from '@/lib/espn-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
 import { mergeEvents } from '@/lib/txline';
 import bs58 from 'bs58';
@@ -755,6 +756,40 @@ function getDialogData(
           commentator2Image: '/NPC/Comentator%202.svg',
         };
       }
+    case 'goal_conceded':
+      // TxLINE: synthesized for the conceding side when the opponent scores
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"${player} and the ${team} defense will be gutted by that one! A real sucker punch right when they looked settled."`,
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"That's the standard required at this level. ${team} will need to regroup quickly and respond before this game slips away."`,
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
+        };
+      }
+    case 'injury':
+      // TxLINE: dataSoccer.injury — player down, physio called on
+      if (step === 1) {
+        return {
+          speakerTitle: 'Martin',
+          text: event.description
+            ? `"${event.description}"`
+            : `"${player} is down injured for ${team}. The physio is being called onto the pitch — let's hope it's nothing serious."`,
+          commentator1Image: '/NPC/Komentator%201%20calm.svg',
+        };
+      } else {
+        return {
+          speakerTitle: 'Alan',
+          text: `"A worrying moment. Injuries at this stage of the match can completely change ${team}'s shape and momentum."`,
+          commentator2Image: '/NPC/Comentator%202%20Calm.svg',
+        };
+      }
     case 'penalty_missed_shootout':
       // TxLINE: miss during gameState=Penalties
       if (step === 1) {
@@ -1027,6 +1062,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   // TxLINE player ID → raw TxLINE display name (fallback when player not in our DB)
   const txPlayerNamesRef = useRef<Record<string, string>>({});
   const seenSeqsRef = useRef<Set<number>>(new Set());
+  const seenEventIdsRef = useRef<Set<string>>(new Set());
   const liveInitDoneRef = useRef(false);
   const lastGameStateRef = useRef<string | null>(null);
   const lastClockRunningRef = useRef<boolean | null>(null);
@@ -1081,7 +1117,8 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
   const lineupFetchedRef = useRef(false);
   const lineupRetryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const realLineupRef = useRef<{ home: FormationPlayer[]; away: FormationPlayer[] } | null>(null);
-  const [eventsTab, setEventsTab] = useState<'events' | 'lineups'>('events');
+  const [eventsTab, setEventsTab] = useState<'events' | 'lineups' | 'stats'>('events');
+  const [matchSummary, setMatchSummary] = useState<import('@/lib/espn').EspnSummary | null>(null);
 
   // Pre-loaded equipped card definitions keyed by playerId — avoids per-event localStorage reads
   const equippedCardDefsRef = useRef<Record<string, SkillCard | null>>({});
@@ -1218,8 +1255,17 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                 }
               } catch {}
             }
-            const prizeSol = getPrizeForRank(rank, contestType, n);
-            const prize = prizeSol > 0 ? `${prizeSol.toFixed(4)} SOL` : '–';
+            let prize = '–';
+            if (contestType === 'usdc_pool') {
+              const totalUsdc = list.reduce((sum, l) => sum + (Number((l as any).usdc_amount) || 0), 0) / 1000000;
+              const totalPts = list.reduce((sum, l) => sum + (l.points && l.points > 0 ? l.points : 0), 0);
+              const fraction = totalPts === 0 ? (1 / list.length) : ((p.points ?? 0) / totalPts);
+              const pPrize = totalUsdc * 0.95 * fraction;
+              prize = pPrize > 0 ? `${pPrize.toFixed(2)} USDC` : '–';
+            } else {
+              const prizeSol = getPrizeForRank(rank, contestType, n);
+              prize = prizeSol > 0 ? `${prizeSol.toFixed(4)} SOL` : '–';
+            }
             // The user's own row is kept driven by the client-side event-replay engine
             // (updated instantly as events arrive, and includes skill-card bonuses this
             // server-side preview doesn't factor in) — only pull the server's computed
@@ -1431,30 +1477,33 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     const normStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' ').trim();
     const normHome = normStr(fixture.homeTeam);
     const normAway = normStr(fixture.awayTeam);
+    // With ESPN, allFixtures has espnId — try to find a direct match
     const matched = allFixtures.find((f: any) => {
-      const p1 = normStr(f.Participant1 || '');
-      const p2 = normStr(f.Participant2 || '');
-      return (p1.includes(normHome.split(' ')[0]) || normHome.includes(p1.split(' ')[0]))
-          && (p2.includes(normAway.split(' ')[0]) || normAway.includes(p2.split(' ')[0]));
+      const fHome = normStr(f.homeTeam ?? f.Participant1 ?? '');
+      const fAway = normStr(f.awayTeam ?? f.Participant2 ?? '');
+      return (fHome.includes(normHome.split(' ')[0]) || normHome.includes(fHome.split(' ')[0]))
+          && (fAway.includes(normAway.split(' ')[0]) || normAway.includes(fAway.split(' ')[0]));
     });
     if (matched) {
-      const resolvedId = matched.FixtureId || matched.fixtureId || matched.id;
+      const resolvedId = (matched as any).espnId ?? (matched as any).FixtureId ?? (matched as any).fixtureId ?? (matched as any).id;
       if (resolvedId && String(resolvedId) !== String(txlineFixtureIdRef.current)) {
         console.log(`[LivePage] Late fixture ID resolution: ${txlineFixtureIdRef.current} → ${resolvedId}`);
         txlineFixtureIdRef.current = resolvedId;
       }
     } else {
-      // Team-name match failed — try kickoff time as last resort (covers SF/Final with unknown teams)
+      // Time-based match as last resort
       const kickoffMs = new Date(fixture.kickoffAt).getTime();
       const TIME_WINDOW = 40 * 60 * 1000;
       const timeMatched = allFixtures.find((f: any) => {
-        const startMs = new Date(f.StartTime ?? '').getTime();
+        const startMs = new Date((f as any).kickoffAt ?? (f as any).StartTime ?? '').getTime();
         return startMs > 0 && Math.abs(startMs - kickoffMs) < TIME_WINDOW;
       });
       if (timeMatched) {
-        const resolvedId = timeMatched.FixtureId || timeMatched.fixtureId || timeMatched.id;
+        const resolvedId = (timeMatched as any).espnId ?? (timeMatched as any).FixtureId ?? (timeMatched as any).fixtureId ?? (timeMatched as any).id;
         if (resolvedId && String(resolvedId) !== String(txlineFixtureIdRef.current)) {
-          console.log(`[LivePage] Late resolution by kickoff time: ${txlineFixtureIdRef.current} → ${resolvedId} (${timeMatched.Participant1} vs ${timeMatched.Participant2})`);
+          const p1 = (timeMatched as any).homeTeam ?? (timeMatched as any).Participant1 ?? '';
+          const p2 = (timeMatched as any).awayTeam ?? (timeMatched as any).Participant2 ?? '';
+          console.log(`[LivePage] Late resolution by kickoff time: ${txlineFixtureIdRef.current} → ${resolvedId} (${p1} vs ${p2})`);
           txlineFixtureIdRef.current = resolvedId;
         }
       }
@@ -1676,15 +1725,12 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
   // ── Shared helper: apply stats-based bonuses to lineup at HT/FT ─────────────
   // Called from both live-mode polling and demo-mode event trigger.
-  const applyStatsBonuses = (stats: HalfStats, minute: number) => {
+  const applyStatsBonuses = (stats: FullTimeStats, minute: number) => {
     if (!userLineupRef.current?.players?.length) return;
     const { players, captain, confidence } = userLineupRef.current;
-    const bonuses = evaluateHalfStats(stats);
+    const bonuses = evaluateFullTimeStats(stats);
     let totalDelta = 0;
 
-    // Only award HT/FT stats bonuses to players who actually took the field.
-    // Uses the same guard as the appearance-bonus logic so confirmed bench players
-    // (starter === false in TxLINE lineup) are never awarded stat bonuses.
     const realStarters = getRealStarterIds();
 
     for (const bonus of bonuses) {
@@ -1693,8 +1739,6 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
 
       for (const p of (players as any[])) {
         if (!p?.id || p.team !== bonusTeam) continue;
-        // Skip confirmed bench players — only starters and subs who entered the game
-        // (appearedPlayersRef) qualify for stats bonuses.
         if (realStarters && !realStarters.has(p.id) && !appearedPlayersRef.current.has(p.id)) continue;
         const basePts = getPositionScore(bonus.eventType, p.position);
         if (basePts === 0) continue;
@@ -1726,16 +1770,15 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalDelta) * 100) / 100 } : e);
         return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
       });
-      const label = minute <= 45 ? 'Half Time Analysis' : 'Full Time Analysis';
       setActiveToasts(prev => [{
         id: `toast-stats-${minute}-${Date.now()}`,
         type: 'possession_bonus' as any,
-        title: label,
+        title: 'Full Time Analysis',
         subtitle: 'Stats bonuses applied',
         value: totalDelta > 0 ? `+${Math.round(totalDelta * 100) / 100} pts` : `${Math.round(totalDelta * 100) / 100} pts`,
       }, ...prev]);
     }
-  };
+  };;
 
   // ── LIVE MODE: TxLINE API polling ──────────────────────────────────────────
   useEffect(() => {
@@ -2076,30 +2119,31 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const normHome = normStr(fixture.homeTeam);
         const normAway = normStr(fixture.awayTeam);
         const matched = fixturePool.find((f: any) => {
-          const p1 = normStr(f.Participant1 || f.homeTeam?.name || f.home || '');
-          const p2 = normStr(f.Participant2 || f.awayTeam?.name || f.away || '');
+          const p1 = normStr((f as any).homeTeam ?? (f as any).Participant1 ?? '');
+          const p2 = normStr((f as any).awayTeam ?? (f as any).Participant2 ?? '');
           return (p1.includes(normHome.split(' ')[0]) || normHome.includes(p1.split(' ')[0]))
               && (p2.includes(normAway.split(' ')[0]) || normAway.includes(p2.split(' ')[0]));
         });
         if (matched) {
-          const resolvedId = matched.FixtureId || matched.fixtureId || matched.id;
+          const resolvedId = (matched as any).espnId ?? (matched as any).FixtureId ?? (matched as any).fixtureId ?? (matched as any).id;
           if (resolvedId && String(resolvedId) !== String(contestId)) {
             console.log(`[LivePage] Fixture ID override (allFixtures): ${txlineFixtureIdRef.current} → ${resolvedId}`);
             txlineFixtureIdRef.current = resolvedId;
           }
         } else {
           // Team-name match failed (e.g. SF/Final with unknown teams) — fall back to kickoff time.
-          // Any TxLINE fixture whose StartTime is within ±40 min of our fixture's kickoff is the same match.
           const kickoffMs = new Date(fixture.kickoffAt).getTime();
           const TIME_WINDOW = 40 * 60 * 1000;
           const timeMatched = fixturePool.find((f: any) => {
-            const startMs = new Date(f.StartTime ?? f.startTime ?? '').getTime();
+            const startMs = new Date((f as any).kickoffAt ?? (f as any).StartTime ?? (f as any).startTime ?? '').getTime();
             return startMs > 0 && Math.abs(startMs - kickoffMs) < TIME_WINDOW;
           });
           if (timeMatched) {
-            const resolvedId = timeMatched.FixtureId || timeMatched.fixtureId || timeMatched.id;
+            const resolvedId = (timeMatched as any).espnId ?? (timeMatched as any).FixtureId ?? (timeMatched as any).fixtureId ?? (timeMatched as any).id;
             if (resolvedId) {
-              console.log(`[LivePage] Fixture ID resolved by kickoff time: ${txlineFixtureIdRef.current} → ${resolvedId} (${timeMatched.Participant1} vs ${timeMatched.Participant2})`);
+              const p1 = (timeMatched as any).homeTeam ?? (timeMatched as any).Participant1 ?? '';
+              const p2 = (timeMatched as any).awayTeam ?? (timeMatched as any).Participant2 ?? '';
+              console.log(`[LivePage] Fixture ID resolved by kickoff time: ${txlineFixtureIdRef.current} → ${resolvedId} (${p1} vs ${p2})`);
               txlineFixtureIdRef.current = resolvedId;
             }
           } else {
@@ -2111,7 +2155,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
       const resolvedFixtureId = txlineFixtureIdRef.current ?? contestId;
 
       // Build player ID map (from lineups or snapshot events)
-      const pMap = await buildPlayerIdMap(apiToken ?? '', resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, guestJwtRef.current);
+      const pMap = await buildPlayerIdMap(apiToken ?? '', resolvedFixtureId, fixture.homeTeam, fixture.awayTeam, (fixture as any).leagueId || 'fifa.world');
       if (isMounted) {
         playerIdMapRef.current = pMap;
         console.log(`[LivePage] Player map — ${Object.keys(pMap).length} players matched`);
@@ -2250,13 +2294,27 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         }
       };
 
-      // Fetch lineup and snapshot in PARALLEL so lineup is available when appearance bonus is awarded.
+      const fetchEspnStats = async () => {
+        try {
+          const espnId = (fixture as any).espnId || contestId;
+          const res = await fetch(`/api/espn/summary?leagueId=${(fixture as any).leagueId}&eventId=${espnId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted) setMatchSummary(data);
+          }
+        } catch (err) {
+          console.error('[LivePage] ESPN stats fetch failed:', err);
+        }
+      };
+
+      // Fetch lineup, snapshot, and stats in PARALLEL so lineup is available when appearance bonus is awarded.
       // lineupPromise is awaited jointly with the snapshot via Promise.allSettled below.
       const lineupPromise = fetchLineup();
       if (!lineupFetchedRef.current) {
         if (lineupRetryTimerRef.current) clearInterval(lineupRetryTimerRef.current);
         lineupRetryTimerRef.current = setInterval(fetchLineup, 15_000);
       }
+      fetchEspnStats();
 
       // Load all events that happened before we connected via the score snapshot.
       // Await lineup in parallel so realLineupRef is populated before we award appearance bonus.
@@ -2386,748 +2444,101 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
     };
 
     const poll = async () => {
-      if (!txlineFixtureIdRef.current) return;
-      // Once the match is confirmed complete, stop pulling further updates — TxLINE's feed
-      // can keep emitting/correcting data long after full time, which otherwise makes stats
-      // like Shots/Danger Attacks/Goalkeeper Saves silently drift upward for as long as the
-      // tab stays open instead of staying frozen at the final result.
-      if (matchCompletedRef.current) return;
+      const espnId = (fixture as any).espnId || contestId;
+      if (!espnId || matchCompletedRef.current) return;
+
       try {
-        // Route through server-side Edge proxy — bypasses browser token/IP limitations
-        const updatesRes = await fetch(`/api/txline/api/scores/updates/${txlineFixtureIdRef.current}`);
-        const updatesRawArr = updatesRes.ok ? await updatesRes.json() : null;
-        const raw = Array.isArray(updatesRawArr) && updatesRawArr.length > 0
-          ? mergeEvents(updatesRawArr)
-          : (updatesRawArr ?? null);
-        if (!isMounted) return;
+        const res = await fetch(`/api/espn/summary?leagueId=${(fixture as any).leagueId}&eventId=${espnId}`);
+        const data = res.ok ? await res.json() : null;
+        if (!isMounted || !data) return;
 
-        // null = 404 (fixture not live on TxLINE yet) — try snapshot fallback
-        if (raw === null) {
-          const snapRes = await fetch(`/api/txline/api/scores/snapshot/${txlineFixtureIdRef.current}`);
-          const snapRawArr = snapRes.ok ? await snapRes.json() : null;
-          const snap = Array.isArray(snapRawArr) && snapRawArr.length > 0 ? mergeEvents(snapRawArr) : snapRawArr;
-          if (snap && isMounted) {
-            const snapUpdates = Array.isArray(snap) ? snap : [snap];
-            const latest = snapUpdates[snapUpdates.length - 1];
-            const s = latest?.score ?? (latest?.Score ? { home: latest.Score.Home ?? 0, away: latest.Score.Away ?? 0 } : null);
-            if (s) { setScore({ home: s.home ?? 0, away: s.away ?? 0 }); scoreRef.current = { home: s.home ?? 0, away: s.away ?? 0 }; }
-          }
-          setTxlineStatus('waiting');
-          return;
+        setMatchSummary(data);
+
+        if (data.homeScore !== null && data.awayScore !== null) {
+          setScore({ home: data.homeScore, away: data.awayScore });
         }
 
-        // raw is a merged state object with _allEvents = array of individual events.
-        // TxLINE sends up to 3 events per logical action, all sharing the same Id:
-        //   1. Confirmed=false (tentative, empty Data)
-        //   2. Confirmed=true  (partial data, e.g. no PlayerId yet)
-        //   3. Confirmed=true  (full data, PlayerId present)
-        // Strategy: drop Confirmed=false, then deduplicate by Id keeping the LAST
-        // (highest Seq) entry so we always get the most complete confirmed data.
-        const rawAll = (Array.isArray((raw as any)?._allEvents)
-          ? (raw as any)._allEvents
-          : (Array.isArray(raw) ? raw : [raw]))
-          .filter((e: any) => e.Confirmed !== false);
-        const idToEvent = new Map<number | string, any>();
-        for (const e of rawAll) {
-          const key = e.Id ?? e.id ?? e.Seq ?? e.seq;
-          idToEvent.set(key, e); // later (higher Seq) entry overwrites earlier for same Id
-        }
-        const allIndividualEvents: any[] = Array.from(idToEvent.values());
-        const updates = allIndividualEvents.map(normalizeUpdate);
-        if (updates.length === 0) { setTxlineStatus('waiting'); return; }
-        setTxlineStatus('live');
-
-        // Authoritative state comes from the merged object, not the last individual event
-        const mergedState = normalizeUpdate(raw);
-        const latest = mergedState;
-
-        // ── Devnet loop / regression guard (mirrors the cron) ────────────────────
-        // The devnet feed replays finished matches from kickoff. Never let the live
-        // display go backwards: if this poll reports fewer goals or an earlier minute
-        // than we've already shown, it's a loop replay — freeze the last good state
-        // (score, events, minute) and skip the rest of this tick. Real matches only
-        // ever move forward, so this can't hide legitimate updates.
-        {
-          const inGoals = (latest?.score?.home ?? 0) + (latest?.score?.away ?? 0);
-          const hasClock = typeof latest?.clockSeconds === 'number';
-          const inMinute = hasClock ? Math.floor((latest!.clockSeconds as number) / 60) : null;
-          const mp = maxProgressRef.current;
-          const goalsRegressed = inGoals < mp.goals;
-          const minuteRegressed = inMinute !== null && inMinute + 5 < mp.minute;
-          if ((mp.goals > 0 || mp.minute >= 45) && (goalsRegressed || minuteRegressed)) {
-            return; // loop replay — keep the frozen final/last-good state
-          }
-          mp.goals = Math.max(mp.goals, inGoals);
-          if (inMinute !== null) mp.minute = Math.max(mp.minute, inMinute);
-        }
-
-        if (latest?.score) {
-          setScore({ home: latest.score.home ?? 0, away: latest.score.away ?? 0 });
-          scoreRef.current = { home: latest.score.home ?? 0, away: latest.score.away ?? 0 };
-        }
-        if (latest?.periodStats) {
-          setTxlinePeriodStats(latest.periodStats);
-          txlinePeriodStatsRef.current = latest.periodStats;
-        }
-
-        // ── Retroactive stats bonuses: fire once if user joined after halftime/fulltime ──
-        // Normal path awards bonuses on the HalfTime/FullTime game-state transition.
-        // If the user opens the page mid-2nd-half or post-match, that transition was missed,
-        // so we apply here as soon as period stats AND lineup are both available.
-        {
-          const catchUpGs = lastGameStateRef.current;
-          const hasLineup = (userLineupRef.current?.players?.length ?? 0) > 0;
-          const ps = txlinePeriodStatsRef.current;
-          if (!halftimePossAwardedRef.current && hasLineup && ps && isMounted &&
-              ['HalfTime','SecondHalf','ExtraTime','Penalties','FullTime'].includes(catchUpGs ?? '')) {
-            halftimePossAwardedRef.current = true;
-            const p1c = possessionCountRef.current[1] ?? 0;
-            const p2c = possessionCountRef.current[2] ?? 0;
-            const totalPoss = p1c + p2c;
-            const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
-            const htStats: HalfStats = {
-              homeGoals:         ps.home.h1.goals   ?? scoreRef.current.home,
-              awayGoals:         ps.away.h1.goals   ?? scoreRef.current.away,
-              homeDangers:       halfDangerCountRef.current[1] ?? 0,
-              awayDangers:       halfDangerCountRef.current[2] ?? 0,
-              homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, ps.home.h1.corners ?? 0),
-              awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, ps.away.h1.corners ?? 0),
-              homePossessionPct: homePct,
-              awayPossessionPct: 100 - homePct,
-            };
-            applyStatsBonuses(htStats, 45);
-          }
-          if (!fulltimePossAwardedRef.current && hasLineup && ps && isMounted &&
-              ['FullTime','ExtraTime','Penalties'].includes(catchUpGs ?? '')) {
-            fulltimePossAwardedRef.current = true;
-            const h2HomeGoals = scoreRef.current.home - (htScoreRef.current?.home ?? 0);
-            const h2AwayGoals = scoreRef.current.away - (htScoreRef.current?.away ?? 0);
-            const p1c = possessionCountRef.current[1] ?? 0;
-            const p2c = possessionCountRef.current[2] ?? 0;
-            const totalPoss = p1c + p2c;
-            const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
-            const ftStats: HalfStats = {
-              homeGoals:         ps.home.h2.goals   ?? Math.max(0, h2HomeGoals),
-              awayGoals:         ps.away.h2.goals   ?? Math.max(0, h2AwayGoals),
-              homeDangers:       halfDangerCountRef.current[1] ?? 0,
-              awayDangers:       halfDangerCountRef.current[2] ?? 0,
-              homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, ps.home.h2.corners ?? 0),
-              awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, ps.away.h2.corners ?? 0),
-              homePossessionPct: homePct,
-              awayPossessionPct: 100 - homePct,
-            };
-            applyStatsBonuses(ftStats, 90);
-          }
-        }
-
-        // ── Clock tracking — update live minute display from TxLINE Clock.Seconds ──
-        const pollClockRunning: boolean | undefined = latest?.clockRunning;
-        const pollClockSeconds: number | undefined = latest?.clockSeconds;
-        if (typeof pollClockSeconds === 'number' && pollClockSeconds > 0) {
-          setLiveClockMinute(Math.floor(pollClockSeconds / 60));
-        }
-
-        // Detect Clock.Running transitions true→false (half/full-time) and false→true (2nd half)
-        // as a fallback when TxLINE GameState is always "scheduled" (devnet quirk).
-        if (typeof pollClockRunning === 'boolean' && pollClockRunning !== lastClockRunningRef.current) {
-          const prevRunning = lastClockRunningRef.current;
-          lastClockRunningRef.current = pollClockRunning;
-          const approxMin = Math.floor((lastClockSecondsRef.current ?? 0) / 60);
-
-          if (!pollClockRunning && prevRunning === true) {
-            // Clock just stopped
-            if (approxMin >= 40 && approxMin < 65 && lastGameStateRef.current !== 'HalfTime') {
-              lastGameStateRef.current = 'HalfTime';
-              if (isMounted) {
-                setEvents(prev => [{ id: `synth-ht-clk-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half time!' }, ...prev]);
-                setMinute(45);
-                playSFX('whistle');
-              }
-            } else if (
-              approxMin >= 85 &&
-              lastGameStateRef.current !== 'FullTime' &&
-              // Never synthesize FT from a clock pause during ET or penalties —
-              // clock stops frequently during those phases (penalty kicks, etc.)
-              !['ExtraTime', 'Penalties'].includes(lastGameStateRef.current ?? '')
-            ) {
-              lastGameStateRef.current = 'FullTime';
-              const ftMin = approxMin;
-              if (isMounted) {
-                setEvents(prev => [{ id: `synth-ft-clk-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ends at ${ftMin}'.` }, ...prev]);
-                setMinute(ftMin);
-                playSFX('end_game');
-              }
-            }
-          } else if (pollClockRunning === true && prevRunning === false && lastGameStateRef.current === 'HalfTime') {
-            // Clock restarted after half-time → second half
-            lastGameStateRef.current = 'SecondHalf';
-            if (isMounted) {
-              setEvents(prev => [{ id: `synth-sh-clk-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' }, ...prev]);
-              setMinute(45);
-              playSFX('whistle');
-            }
-          }
-        }
-        if (typeof pollClockSeconds === 'number') lastClockSecondsRef.current = pollClockSeconds;
-
-        // ── Game state transition synthesis ────────────────────────────────────
-        // Detect state changes (null → FirstHalf, FirstHalf → HalfTime, etc.) and
-        // synthesize match-flow events. Also awards starting_xi fantasy points once.
-        const gs = latest?.gameState ?? null;
-        if (gs && gs !== lastGameStateRef.current) {
-          const prevGs = lastGameStateRef.current;
-          lastGameStateRef.current = gs;
-
-          const synthEvents: typeof matchEvents = [];
-          const isMatchLive = ['FirstHalf','SecondHalf','HalfTime','ExtraTime','Penalties','FullTime'].includes(gs);
-
-          // Award starting appearance bonus once per session when match is first detected live
-          if (!prevGs && isMatchLive && userLineupRef.current?.players?.length > 0) {
-            const { players, captain, confidence } = userLineupRef.current;
-            const realStarters = getRealStarterIds();
-            let totalBonus = 0;
-            for (const p of (players as any[])) {
-              if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
-              if (realStarters && !realStarters.has(p.id)) continue; // not in actual XI
-              const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
-              totalBonus += pts;
-              appearedPlayersRef.current.add(p.id); // prevent double-counting from appearance bonus
-              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-              setPlayerHistory(prev => ({
-                ...prev,
-                [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }],
-              }));
-            }
-            if (totalBonus > 0 && isMounted) {
-              setLeaderboard(prev => {
-                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
-              });
-            }
-          }
-
-          // Synthesize match-flow events for the feed
-          if (gs === 'FirstHalf' && !prevGs) {
-            synthEvents.push({ id: `synth-kickoff-${Date.now()}`, minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Kick off! The match has started.' });
-          } else if (gs === 'HalfTime') {
-            synthEvents.push({ id: `synth-ht-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'half_time', points: 0, description: 'Half time!' });
-            // ── H1 stats-based bonus evaluation ─────────────────────────────
-            if (!halftimePossAwardedRef.current && isMounted) {
-              halftimePossAwardedRef.current = true;
-              const p1c = possessionCountRef.current[1] ?? 0;
-              const p2c = possessionCountRef.current[2] ?? 0;
-              const totalPoss = p1c + p2c;
-              const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
-              const awayPct = 100 - homePct;
-              // Count first-half event stats — supplement with TxLINE period stats when available
-              // TxLINE Score.Period1 provides authoritative corner/card counts for the period.
-              const txPS1 = txlinePeriodStatsRef.current;
-              const htStats: HalfStats = {
-                homeGoals:         txPS1?.home.h1.goals    ?? scoreRef.current.home,
-                awayGoals:         txPS1?.away.h1.goals    ?? scoreRef.current.away,
-                homeDangers:       halfDangerCountRef.current[1] ?? 0,
-                awayDangers:       halfDangerCountRef.current[2] ?? 0,
-                homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, txPS1?.home.h1.corners ?? 0),
-                awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, txPS1?.away.h1.corners ?? 0),
-                homePossessionPct: homePct,
-                awayPossessionPct: awayPct,
-              };
-              if (userLineupRef.current?.players?.length > 0) {
-                applyStatsBonuses(htStats, 45);
-              }
-              // Reset per-half counters for second half
-              possessionCountRef.current   = { 1: 0, 2: 0 };
-              halfDangerCountRef.current   = { 1: 0, 2: 0 };
-              halfCornerCountRef.current   = { 1: 0, 2: 0 };
-              htScoreRef.current           = { ...scoreRef.current };
-            }
-          } else if (gs === 'SecondHalf' && prevGs) {
-            synthEvents.push({ id: `synth-so-${Date.now()}`, minute: 45, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Second half underway!' });
-          } else if (gs === 'ExtraTime') {
-            synthEvents.push({ id: `synth-et-${Date.now()}`, minute: 90, team: '', teamFlag: '', player: '', playerId: '', type: 'extra_time', points: 2, description: 'Extra time! The match continues.' });
-            // Award extra_time appearance bonus (+2) to all lineup players
-            if (!extraTimeBonusAwardedRef.current && isMounted && userLineupRef.current?.players?.length > 0) {
-              extraTimeBonusAwardedRef.current = true;
-              const { players: etP, captain: etCap, confidence: etConf } = userLineupRef.current;
-              let etBonus = 0;
-              for (const p of (etP as any[])) {
-                if (!p?.id) continue;
-                const stars = (etConf as Record<string, number>)?.[p.id] ?? 3;
-                const pts = resolvePlayerDelta(0, { isCaptain: etCap === p.id, confidenceStars: stars, appearanceBonus: 2 });
-                etBonus += pts;
-                setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-                setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'extra time', pts, minute: 90 }] }));
-              }
-              if (etBonus > 0) {
-                setLeaderboard(prev => {
-                  const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + etBonus) * 100) / 100 } : e);
-                  return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-                });
-                setActiveToasts(prev => [{ id: `toast-et-${Date.now()}`, type: 'extra_time' as any, title: 'Extra Time Bonus', subtitle: 'All players +2 pts', value: `+${Math.round(etBonus * 100) / 100} pts` }, ...prev]);
-              }
-            }
-          } else if (gs === 'FullTime') {
-            const ftMin = Math.max(90, Math.floor((lastClockSecondsRef.current ?? 90 * 60) / 60));
-            synthEvents.push({ id: `synth-ft-${Date.now()}`, minute: ftMin, team: '', teamFlag: '', player: '', playerId: '', type: 'full_time', points: 0, description: `Full time! Match ends at ${ftMin}'.` });
-            // ── H2 stats-based bonus evaluation ─────────────────────────────
-            if (!fulltimePossAwardedRef.current && isMounted) {
-              fulltimePossAwardedRef.current = true;
-              const p1c = possessionCountRef.current[1] ?? 0;
-              const p2c = possessionCountRef.current[2] ?? 0;
-              const totalPoss = p1c + p2c;
-              const homePct = totalPoss > 0 ? Math.round((p1c / totalPoss) * 100) : 50;
-              const awayPct = 100 - homePct;
-              const h2HomeGoals = scoreRef.current.home - (htScoreRef.current?.home ?? 0);
-              const h2AwayGoals = scoreRef.current.away - (htScoreRef.current?.away ?? 0);
-              // Supplement event-counted stats with TxLINE Score.Period2 when available
-              const txPS2 = txlinePeriodStatsRef.current;
-              const ftStats: HalfStats = {
-                homeGoals:         txPS2?.home.h2.goals    ?? Math.max(0, h2HomeGoals),
-                awayGoals:         txPS2?.away.h2.goals    ?? Math.max(0, h2AwayGoals),
-                homeDangers:       halfDangerCountRef.current[1] ?? 0,
-                awayDangers:       halfDangerCountRef.current[2] ?? 0,
-                homeCorners:       Math.max(halfCornerCountRef.current[1] ?? 0, txPS2?.home.h2.corners ?? 0),
-                awayCorners:       Math.max(halfCornerCountRef.current[2] ?? 0, txPS2?.away.h2.corners ?? 0),
-                homePossessionPct: homePct,
-                awayPossessionPct: awayPct,
-              };
-              if (userLineupRef.current?.players?.length > 0) {
-                applyStatsBonuses(ftStats, 90);
-              }
-            }
-          }
-
-          if (synthEvents.length > 0 && isMounted) {
-            setEvents(prev => [...synthEvents.slice().reverse(), ...prev]);
-            setMinute(synthEvents[synthEvents.length - 1].minute);
-            if (gs === 'FullTime') playSFX('end_game'); else playSFX('whistle');
-          }
-        }
-        // ── End game state synthesis ────────────────────────────────────────────
-
-        // Fallback: TxLINE is responding with score data but no GameState field detected.
-        // This happens with some TxODDS devnet responses that omit status entirely.
-        // Synthesize a kick_off once so the feed isn't empty.
-        if (!gs && lastGameStateRef.current === null && latest?.score !== undefined) {
-          lastGameStateRef.current = 'InPlay'; // sentinel — prevents re-running
-          if (isMounted) {
-            setEvents(prev => [{ id: `synth-ko-fb-${Date.now()}`, minute: 0, team: '', teamFlag: '', player: '', playerId: '', type: 'kick_off', points: 0, description: 'Match in progress!' }, ...prev]);
-          }
-          if (userLineupRef.current?.players?.length > 0) {
-            const { players, captain, confidence } = userLineupRef.current;
-            let totalBonus = 0;
-            for (const p of (players as any[])) {
-              if (!p?.id || appearedPlayersRef.current.has(p.id)) continue;
-              const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
-              totalBonus += pts;
-              appearedPlayersRef.current.add(p.id);
-              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'starting xi', pts, minute: 0 }] }));
-            }
-            if (totalBonus > 0 && isMounted) {
-              setLeaderboard(prev => {
-                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + totalBonus) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
-              });
-            }
-          }
-          console.log('[LivePage] Fallback: TxLINE live but no GameState detected — synthesized kick_off');
-        }
-
-        // Suppress dialog for historical events loaded on page-open (first poll).
-        // Must be set before PlayerStats and convertTxLineUpdates paths so both share it.
-        const suppressDialog = isFirstTxLinePollRef.current || matchCompletedRef.current;
-        isFirstTxLinePollRef.current = false;
-
-        // Tracks player-type combos scored by PlayerStats this poll — prevents convertTxLineUpdates
-        // from double-awarding points for the same event (TxLINE sends both individual events AND
-        // cumulative PlayerStats, which independently detect the same goal/card).
-        const psScored = new Set<string>();
-
-        // ── PlayerStats delta: detect new goals/cards from cumulative TxLINE snapshot ──
-        const latestStats = latest?.playerStats as Record<string, Record<string, number>> | undefined;
-        if (latestStats) {
-          const statsEvents: typeof matchEvents = [];
-          for (const [txPid, cur] of Object.entries(latestStats)) {
-            const prev = prevPlayerStatsRef.current[txPid] ?? {};
-            const ourId = playerIdMapRef.current[txPid] ?? '';
-            const playerInfo = ourId ? (await import('@/lib/players').then(m => m.getPlayerById(ourId))) : null;
-            const isHome = cur.participant === 1;
-            const team = isHome ? fixture.homeTeam : fixture.awayTeam;
-            const teamFlag = isHome ? fixture.homeFlag : fixture.awayFlag;
-            const playerName = playerInfo?.name ?? txPlayerNamesRef.current[txPid] ?? `Player ${txPid}`;
-            const clkMin = Math.floor((latest?.clockSeconds ?? 0) / 60) || liveClockMinute;
-
-            const mkEv = (type: string, count: number) => {
-              for (let i = 0; i < count; i++) {
-                const evId = `ps-${type}-${txPid}-${(prev[type] ?? 0) + i + 1}`;
-                if (seenSeqsRef.current.has(Number(evId.slice(-4)))) continue;
-                statsEvents.push({ id: evId, minute: clkMin, team, teamFlag, player: playerName, playerId: ourId, type, points: 0, description: `${playerName} — ${type.replace(/_/g,' ')} (${team})` });
-              }
-            };
-
-            const delta = (k: string) => Math.max(0, (cur[k] ?? 0) - (prev[k] ?? 0));
-            mkEv('goal', delta('goals'));
-            mkEv('assist', delta('assists'));
-            mkEv('yellow_card', delta('yellowCards'));
-            mkEv('red_card', delta('redCards'));
-            mkEv('own_goal', delta('ownGoals'));
-            if (delta('saves') > 0) mkEv('goalkeeper_save', delta('saves'));
-          }
-          // Update prev stats snapshot
-          prevPlayerStatsRef.current = { ...prevPlayerStatsRef.current, ...latestStats };
-
-          if (statsEvents.length > 0 && isMounted) {
-            console.log('[LivePage] PlayerStats delta events:', statsEvents.map(e => `${e.type}@${e.minute}'`));
-            setEvents(prev => {
-              const existingKeys = new Set(prev.map(e => e.id));
-              const fresh = statsEvents.filter(e => !existingKeys.has(e.id));
-              return fresh.length > 0 ? [...fresh.slice().reverse(), ...prev] : prev;
-            });
-            // Process points for PlayerStats events (same pipeline as TxLINE events)
-            for (const ev of statsEvents) {
-              if (!userLineupRef.current) continue;
-              const { players, captain, confidence } = userLineupRef.current;
-              const matched = players.find((p: any) => p?.id === ev.playerId);
-              // Indirect contribution: MID/SWG from scoring team when scorer not in lineup.
-              // Keyed by team+type, not player identity — the scorer is frequently unmapped
-              // here, and this loop vs. the convertTxLineUpdates loop below can each resolve
-              // a *different* fallback display name for the same unmapped TxLINE player id,
-              // so a player-identity key would silently fail to dedup between them.
-              const indirectKeyPS = `indirect-${ev.team}-${ev.type}`;
-              if (ev.type === 'goal' && ev.team && !matched && !psScored.has(indirectKeyPS)) {
-                let tcTotal = 0;
-                for (const p of (players as any[])) {
-                  if (!p?.id || p.id === ev.playerId) continue;
-                  if (p.team !== ev.team) continue;
-                  if (p.position !== 'MID' && p.position !== 'SWG') continue;
-                  let appearanceBonus = 0;
-                  if (!appearedPlayersRef.current.has(p.id)) { appearanceBonus = 2; appearedPlayersRef.current.add(p.id); }
-                  const tcSt = (confidence as Record<string, number>)?.[p.id] ?? 3;
-                  const pts = resolvePlayerDelta(1, { isCaptain: captain === p.id, confidenceStars: tcSt, appearanceBonus });
-                  tcTotal += pts;
-                  setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-                  setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'team contribution', pts, minute: ev.minute }] }));
-                }
-                if (tcTotal !== 0) {
-                  setLeaderboard(prev => {
-                    const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + tcTotal) * 100) / 100 } : e);
-                    return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-                  });
-                }
-                // Mark this goal's indirect contribution as scored so the convertTxLineUpdates
-                // loop below (which sees the same goal via TxLINE's individual-event stream)
-                // doesn't award the same team-contribution bonus a second time.
-                psScored.add(indirectKeyPS);
-              }
-              if (!matched) continue;
-              if (ev.type === 'goal' && matched.position === 'GK') continue;
-              const basePts = calculateEventPoints(ev.type, matched.position);
-              let appearanceBonus = 0;
-              if (!appearedPlayersRef.current.has(ev.playerId)) { appearanceBonus = 2; appearedPlayersRef.current.add(ev.playerId); }
-              const cardDef = equippedCardDefsRef.current[ev.playerId];
-              const cardInst = equippedCardInstancesRef.current[ev.playerId];
-              const cardBonus = cardDef ? getCardBonusForEvent(cardDef, ev.type, cardInst?.upgradeCredits || 0) : 0;
-              const stars = confidence?.[ev.playerId] ?? 3;
-              const delta = resolvePlayerDelta(basePts, { isCaptain: captain === ev.playerId, confidenceStars: stars, appearanceBonus, cardBonus });
-              if (delta === 0) continue;
-              setPlayerPoints(prev => ({ ...prev, [ev.playerId]: Math.round(((prev[ev.playerId] ?? 0) + delta) * 100) / 100 }));
-              setPlayerHistory(prev => ({ ...prev, [ev.playerId]: [...(prev[ev.playerId] ?? []), { label: ev.type.replace(/_/g,' '), pts: delta, minute: ev.minute }] }));
-              setLeaderboard(prev => {
-                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + delta) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
-              });
-              if (ev.type === 'goal' || ev.type === 'own_goal') playSFX('goal');
-              else if (ev.type === 'yellow_card' || ev.type === 'red_card') playSFX('whistle');
-              // Prevent convertTxLineUpdates scoring loop from double-awarding this event
-              if (ev.playerId) psScored.add(`${ev.playerId}-${ev.type}`);
-              // Fire toast now — convertTxLineUpdates will skip scoring AND toast for psScored events
-              if (!notifiedEventsRef.current.has(ev.id)) {
-                notifiedEventsRef.current.add(ev.id);
-                const rd = Math.round(delta * 100) / 100;
-                setActiveToasts(prev => [{ id: `toast-ps-${ev.id}`, type: ev.type as any, title: ev.type.replace(/_/g, ' '), subtitle: ev.player || 'Event', value: rd > 0 ? `+${rd} pts` : `${rd} pts` }, ...prev]);
-              }
-            }
-
-            // Trigger NPC dialog for significant PlayerStats events (goal, red card, etc.).
-            // convertTxLineUpdates below only fires dialog if _allEvents contains the event —
-            // PlayerStats is often the only source when individual events are missing/unconfirmed.
-            if (!suppressDialog && !showPopupRef.current) {
-              const DIALOG_TYPES = new Set(['goal', 'own_goal', 'red_card', 'penalty_save', 'yellow_card']);
-              const dialogEv = statsEvents.find(e => DIALOG_TYPES.has(e.type)) ?? null;
-              if (dialogEv) {
-                setLatestEvent(dialogEv);
-                setDialogStep(1);
-                setShowPopup(true);
-              }
-            }
-          }
-        }
-        // ── End PlayerStats delta ──────────────────────────────────────────────
-
-        const newEvents = convertTxLineUpdates(
-          updates,
+        const convertedEvents = convertEspnEvents(
+          data.events || [],
           playerIdMapRef.current,
-          fixture.homeTeam,
-          fixture.awayTeam,
-          fixture.homeFlag,
-          fixture.awayFlag,
-          seenSeqsRef.current,
-          txPlayerNamesRef.current
+          (fixture as any).homeTeam,
+          (fixture as any).awayTeam,
+          data.homeTeamId,
+          data.awayTeamId,
+          (fixture as any).homeFlag,
+          (fixture as any).awayFlag,
+          seenEventIdsRef.current
         );
 
-        if (newEvents.length === 0 && !latestStats) return;
-
-        // Merge new events into feed, deduplicating PlayerStats placeholders
-        setEvents(prev => {
-          const superseded = new Set<string>();
-          for (const ne of newEvents) {
-            for (const e of prev) {
-              // Replace PlayerStats placeholder: same player + same type
-              if (e.id.startsWith('ps-') && e.type === ne.type && ne.playerId && e.playerId === ne.playerId)
-                superseded.add(e.id);
-            }
-          }
-          const base = superseded.size > 0 ? prev.filter(e => !superseded.has(e.id)) : prev;
-          return [...newEvents.slice().reverse(), ...base];
-        });
-
-        if (newEvents.length === 0) return;
-
-        // Prefer high-importance events as the NPC dialog trigger.
-        // Without this, synthesized goal_conceded (pushed after goal) or assist events
-        // would become the trigger and the excited goal commentator dialog would never show.
-        const DIALOG_PRIORITY = ['goal', 'own_goal', 'penalty_scored', 'red_card',
-          'penalty_save', 'yellow_card', 'assist', 'penalty_missed',
-          'clean_sheet', 'full_time', 'half_time', 'kick_off'];
-        const trigger =
-          newEvents.find(e => DIALOG_PRIORITY.includes(e.type)) ??
-          newEvents[newEvents.length - 1];
-        setMinute(trigger.minute);
-
-        // SFX — check all newEvents so goal SFX fires even if trigger was overridden
-        const hasGoal = newEvents.some(e => e.type === 'goal' || e.type === 'own_goal');
-        if (hasGoal) {
-          playSFX('goal');
-        } else if (newEvents.some(e => e.type === 'full_time')) {
-          playSFX('end_game');
-        } else if (newEvents.some(e => ['kick_off', 'half_time', 'yellow_card', 'red_card', 'corner_kick', 'substitution', 'extra_time', 'penalty_save'].includes(e.type))) {
-          playSFX('whistle');
-        }
-
-        // Show popup only for genuinely new live events (not history loaded on page open,
-        // and not for completed matches where no new events will arrive)
-        if (!showPopupRef.current && !suppressDialog) {
-          setLatestEvent(trigger);
-          setDialogStep(1);
-          setShowPopup(true);
-        }
-
-        // Telegram notifications are handled server-side by /api/cron/match-events
-        // to avoid duplicates (cron has deduplication via notified_events table).
-
-        // Track per-half stats for corner kicks and danger attacks
-        for (const ev of newEvents) {
-          if (ev.type === 'corner_kick' && ev.team) {
-            const pNum = ev.team === fixture.homeTeam ? 1 : 2;
-            halfCornerCountRef.current[pNum] = (halfCornerCountRef.current[pNum] ?? 0) + 1;
-          }
-          // danger_attack tracking is already done in convertPossessionAction via halfDangerCountRef
-        }
-
-        // Fantasy points + toasts for every event
-        for (const ev of newEvents) {
-          if (!userLineupRef.current) continue;
-          const { players, captain, confidence } = userLineupRef.current;
-
-          // extra_time: award +2 to ALL lineup players (not a single-player event)
-          if (ev.type === 'extra_time' && !ev.playerId) {
-            if (!extraTimeBonusAwardedRef.current) {
-              extraTimeBonusAwardedRef.current = true;
-              let etBonus = 0;
-              for (const p of (players as any[])) {
-                if (!p?.id) continue;
-                const stars = (confidence as Record<string, number>)?.[p.id] ?? 3;
-                const pts = resolvePlayerDelta(0, { isCaptain: captain === p.id, confidenceStars: stars, appearanceBonus: 2 });
-                etBonus += pts;
-                setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-                setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'extra time', pts, minute: ev.minute }] }));
-              }
-              if (etBonus > 0) {
-                setLeaderboard(prev => {
-                  const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + etBonus) * 100) / 100 } : e);
-                  return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-                });
-                setActiveToasts(prev => [{ id: `toast-et-ne-${Date.now()}`, type: 'extra_time' as any, title: 'Extra Time Bonus', subtitle: 'All players +2 pts', value: `+${Math.round(etBonus * 100) / 100} pts` }, ...prev]);
-              }
-            }
-            continue;
-          }
-
-          // goal_conceded / penalty_conceded: deduct points from all GK/DEF on the conceding team.
-          // goal_conceded is synthesized from goal events in txline-bridge (no playerId).
-          // retroComputed skips any player who already has a 'goal conceded' history entry,
-          // so applying it here real-time prevents double-counting at match end.
-          if (ev.type === 'goal_conceded' && !ev.playerId && ev.team) {
-            let gcTotal = 0;
-            for (const p of (players as any[])) {
-              if (!p?.id || (p.position !== 'GK' && p.position !== 'DEF')) continue;
-              if (p.team !== ev.team) continue;
-              const basePts = calculateEventPoints('goal_conceded', p.position);
-              if (basePts === 0) continue;
-              const cardDef = equippedCardDefsRef.current[p.id];
-              const cardInst = equippedCardInstancesRef.current[p.id];
-              const cardBonus = cardDef ? getCardBonusForEvent(cardDef, 'goal_conceded', cardInst?.upgradeCredits || 0) : 0;
-              const st = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              const rawPts = resolvePlayerDelta(basePts, { isCaptain: captain === p.id, confidenceStars: st, cardBonus });
-              gcTotal += rawPts;
-              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + rawPts) * 100) / 100 }));
-              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'goal conceded', pts: rawPts, minute: ev.minute }] }));
-            }
-            if (gcTotal !== 0) {
-              setLeaderboard(prev => {
-                const next = prev.map(entry => entry.isUser ? { ...entry, points: Math.round((entry.points + gcTotal) * 100) / 100 } : entry);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-              });
-            }
-            continue;
-          }
-
-          // penalty_conceded: deduct points from all GK/DEF on the conceding team.
-          // Synthesized from penalty_won in txline-bridge — no playerId on the event.
-          if (ev.type === 'penalty_conceded' && !ev.playerId && ev.team) {
-            let pcTotal = 0;
-            for (const p of (players as any[])) {
-              if (!p?.id || (p.position !== 'GK' && p.position !== 'DEF')) continue;
-              if (p.team !== ev.team) continue;
-              const basePts = calculateEventPoints('penalty_conceded', p.position);
-              if (basePts === 0) continue;
-              const cardDef = equippedCardDefsRef.current[p.id];
-              const cardInst = equippedCardInstancesRef.current[p.id];
-              const cardBonus = cardDef ? getCardBonusForEvent(cardDef, 'penalty_conceded', cardInst?.upgradeCredits || 0) : 0;
-              const st = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              const rawPts = resolvePlayerDelta(basePts, { isCaptain: captain === p.id, confidenceStars: st, cardBonus });
-              pcTotal += rawPts;
-              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + rawPts) * 100) / 100 }));
-              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'penalty conceded', pts: rawPts, minute: ev.minute }] }));
-            }
-            if (pcTotal !== 0) {
-              setLeaderboard(prev => {
-                const next = prev.map(entry => entry.isUser ? { ...entry, points: Math.round((entry.points + pcTotal) * 100) / 100 } : entry);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-              });
-            }
-            continue;
-          }
-
-          // Skip scoring if PlayerStats already scored this player+event combo this poll.
-          // Normalize penalty_scored → goal since PlayerStats tracks all goals as 'goals'.
-          // (Indirect/team-contribution dedup is handled separately below via indirectKey —
-          // this check only ever matters once `matched` resolves to a direct scorer.)
-          const _psType = ev.type === 'penalty_scored' ? 'goal' : ev.type;
-          if (ev.playerId && psScored.has(`${ev.playerId}-${_psType}`)) {
-            notifiedEventsRef.current.add(ev.id); // prevent duplicate toast later
-            continue;
-          }
-
-          // goalkeeper_save / penalty_save synthesized without playerId —
-          // find the GK in our lineup that plays for the saving team
-          let matched = players.find((p: any) => p && p.id === ev.playerId);
-          if (!matched && (ev.type === 'goalkeeper_save' || ev.type === 'penalty_save') && !ev.playerId) {
-            matched = (players as any[]).find((p: any) => p && p.position === 'GK' && p.team === ev.team);
-          }
-          // Indirect contribution: MID/SWG from scoring team when scorer not in lineup.
-          // Keyed by team+type (not player identity) because the scorer is frequently
-          // unmapped here — the PlayerStats loop and this individual-event loop can each
-          // resolve a *different* display name for the same unmapped TxLINE player id
-          // (one falls back to "Player <rawId>", the other uses the raw event's own name),
-          // so a player-identity key silently fails to dedup between them.
-          const indirectKey = `indirect-${ev.team}-${ev.type}`;
-          if (ev.type === 'goal' && ev.team && !matched && !psScored.has(indirectKey)) {
-            let tcTotal = 0;
-            for (const p of (players as any[])) {
-              if (!p?.id || p.id === ev.playerId) continue;
-              if (p.team !== ev.team) continue;
-              if (p.position !== 'MID' && p.position !== 'SWG') continue;
-              let appearanceBonus = 0;
-              if (!appearedPlayersRef.current.has(p.id)) { appearanceBonus = 2; appearedPlayersRef.current.add(p.id); }
-              const tcSt = (confidence as Record<string, number>)?.[p.id] ?? 3;
-              const pts = resolvePlayerDelta(1, { isCaptain: captain === p.id, confidenceStars: tcSt, appearanceBonus });
-              tcTotal += pts;
-              setPlayerPoints(prev => ({ ...prev, [p.id]: Math.round(((prev[p.id] ?? 0) + pts) * 100) / 100 }));
-              setPlayerHistory(prev => ({ ...prev, [p.id]: [...(prev[p.id] ?? []), { label: 'team contribution', pts, minute: ev.minute }] }));
-            }
-            if (tcTotal !== 0) {
-              setLeaderboard(prev => {
-                const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + tcTotal) * 100) / 100 } : e);
-                return next.sort((a, b) => b.points - a.points).map((e, i) => { const pp = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: pp > 0 ? `${pp.toFixed(4)} SOL` : '–' }; });
-              });
-            }
-            psScored.add(indirectKey);
-          }
-          if (!matched) continue;
-
-          // GKs cannot score regular goals — only penalty shootout goals are valid
-          if (ev.type === 'goal' && matched.position === 'GK') continue;
-
-          const basePts = calculateEventPoints(ev.type, matched.position);
-          const isAppearanceEv = ev.type === 'starting_xi' || ev.type === 'sub_appearance';
-          let appearanceBonus = 0;
-          if (!isAppearanceEv && !appearedPlayersRef.current.has(ev.playerId)) {
-            appearanceBonus = 2;
-          }
-          appearedPlayersRef.current.add(ev.playerId);
-          // Apply equipped skill card bonus before captain/confidence multipliers
-          const cardDefLive = equippedCardDefsRef.current[ev.playerId];
-          const cardInstLive = equippedCardInstancesRef.current[ev.playerId];
-          const cardBonus = cardDefLive ? getCardBonusForEvent(cardDefLive, ev.type, cardInstLive?.upgradeCredits || 0) : 0;
-          const isCap = captain === ev.playerId;
-          const stars = confidence?.[ev.playerId] ?? 3;
-          const delta = resolvePlayerDelta(basePts, { isCaptain: isCap, confidenceStars: stars, appearanceBonus, cardBonus });
-
-          setLeaderboard(prev => {
-            const next = prev.map(entry =>
-              entry.isUser
-                ? { ...entry, points: entry.points + delta }
-                : entry // other real participants — no fake scoring
-            );
-            return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
+        if (convertedEvents.length > 0) {
+          setTxlineStatus('live');
+          setEvents(prev => {
+            const copy = [...prev];
+            for (const ev of convertedEvents) copy.unshift(ev);
+            return copy.sort((a, b) => b.minute - a.minute);
           });
-          if (ev.playerId && delta !== 0) {
-            const pid = ev.playerId;
-            const rnd = Math.round(delta * 100) / 100;
-            setPlayerPoints(prev => ({ ...prev, [pid]: Math.round(((prev[pid] ?? 0) + rnd) * 100) / 100 }));
-            setPlayerHistory(prev => ({
-              ...prev,
-              [pid]: [...(prev[pid] ?? []), { label: ev.type.replace(/_/g, ' '), pts: rnd, minute: ev.minute }],
-            }));
-          }
 
-          if (delta !== 0 && !notifiedEventsRef.current.has(ev.id)) {
-            notifiedEventsRef.current.add(ev.id);
-            const rd = Math.round(delta * 100) / 100;
-            const val = rd > 0 ? `+${rd} pts` : `${rd} pts`;
-            const toasts: FantasyNotificationItem[] = [{
-              id: `toast-${Date.now()}-${ev.id}`,
-              type: ev.type as any,
-              title: ev.type.replace(/_/g, ' '),
-              subtitle: ev.player || 'Player Action',
-              value: val,
-            }];
-            if (isCap) {
-              const cap = Math.round((rd / 2) * 100) / 100;
-              toasts.unshift({ id: `toast-cap-${Date.now()}`, type: 'captain_bonus', title: 'Captain 2× Bonus', subtitle: ev.player, value: cap > 0 ? `+${cap} pts` : `${cap} pts` });
+          let sfxToPlay: string | null = null;
+          let newPts = 0;
+          for (const ev of convertedEvents) {
+            if (['goal', 'own_goal', 'penalty_scored'].includes(ev.type)) sfxToPlay = 'goal';
+            else if (ev.type === 'red_card') sfxToPlay = 'whistle';
+
+            if (ev.playerId && userLineupRef.current?.players?.find((p:any) => p.id === ev.playerId)) {
+              const basePts = ev.points;
+              const stars = (userLineupRef.current.confidence as any)?.[ev.playerId] ?? 3;
+              const pts = resolvePlayerDelta(basePts, { isCaptain: userLineupRef.current.captain === ev.playerId, confidenceStars: stars });
+              if (pts !== 0) {
+                newPts += pts;
+                setPlayerPoints(prev => ({ ...prev, [ev.playerId]: Math.round(((prev[ev.playerId] ?? 0) + pts) * 100) / 100 }));
+                setPlayerHistory(prev => ({ ...prev, [ev.playerId]: [...(prev[ev.playerId] ?? []), { label: ev.description.split(' — ')[0] || ev.type, pts, minute: ev.minute }] }));
+              }
             }
-            setActiveToasts(prev => [...toasts, ...prev]);
+          }
+          if (sfxToPlay) playSFX(sfxToPlay as any);
+          if (newPts !== 0) {
+            setLeaderboard(prev => {
+              const next = prev.map(e => e.isUser ? { ...e, points: Math.round((e.points + newPts) * 100) / 100 } : e);
+              return next.sort((a, b) => b.points - a.points).map((e, i) => { const p = getPrizeForRank(i + 1, contestType, next.length); return { ...e, rank: i + 1, prize: p > 0 ? `${p.toFixed(4)} SOL` : '–' }; });
+            });
+          }
+        } else {
+           if (data.statusState === 'in') setTxlineStatus('live');
+           else if (data.statusState === 'pre') setTxlineStatus('waiting');
+        }
+
+        if (data.clockDisplay) {
+          const match = data.clockDisplay.match(/(\d+)/);
+          if (match) {
+             setLiveClockMinute(parseInt(match[1], 10));
+             setMinute(parseInt(match[1], 10));
           }
         }
-      } catch (err: any) {
-        if (isMounted) setTxlineStatus('waiting');
-        console.error('[LivePage] poll error:', err);
+
+        if (data.completed && !fulltimePossAwardedRef.current) {
+          fulltimePossAwardedRef.current = true;
+          matchCompletedRef.current = true;
+          
+          if (data.boxscore && userLineupRef.current?.players?.length > 0) {
+             const homeS = parseInt(data.boxscore.home.possession || '50');
+             const ftStats: FullTimeStats = {
+                homeGoals: data.homeScore || 0,
+                awayGoals: data.awayScore || 0,
+                homeCorners: parseInt(data.boxscore.home.cornerKicks || '0'),
+                awayCorners: parseInt(data.boxscore.away.cornerKicks || '0'),
+                homePossessionPct: homeS,
+                awayPossessionPct: 100 - homeS,
+                homeShotsOnTarget: parseInt(data.boxscore.home.shotsOnTarget || '0'),
+                awayShotsOnTarget: parseInt(data.boxscore.away.shotsOnTarget || '0'),
+             };
+             applyStatsBonuses(ftStats, 90);
+          }
+        }
+
+      } catch (err) {
+        console.error('[LivePage] ESPN polling failed:', err);
       }
-    };
+    };;
 
     if (!guestDemoMode) {
       bootstrap().then(() => poll());
@@ -3395,11 +2806,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const p2c = possessionCountRef.current[2] ?? 0;
         const totalP = p1c + p2c;
         const homePct = totalP > 0 ? Math.round((p1c / totalP) * 100) : 50;
-        const h1Stats: HalfStats = {
+        const h1Stats: FullTimeStats = {
           homeGoals:         htPastEvents.filter((e: any) => e.type === 'goal' && e.team === fixture.homeTeam).length,
           awayGoals:         htPastEvents.filter((e: any) => e.type === 'goal' && e.team === fixture.awayTeam).length,
-          homeDangers:       htPastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.homeTeam).length,
-          awayDangers:       htPastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.awayTeam).length,
+          homeShotsOnTarget: Math.floor(htPastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.homeTeam).length / 3),
+          awayShotsOnTarget: Math.floor(htPastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.awayTeam).length / 3),
           homeCorners:       htPastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.homeTeam).length,
           awayCorners:       htPastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.awayTeam).length,
           homePossessionPct: homePct,
@@ -3437,11 +2848,11 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         const homePct2 = totalP2 > 0 ? Math.round((p1c / totalP2) * 100) : 50;
         const h2HomeGoals = scoreRef.current.home - (htScoreRef.current?.home ?? 0);
         const h2AwayGoals = scoreRef.current.away - (htScoreRef.current?.away ?? 0);
-        const h2Stats: HalfStats = {
+        const h2Stats: FullTimeStats = {
           homeGoals:         Math.max(0, h2HomeGoals),
           awayGoals:         Math.max(0, h2AwayGoals),
-          homeDangers:       h2PastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.homeTeam).length,
-          awayDangers:       h2PastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.awayTeam).length,
+          homeShotsOnTarget: Math.floor(h2PastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.homeTeam).length / 3),
+          awayShotsOnTarget: Math.floor(h2PastEvents.filter((e: any) => e.type === 'danger_attack' && e.team === fixture.awayTeam).length / 3),
           homeCorners:       h2PastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.homeTeam).length,
           awayCorners:       h2PastEvents.filter((e: any) => e.type === 'corner_kick' && e.team === fixture.awayTeam).length,
           homePossessionPct: homePct2,
@@ -3694,7 +3105,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
         'penalty_save', 'penalty_scored', 'penalty_missed_shootout',
         'clean_sheet', 'substitution', 'sub_appearance',
         'possession_bonus', 'danger_attack', 'starting_xi',
-        'assist', 'goalkeeper_save',
+        'assist', 'goalkeeper_save', 'goal_conceded', 'injury',
       ];
 
       if (latestEvent.type === 'full_time') {
@@ -3859,7 +3270,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
           <div style={{ fontSize: '3rem' }}>⚽</div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>Match Not Found</h1>
           <p style={{ color: 'var(--text-secondary)', maxWidth: 380, lineHeight: 1.7 }}>
-            This fixture is not in the WC 2026 schedule. It may have been a demo match.
+            This fixture is not in the active schedule. It may have been a demo match.
           </p>
           <Link href="/contests" className="btn btn--primary">← Back to Schedule</Link>
         </div>
@@ -4590,30 +4001,85 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               <div className="mobile-only" style={{ marginBottom: 20 }}>
               {/* Match Events panel */}
               <div className="ro-window live-events-mobile" style={{ position: 'sticky', top: 80 }}>
-                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>⚡ Match Events</span>
-                  {appMode === 'live' ? (
-                    <span
-                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', flexShrink: 0, padding: 0 }}>
+                  <div style={{ display: 'flex', width: '100%' }}>
+                    <button
+                      onClick={() => setEventsTab('events')}
                       style={{
-                        fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
-                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
-                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                        flex: 1, padding: '12px 0', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer',
+                        background: eventsTab === 'events' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                        color: eventsTab === 'events' ? '#fff' : 'rgba(255,255,255,0.4)',
+                        borderBottom: eventsTab === 'events' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                        transition: 'all 0.2s',
+                        border: 'none', borderBottomStyle: 'solid', borderBottomWidth: 2,
                       }}
                     >
-                      {matchCompleted ? 'FINAL' : (txlineStatus === 'live' || minutesToKickoff === null) ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
-                    </span>
-                  ) : (
-                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
-                  )}
-                  <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
-                    title="Points shown are base values. Your actual pts include captain 2× and confidence multiplier.">
-                    ⓘ base pts
-                  </span>
+                      ⚡ Match Events
+                    </button>
+                    <button
+                      onClick={() => setEventsTab('stats')}
+                      style={{
+                        flex: 1, padding: '12px 0', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer',
+                        background: eventsTab === 'stats' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                        color: eventsTab === 'stats' ? '#fff' : 'rgba(255,255,255,0.4)',
+                        borderBottom: eventsTab === 'stats' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                        transition: 'all 0.2s',
+                        border: 'none', borderBottomStyle: 'solid', borderBottomWidth: 2,
+                      }}
+                    >
+                      📊 Match Stats
+                    </button>
+                  </div>
                 </div>
                 <div className="ro-window__body" style={{ padding: 12 }}>
-                  {events.length === 0 && (
+                  {eventsTab === 'stats' && matchSummary?.boxscore ? (
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '0.9rem' }}>
+                          <FlagImage flag={fixture.homeFlag} size={16} />
+                          {fixture.homeTeam}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '0.9rem' }}>
+                          {fixture.awayTeam}
+                          <FlagImage flag={fixture.awayFlag} size={16} />
+                        </div>
+                      </div>
+
+                      {[
+                        { label: 'Possession', h: matchSummary.boxscore.home.possession, a: matchSummary.boxscore.away.possession },
+                        { label: 'Shots', h: matchSummary.boxscore.home.shots, a: matchSummary.boxscore.away.shots },
+                        { label: 'Shots on Target', h: matchSummary.boxscore.home.shotsOnTarget, a: matchSummary.boxscore.away.shotsOnTarget },
+                        { label: 'Saves', h: matchSummary.boxscore.home.saves, a: matchSummary.boxscore.away.saves },
+                        { label: 'Corners', h: matchSummary.boxscore.home.cornerKicks, a: matchSummary.boxscore.away.cornerKicks },
+                        { label: 'Fouls', h: matchSummary.boxscore.home.fouls, a: matchSummary.boxscore.away.fouls },
+                        { label: 'Yellow Cards', h: matchSummary.boxscore.home.yellowCards, a: matchSummary.boxscore.away.yellowCards },
+                        { label: 'Red Cards', h: matchSummary.boxscore.home.redCards, a: matchSummary.boxscore.away.redCards },
+                        { label: 'Offsides', h: matchSummary.boxscore.home.offsides, a: matchSummary.boxscore.away.offsides },
+                      ].map(stat => (
+                        <div key={stat.label} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>
+                            <span style={{ fontWeight: 600 }}>{stat.h}</span>
+                            <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>{stat.label}</span>
+                            <span style={{ fontWeight: 600 }}>{stat.a}</span>
+                          </div>
+                          <div style={{ display: 'flex', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ 
+                              width: `${(parseFloat(stat.h) / (parseFloat(stat.h) + parseFloat(stat.a) || 1)) * 100}%`, 
+                              background: '#3b82f6' 
+                            }} />
+                            <div style={{ 
+                              width: `${(parseFloat(stat.a) / (parseFloat(stat.h) + parseFloat(stat.a) || 1)) * 100}%`, 
+                              background: '#ef4444' 
+                            }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : eventsTab === 'stats' ? (
+                    <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)' }}>
+                      Match stats are currently unavailable.
+                    </div>
+                  ) : events.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                       {appMode === 'live' && !matchCompleted && minutesToKickoff !== null && minutesToKickoff > 0 ? (
                         <>
@@ -4641,8 +4107,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       )}
                     </div>
                   )}
-                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
-                    {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
+                  {eventsTab === 'events' && (
+                    <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+                      {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
                       <div
                         key={event.id}
                         style={{
@@ -4715,6 +4182,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       </div>
                     ))}
                   </div>
+                  )}
                 </div>
               </div>
 
@@ -4805,30 +4273,85 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
               <div className="desktop-only live-events-wrapper">
               {/* Match Events panel */}
               <div className="ro-window live-events" style={{ position: 'sticky', top: 80, height: 680, display: 'flex', flexDirection: 'column' }}>
-                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <span>⚡ Match Events</span>
-                  {appMode === 'live' ? (
-                    <span
-                      className={(!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? 'badge badge--live' : undefined}
+                <div className="ro-window__header" style={{ background: 'linear-gradient(to right, #0d3040 0%, #0a1f2a 100%)', display: 'flex', alignItems: 'center', flexShrink: 0, padding: 0 }}>
+                  <div style={{ display: 'flex', width: '100%' }}>
+                    <button
+                      onClick={() => setEventsTab('events')}
                       style={{
-                        fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, fontWeight: 700,
-                        background: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? 'rgba(255,193,7,0.2)' : 'rgba(255,255,255,0.08)',
-                        color: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : txlineStatus === 'connecting' ? '#ffc107' : 'rgba(255,255,255,0.4)',
-                        border: (!matchCompleted && (txlineStatus === 'live' || minutesToKickoff === null)) ? undefined : `1px solid ${txlineStatus === 'connecting' ? '#ffc10744' : 'rgba(255,255,255,0.12)'}`,
+                        flex: 1, padding: '12px 0', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer',
+                        background: eventsTab === 'events' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                        color: eventsTab === 'events' ? '#fff' : 'rgba(255,255,255,0.4)',
+                        borderBottom: eventsTab === 'events' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                        transition: 'all 0.2s',
+                        border: 'none', borderBottomStyle: 'solid', borderBottomWidth: 2,
                       }}
                     >
-                      {matchCompleted ? 'FINAL' : (txlineStatus === 'live' || minutesToKickoff === null) ? 'LIVE' : txlineStatus === 'connecting' ? 'CONNECTING…' : 'WAITING'}
-                    </span>
-                  ) : (
-                    <span className="badge badge--live" style={{ fontSize: '0.6rem' }}>DEMO</span>
-                  )}
-                  <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 'auto' }}
-                    title="Points shown are base values. Your actual pts include captain 2× and confidence multiplier.">
-                    ⓘ base pts
-                  </span>
+                      ⚡ Match Events
+                    </button>
+                    <button
+                      onClick={() => setEventsTab('stats')}
+                      style={{
+                        flex: 1, padding: '12px 0', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer',
+                        background: eventsTab === 'stats' ? 'rgba(255,255,255,0.05)' : 'transparent',
+                        color: eventsTab === 'stats' ? '#fff' : 'rgba(255,255,255,0.4)',
+                        borderBottom: eventsTab === 'stats' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                        transition: 'all 0.2s',
+                        border: 'none', borderBottomStyle: 'solid', borderBottomWidth: 2,
+                      }}
+                    >
+                      📊 Match Stats
+                    </button>
+                  </div>
                 </div>
                 <div className="ro-window__body" style={{ padding: 12, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                  {events.length === 0 && (
+                  {eventsTab === 'stats' && matchSummary?.boxscore ? (
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '0.9rem' }}>
+                          <FlagImage flag={fixture.homeFlag} size={16} />
+                          {fixture.homeTeam}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '0.9rem' }}>
+                          {fixture.awayTeam}
+                          <FlagImage flag={fixture.awayFlag} size={16} />
+                        </div>
+                      </div>
+
+                      {[
+                        { label: 'Possession', h: matchSummary.boxscore.home.possession, a: matchSummary.boxscore.away.possession },
+                        { label: 'Shots', h: matchSummary.boxscore.home.shots, a: matchSummary.boxscore.away.shots },
+                        { label: 'Shots on Target', h: matchSummary.boxscore.home.shotsOnTarget, a: matchSummary.boxscore.away.shotsOnTarget },
+                        { label: 'Saves', h: matchSummary.boxscore.home.saves, a: matchSummary.boxscore.away.saves },
+                        { label: 'Corners', h: matchSummary.boxscore.home.cornerKicks, a: matchSummary.boxscore.away.cornerKicks },
+                        { label: 'Fouls', h: matchSummary.boxscore.home.fouls, a: matchSummary.boxscore.away.fouls },
+                        { label: 'Yellow Cards', h: matchSummary.boxscore.home.yellowCards, a: matchSummary.boxscore.away.yellowCards },
+                        { label: 'Red Cards', h: matchSummary.boxscore.home.redCards, a: matchSummary.boxscore.away.redCards },
+                        { label: 'Offsides', h: matchSummary.boxscore.home.offsides, a: matchSummary.boxscore.away.offsides },
+                      ].map(stat => (
+                        <div key={stat.label} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)' }}>
+                            <span style={{ fontWeight: 600 }}>{stat.h}</span>
+                            <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>{stat.label}</span>
+                            <span style={{ fontWeight: 600 }}>{stat.a}</span>
+                          </div>
+                          <div style={{ display: 'flex', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                            <div style={{ 
+                              width: `${(parseFloat(stat.h) / (parseFloat(stat.h) + parseFloat(stat.a) || 1)) * 100}%`, 
+                              background: '#3b82f6' 
+                            }} />
+                            <div style={{ 
+                              width: `${(parseFloat(stat.a) / (parseFloat(stat.h) + parseFloat(stat.a) || 1)) * 100}%`, 
+                              background: '#ef4444' 
+                            }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : eventsTab === 'stats' ? (
+                    <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)' }}>
+                      Match stats are currently unavailable.
+                    </div>
+                  ) : events.length === 0 && (
                     <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                       {appMode === 'live' && !matchCompleted && minutesToKickoff !== null && minutesToKickoff > 0 ? (
                         <>
@@ -4856,8 +4379,9 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       )}
                     </div>
                   )}
-                  <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflowY: 'auto' }}>
-                    {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
+                  {eventsTab === 'events' && (
+                    <div ref={eventRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflowY: 'auto' }}>
+                      {[...events].sort((a, b) => b.minute - a.minute).map((event) => (
                       <div
                         key={event.id}
                         style={{
@@ -4930,6 +4454,7 @@ export default function LivePage({ params, searchParams }: { params: Promise<{ c
                       </div>
                     ))}
                   </div>
+                  )}
                 </div>
               </div>
 

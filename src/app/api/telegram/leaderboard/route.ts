@@ -7,7 +7,7 @@ import {
   type LeaderboardEntry,
 } from '@/lib/telegram-bot';
 import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
-import { matchPlayerName } from '@/lib/txline-bridge';
+import { matchPlayerName } from '@/lib/espn-bridge';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -1,196 +1,69 @@
 import { NextResponse } from 'next/server';
-import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
-
-const FLAG: Record<string, string> = {
-  'Haiti': '🇭🇹', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿', 'Australia': '🇦🇺', 'Turkey': '🇹🇷',
-  'Germany': '🇩🇪', 'Curacao': '🇨🇼', 'Netherlands': '🇳🇱', 'Japan': '🇯🇵',
-  'Ivory Coast': '🇨🇮', 'Ecuador': '🇪🇨', 'Sweden': '🇸🇪', 'Tunisia': '🇹🇳',
-  'Spain': '🇪🇸', 'Cape Verde': '🇨🇻', 'Belgium': '🇧🇪', 'Egypt': '🇪🇬',
-  'Saudi Arabia': '🇸🇦', 'Uruguay': '🇺🇾', 'Iran': '🇮🇷', 'New Zealand': '🇳🇿',
-  'France': '🇫🇷', 'Senegal': '🇸🇳', 'Iraq': '🇮🇶', 'Norway': '🇳🇴',
-  'Argentina': '🇦🇷', 'Algeria': '🇩🇿', 'Austria': '🇦🇹', 'Jordan': '🇯🇴',
-  'Portugal': '🇵🇹', 'Congo DR': '🇨🇩', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Croatia': '🇭🇷',
-  'Ghana': '🇬🇭', 'Panama': '🇵🇦', 'Uzbekistan': '🇺🇿', 'Colombia': '🇨🇴',
-  'Czech Republic': '🇨🇿', 'South Africa': '🇿🇦', 'Switzerland': '🇨🇭',
-  'Bosnia & Herzegovina': '🇧🇦', 'Canada': '🇨🇦', 'Qatar': '🇶🇦',
-  'Mexico': '🇲🇽', 'South Korea': '🇰🇷', 'USA': '🇺🇸', 'Morocco': '🇲🇦',
-  'Brazil': '🇧🇷', 'Paraguay': '🇵🇾',
-};
-
-const ALIASES: Record<string, string> = {
-  "côte d'ivoire": 'Ivory Coast', "cote d'ivoire": 'Ivory Coast',
-  'cote divoire': 'Ivory Coast', 'dem. rep. congo': 'Congo DR',
-  'dr congo': 'Congo DR', 'democratic republic of congo': 'Congo DR',
-  'republic of korea': 'South Korea', 'korea republic': 'South Korea',
-  'united states': 'USA', 'czechia': 'Czech Republic',
-  'cape verde islands': 'Cape Verde',
-  'bosnia and herzegovina': 'Bosnia & Herzegovina',
-  'bosnia & hercegovina': 'Bosnia & Herzegovina',
-};
-
-function norm(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, ''); }
-function resolve(name: string) { return ALIASES[name.toLowerCase().trim()] ?? name; }
-function flag(name: string) { return FLAG[name] ?? '🏳️'; }
-
-const BACKUP_SCORE_URL = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+import { fetchAllLeaguesFixtures, resolveTeamName } from '@/lib/espn';
+import { LEAGUES } from '@/lib/leagues';
+import { getTeamFlag } from '@/lib/fixtures';
 
 export type RecentScore = {
   homeTeam: string; awayTeam: string;
   homeFlag: string; awayFlag: string;
   kickoffAt: string;
   scoreHome: number | null; scoreAway: number | null;
-  source: 'txline' | 'backup' | 'static';
+  leagueId: string;
+  source: 'espn';
 };
 
 // GET /api/scores/recent
-// Returns up to 3 recently finished WC 2026 matches with scores.
-// Primary: TxLINE snapshot. Backup data source fills in any missing scores.
+// Returns up to 5 recently finished or live matches from all leagues.
+// Now sourced entirely from ESPN free API.
 export async function GET() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
   const now = Date.now();
-  const cutoff = now - 48 * 3_600_000;
+  const cutoff = now - 48 * 3_600_000; // last 48 hours
 
-  const results = new Map<string, RecentScore>();
+  const results: RecentScore[] = [];
 
-  // ── Step 1: TxLINE snapshot ──────────────────────────────────────────────
   try {
-    const res = await fetch(`${appUrl}/api/txline/api/fixtures/snapshot`, {
-      next: { revalidate: 60 },
-    });
-    if (res.ok) {
-      const raw = await res.json();
-      const fixtures: any[] = Array.isArray(raw) ? raw : (raw?.fixtures ?? raw?.data ?? []);
+    // Fetch from all leagues for the past 2 days
+    const dateStr = (ms: number) => {
+      const d = new Date(ms);
+      return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+    };
 
-      for (const tf of fixtures) {
-        const kickoffAt = tf.StartTime ?? '';
-        if (!kickoffAt) continue;
-        const kickoffMs = new Date(kickoffAt).getTime();
-        if (kickoffMs < cutoff || kickoffMs > now) continue;
+    const dates = [
+      dateStr(now - 2 * 86_400_000),
+      dateStr(now - 86_400_000),
+      dateStr(now),
+    ].join(',');
 
-        const rawState = tf.GameState ?? tf.gameState ?? tf.Status ?? tf.status ?? '';
-        const strState = String(rawState).toLowerCase();
-        const intState = typeof rawState === 'number' ? rawState : null;
-        const isFinished =
-          [9, 10, 11].includes(intState as number) ||
-          ['fulltime', 'finished', 'postgame', 'abandoned'].some(s => strState.includes(s));
-        if (!isFinished) continue;
+    const leagueSlugs = LEAGUES.map(l => l.espnSlug);
+    const fixtures = await fetchAllLeaguesFixtures(leagueSlugs, dates);
 
-        const comp = (tf.CompetitionName ?? '').toLowerCase();
-        if (!comp.includes('world cup')) continue;
+    for (const f of fixtures) {
+      if (!f.kickoffAt) continue;
+      const kickoffMs = new Date(f.kickoffAt).getTime();
+      if (kickoffMs < cutoff || kickoffMs > now + 90 * 60_000) continue;
+      // Must be finished or live
+      if (f.statusState === 'pre' && f.homeScore === null) continue;
+      if (f.homeScore === null && f.awayScore === null) continue;
 
-        const isP1Home = tf.Participant1IsHome !== false;
-        const rawHome = isP1Home ? (tf.Participant1 ?? '') : (tf.Participant2 ?? '');
-        const rawAway = isP1Home ? (tf.Participant2 ?? '') : (tf.Participant1 ?? '');
-        const homeTeam = resolve(rawHome);
-        const awayTeam = resolve(rawAway);
-        if (!homeTeam || !awayTeam) continue;
-
-        const p1G = tf.Score?.Participant1?.Total?.Goals ?? tf.Score?.Participant1?.Goals;
-        const p2G = tf.Score?.Participant2?.Total?.Goals ?? tf.Score?.Participant2?.Goals;
-        const sh = typeof p1G === 'number' ? (isP1Home ? p1G : p2G) : null;
-        const sa = typeof p2G === 'number' ? (isP1Home ? p2G : p1G) : null;
-
-        const key = `${norm(homeTeam)}__${norm(awayTeam)}`;
-        results.set(key, {
-          homeTeam, awayTeam,
-          homeFlag: flag(homeTeam), awayFlag: flag(awayTeam),
-          kickoffAt,
-          scoreHome: sh as number | null,
-          scoreAway: sa as number | null,
-          source: 'txline',
-        });
-      }
-    }
-  } catch { /* TxLINE unavailable */ }
-
-  // ── Step 2: Seed from static fixture list for matches TxLINE didn't report ─
-  const staticFinished = WC2026_FIXTURES
-    .filter(f => {
-      const ms = new Date(f.kickoffAt).getTime();
-      return ms >= cutoff && ms <= now;
-    })
-    .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime());
-
-  for (const f of staticFinished) {
-    const k1 = `${norm(f.homeTeam)}__${norm(f.awayTeam)}`;
-    const k2 = `${norm(f.awayTeam)}__${norm(f.homeTeam)}`;
-    if (!results.has(k1) && !results.has(k2)) {
-      results.set(k1, {
-        homeTeam: f.homeTeam, awayTeam: f.awayTeam,
-        homeFlag: f.homeFlag, awayFlag: f.awayFlag,
+      results.push({
+        homeTeam: resolveTeamName(f.homeTeam),
+        awayTeam: resolveTeamName(f.awayTeam),
+        homeFlag: f.homeLogo || getTeamFlag(f.homeTeam),
+        awayFlag: f.awayLogo || getTeamFlag(f.awayTeam),
         kickoffAt: f.kickoffAt,
-        scoreHome: null, scoreAway: null,
-        source: 'static',
+        scoreHome: f.homeScore,
+        scoreAway: f.awayScore,
+        leagueId: f.leagueId,
+        source: 'espn',
       });
     }
+  } catch (err) {
+    console.error('[scores/recent] ESPN fetch failed:', err);
   }
 
-  // ── Step 3: Backup source for any entry still missing scores ─────────────
-  const needScore = Array.from(results.values()).filter(r => r.scoreHome === null);
-
-  if (needScore.length > 0) {
-    // Search dates relative to each match's own kickoff (day before/of/after), not to
-    // "now" — the backup source sometimes lists a match under a different calendar date
-    // than our own kickoff time (timezone rollover, admin correction, etc.), and a
-    // now-anchored window can drift entirely past a fixture's real listing once a few
-    // days pass. This mirrors the same kickoff-relative search /api/match/result uses,
-    // which reliably finds these matches.
-    const dates = new Set<string>();
-    for (const r of needScore) {
-      const kickoff = new Date(r.kickoffAt).getTime();
-      for (let i = -1; i <= 1; i++) {
-        const d = new Date(kickoff + i * 86_400_000);
-        dates.add(
-          `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`
-        );
-      }
-    }
-
-    const backupEvents: any[] = [];
-    await Promise.all(
-      [...dates].map(async dateStr => {
-        try {
-          const r = await fetch(
-            `${BACKUP_SCORE_URL}?dates=${dateStr}&limit=20`,
-            { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 120 } }
-          );
-          if (r.ok) backupEvents.push(...((await r.json()).events ?? []));
-        } catch { /* backup source unavailable for this date */ }
-      })
-    );
-
-    for (const ev of backupEvents) {
-      const comp = ev.competitions?.[0];
-      if (!comp?.status?.type?.completed) continue;
-
-      const homeComp = comp.competitors?.find((c: any) => c.homeAway === 'home');
-      const awayComp = comp.competitors?.find((c: any) => c.homeAway === 'away');
-      if (!homeComp || !awayComp) continue;
-
-      const backupHome = resolve(homeComp.team?.displayName ?? '');
-      const backupAway = resolve(awayComp.team?.displayName ?? '');
-      const sh = parseInt(homeComp.score ?? '', 10);
-      const sa = parseInt(awayComp.score ?? '', 10);
-      if (!backupHome || !backupAway || isNaN(sh) || isNaN(sa)) continue;
-
-      for (const [, result] of results) {
-        if (result.scoreHome !== null) continue;
-        const matchNormal =
-          norm(result.homeTeam) === norm(backupHome) && norm(result.awayTeam) === norm(backupAway);
-        const matchReversed =
-          norm(result.homeTeam) === norm(backupAway) && norm(result.awayTeam) === norm(backupHome);
-        if (matchNormal) {
-          result.scoreHome = sh; result.scoreAway = sa; result.source = 'backup';
-        } else if (matchReversed) {
-          result.scoreHome = sa; result.scoreAway = sh; result.source = 'backup';
-        }
-      }
-    }
-  }
-
-  const sorted = Array.from(results.values())
+  const sorted = results
     .sort((a, b) => new Date(b.kickoffAt).getTime() - new Date(a.kickoffAt).getTime())
-    .slice(0, 3);
+    .slice(0, 5);
 
   return NextResponse.json(sorted, {
     headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },

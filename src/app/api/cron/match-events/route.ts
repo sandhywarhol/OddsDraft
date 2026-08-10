@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendMessage, formatMatchEvent, formatMatchStats } from '@/lib/telegram-bot';
-import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
-import { mergeEvents } from '@/lib/txline';
+import { fetchEspnMatchSummary, fetchAllLeaguesFixtures, type EspnMatchEvent } from '@/lib/espn';
+import { LEAGUES } from '@/lib/leagues';
 import { calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
-import { matchPlayerName, buildPlayerIdMap } from '@/lib/txline-bridge';
+import {
+  matchPlayerName,
+  buildEspnPlayerIdMapFromRosters,
+  convertEspnEvents,
+  type LiveEvent,
+} from '@/lib/espn-bridge';
 import { WC2026_PLAYERS } from '@/lib/wc2026-players-static';
-import { getFixtureIdRemap, discoverAndSync } from '@/lib/fixture-remap';
-import { checkEspnMatchStatus } from '@/lib/espn';
+import { mapEspnEventType } from '@/lib/espn';
+import { getTeamFlag } from '@/lib/fixtures';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,59 +20,21 @@ const supabase = createClient(
 );
 
 const SIGNIFICANT = new Set([
-  'goal', 'penalty_outcome', 'own_goal', 'red_card', 'penalty_save',
+  'goal', 'own_goal', 'red_card', 'penalty_save',
   'half_time', 'full_time', 'game_finalised',
   'yellow_card', 'substitution', 'corner_kick', 'var_review', 'extra_time',
-  'penalty_won', 'penalty_missed', 'kick_off',
-  'shot', 'danger_attack',
+  'penalty_won', 'penalty_missed', 'kick_off', 'shot', 'danger_attack',
 ]);
 
-// These events are stored in live_match_events and marked as notified,
-// but NOT sent as individual Telegram messages — a rich stats block is
-// sent by the cron instead (same dedup key as /api/telegram/stats).
-// game_finalised = true end for knockout matches (after ET/pens).
 const STATS_ONLY = new Set(['half_time', 'full_time', 'game_finalised']);
+const SILENT_DB_ONLY = new Set(['shot', 'danger_attack', 'corner_kick', 'kick_off']);
 
-// Recorded to live_match_events (so /api/match/result's Shots/Danger Attacks
-// stats aren't stuck at 0) but never sent as individual Telegram messages —
-// these fire far too often per match to be worth a ping each time.
-const SILENT_DB_ONLY = new Set(['shot', 'danger_attack']);
-
-// Contest types users can enter (mirrors VALID_CONTEST_TYPES in api/contest/enter).
-// Used to compute rewards for every contest type once a match is confirmed
-// finished, so claiming doesn't depend on someone having the live page open.
 const CONTEST_TYPES = ['top3', '5050', 'wta'] as const;
 
-const ACTION_MAP: Record<string, string> = {
-  goal: 'goal', scored: 'goal',
-  penalty_outcome: 'goal', penaltyoutcome: 'goal',
-  penalty_goal: 'goal', penaltygoal: 'goal', goal_penalty: 'goal',
-  penalty_scored: 'goal', penaltyscored: 'goal',
-  own_goal: 'own_goal', owngoal: 'own_goal',
-  yellowcard: 'yellow_card', yellow_card: 'yellow_card',
-  redcard: 'red_card', red_card: 'red_card',
-  substitution: 'substitution', sub: 'substitution',
-  penalty_save: 'penalty_save', penaltysave: 'penalty_save',
-  half_time: 'half_time', halftime: 'half_time', halftime_finalised: 'half_time',
-  full_time: 'full_time', fulltime: 'full_time',
-  // game_finalised = definitive match end (after ET/pens for knockout matches)
-  game_finalised: 'game_finalised',
-  kick_off: 'kick_off', kickoff: 'kick_off', secondhalf: 'kick_off',
-  // TxLINE raw event type names (from txodds.ts mapEventToFantasyType):
-  corner: 'corner_kick', corner_kick: 'corner_kick',
-  var: 'var_review', var_review: 'var_review',
-  penalty: 'penalty_won', penaltymiss: 'penalty_missed', penalty_miss: 'penalty_missed',
-  shot: 'shot',
-  high_danger_possession: 'danger_attack', danger_possession: 'danger_attack',
-};
-
 // GET /api/cron/match-events?secret=<CRON_SECRET>
-// Called by an external cron service (e.g. cron-job.org) every 60 seconds.
-// Polls TxLINE for live match events and sends Telegram notifications to subscribers.
+// Polls ESPN summary endpoint for all live matches across all tracked leagues.
+// Processes keyEvents and writes to live_match_events, sends Telegram notifications.
 export async function GET(req: NextRequest) {
-  // Auth accepts BOTH triggers so the live feed has a backup during matches:
-  //   - external cron (cron-job.org): ?secret=<CRON_SECRET>
-  //   - Vercel Cron: Authorization: Bearer <CRON_SECRET> (sent automatically by Vercel)
   const cronSecret = process.env.CRON_SECRET;
   const querySecret = req.nextUrl.searchParams.get('secret');
   const authHeader = req.headers.get('authorization');
@@ -77,424 +44,276 @@ export async function GET(req: NextRequest) {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://odds-draft.vercel.app';
-
-  // Find matches that are currently live (started within last 4h to handle delays).
-  // Use TxLINE-enriched schedule as the source of truth for kickoff times so that
-  // placeholder dates in WC2026_FIXTURES never cause the cron to miss a live match.
   const now = Date.now();
-  let fixtureSource = WC2026_FIXTURES as typeof WC2026_FIXTURES;
-  try {
-    const schedRes = await fetch(`${appUrl}/api/schedule/wc2026`, { cache: 'no-store' });
-    if (schedRes.ok) {
-      const enriched = await schedRes.json();
-      if (Array.isArray(enriched) && enriched.length > 0) fixtureSource = enriched;
-    }
-  } catch { /* fall through to static */ }
 
-  const liveFixtures = fixtureSource.filter(f => {
+  // ── 1. Find live/upcoming fixtures from ESPN across all leagues ──────────────
+  const leagueSlugs = LEAGUES.map(l => l.espnSlug);
+
+  let allEspnFixtures;
+  try {
+    allEspnFixtures = await fetchAllLeaguesFixtures(leagueSlugs);
+  } catch (err) {
+    console.error('[CronMatchEvents] Failed to fetch ESPN fixtures:', err);
+    return NextResponse.json({ ok: false, error: 'ESPN fetch failed' }, { status: 502 });
+  }
+
+  // Filter for live + recently started matches (within 4h of kickoff)
+  const liveFixtures = allEspnFixtures.filter(f => {
     if (!f.kickoffAt) return false;
     const ko = new Date(f.kickoffAt).getTime();
-    return now > ko - 90 * 60 * 1000 && now < ko + 4 * 3600 * 1000;
+    const WINDOW_START = ko - 15 * 60_000;   // 15 min before
+    const WINDOW_END   = ko + 4 * 3_600_000; // 4h after
+    return now >= WINDOW_START && now <= WINDOW_END;
   });
 
   if (liveFixtures.length === 0) {
-    return NextResponse.json({ ok: true, message: 'No live matches right now' });
+    return NextResponse.json({ ok: true, message: 'No live matches right now', checked: allEspnFixtures.length });
   }
 
+  console.log(`[CronMatchEvents] Processing ${liveFixtures.length} live/upcoming fixtures`);
   const results: Record<string, number> = {};
 
-  // Fetch once per cron run — result is cached server-side for 5 min
-  const fixtureRemap = await getFixtureIdRemap();
-
   for (const fixture of liveFixtures) {
+    const fixtureId = fixture.espnId;
+    const leagueSlug = fixture.leagueId;
+
     try {
-      // Remap our placeholder fixture IDs to the ones TxLINE actually uses.
-      // DB operations (notified_events, contest_entries) keep using fixture.fixtureId.
-      let txlineFixtureId = fixtureRemap[fixture.fixtureId] ?? fixture.fixtureId;
+      // ── 2. Check if already finalized ─────────────────────────────────────
+      const { data: existingFinal } = await supabase
+        .from('live_match_events')
+        .select('event_id')
+        .eq('fixture_id', fixtureId)
+        .eq('event_type', 'game_finalised')
+        .limit(1);
 
-      // Use server-side proxy — injects auth, no client token needed.
-      // Path matches live page: /api/txline/api/scores/updates/{id}
-      // Proxy returns a raw SSE array; mergeEvents() merges it into a state object with _allEvents.
-      let scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
-      // 403/404 means TxLINE doesn't know this fixture ID — our static ID is a placeholder.
-      // Also run discovery when events come back empty (ID known but no data yet).
-      const needsDiscovery = (!scoreRes.ok && (scoreRes.status === 403 || scoreRes.status === 404)) || scoreRes.ok;
-      let scoreArr: any = scoreRes.ok ? await scoreRes.json() : [];
-      let raw: any = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
-      let allEvents: any[] = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
-
-      // Attempt auto-discovery by kickoff time when our ID is unrecognised or returns nothing.
-      if (needsDiscovery && allEvents.length === 0 && fixture.kickoffAt) {
-        const discovered = await discoverAndSync(fixture.fixtureId, fixture.kickoffAt, appUrl);
-        if (discovered && discovered !== txlineFixtureId) {
-          txlineFixtureId = discovered;
-          scoreRes = await fetch(`${appUrl}/api/txline/api/scores/updates/${txlineFixtureId}`, { cache: 'no-store' });
-          if (scoreRes.ok) {
-            scoreArr = await scoreRes.json();
-            raw = Array.isArray(scoreArr) && scoreArr.length > 0 ? mergeEvents(scoreArr) : (scoreArr ?? {});
-            allEvents = Array.isArray((raw as any)?._allEvents) ? (raw as any)._allEvents : [];
-          }
-        }
+      if (existingFinal?.length) {
+        continue; // Already processed — skip
       }
 
-      // ── ESPN fallback: detect match completion when TxLINE stays silent ──────
-      // TxLINE (esp. on the devnet feed) sometimes never sends full_time/
-      // game_finalised for a fixture, which otherwise blocks matchCompleted on
-      // the live page forever and users can never claim SOL/card rewards.
-      // Once the match should reasonably be over, cross-check ESPN and, if it
-      // confirms completion, synthesize the finish signal ourselves.
-      try {
-        const kickoffMsF = fixture.kickoffAt ? new Date(fixture.kickoffAt).getTime() : 0;
-        const isKnockoutStageF = ['qf', 'sf', 'final'].includes(fixture.stage as string);
-        const expectedEndMs = kickoffMsF + (isKnockoutStageF ? 3 : 2) * 3600 * 1000;
-
-        const txlineReportsFinish = allEvents.some(ev => {
-          const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-          const mapped = ACTION_MAP[rt] ?? rt;
-          return mapped === 'full_time' || mapped === 'game_finalised';
-        });
-
-        if (!txlineReportsFinish && kickoffMsF && now >= expectedEndMs) {
-          const { data: existingFinal } = await supabase
-            .from('live_match_events')
-            .select('event_id')
-            .eq('fixture_id', fixture.fixtureId)
-            .eq('event_type', 'game_finalised')
-            .limit(1);
-
-          if (!existingFinal?.length) {
-            const espn = await checkEspnMatchStatus(fixture.homeTeam, fixture.awayTeam, fixture.kickoffAt);
-            if (espn?.completed) {
-              await supabase.from('live_match_events').upsert({
-                fixture_id: fixture.fixtureId,
-                event_id: 'espn-game_finalised',
-                minute: 90,
-                event_type: 'game_finalised',
-                player_name: '',
-                team_name: '',
-                home_score: espn.scoreHome,
-                away_score: espn.scoreAway,
-              }, { onConflict: 'fixture_id,event_id' });
-
-              console.log(`[CronMatchEvents] ESPN fallback: ${fixture.homeTeam} vs ${fixture.awayTeam} (${fixture.fixtureId}) marked finished — TxLINE never reported it.`);
-
-              // Compute rewards server-side for every contest type so claims
-              // don't depend on any user having the live page open.
-              for (const ct of CONTEST_TYPES) {
-                fetch(`${appUrl}/api/prize/submit`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ fixtureId: fixture.fixtureId, contestType: ct }),
-                }).catch(e => console.error('[CronMatchEvents] ESPN fallback prize/submit failed:', e));
-              }
-            }
-          }
-        }
-      } catch (espnErr) {
-        console.error(`[CronMatchEvents] ESPN fallback check failed for ${fixture.fixtureId}:`, espnErr);
+      // ── 3. Fetch ESPN match summary ─────────────────────────────────────────
+      const summary = await fetchEspnMatchSummary(leagueSlug, fixtureId);
+      if (!summary) {
+        console.warn(`[CronMatchEvents] No ESPN summary for ${fixtureId} (${leagueSlug})`);
+        continue;
       }
 
-      if (!scoreRes.ok && allEvents.length === 0) continue;
-      if (allEvents.length === 0) continue;
+      const { events: espnEvents, rosters, homeTeamId, awayTeamId,
+              homeScore, awayScore, completed, statusState } = summary;
 
-      // Score from authoritative TxLINE source
-      const scoreHome: number = (raw as any)?.Score?.Participant1?.Total?.Goals ?? 0;
-      const scoreAway: number = (raw as any)?.Score?.Participant2?.Total?.Goals ?? 0;
+      // ── 4. Build player ID map from rosters ──────────────────────────────
+      const playerIdMap = buildEspnPlayerIdMapFromRosters(
+        rosters, fixture.homeTeam, fixture.awayTeam
+      );
 
-      // ── Devnet loop / regression guard ───────────────────────────────────────
-      // The TxLINE devnet feed REPLAYS finished matches: it plays kickoff → goals →
-      // full_time, then resets to 0-0 and loops. Without this guard every loop would
-      // overwrite the stored final score with a lower one and re-accumulate duplicate
-      // events at shifted minutes — corrupting the leaderboard and, worse, the prize
-      // payouts derived from live_match_events. A real match never regresses (score
-      // only climbs, minutes only advance), so a feed showing LESS progress than we've
-      // already recorded is a loop artifact and must be ignored. Skipping a tick is
-      // always safe — it never deletes data; the next non-regressed tick resumes.
-      const incomingGoals = scoreHome + scoreAway;
-      const incomingMaxMinute = allEvents.reduce((mx: number, ev: any) => {
-        const m = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : (parseInt(ev.minute) || 0);
-        return Math.max(mx, m);
-      }, 0);
-      {
-        const { data: storedRows } = await supabase
-          .from('live_match_events')
-          .select('event_type, home_score, away_score, minute')
-          .eq('fixture_id', fixture.fixtureId);
-        const rows = storedRows ?? [];
-        // Definitive end already recorded → freeze this fixture: never process it again.
-        // (game_finalised is only written on a real/ESPN-confirmed match end.)
-        if (rows.some(r => r.event_type === 'game_finalised')) {
-          continue;
-        }
-        const storedGoals = rows.reduce((mx, r) => Math.max(mx, (r.home_score ?? 0) + (r.away_score ?? 0)), 0);
-        const storedMaxMinute = rows.reduce((mx, r) => Math.max(mx, r.minute ?? 0), 0);
-        // Regression in either dimension = the feed looped back. The +5 minute buffer
-        // tolerates minor clock jitter; the guard only engages once real progress exists.
-        if (rows.length > 0 && (incomingGoals < storedGoals || incomingMaxMinute + 5 < storedMaxMinute)) {
-          console.log(`[CronMatchEvents] Loop replay ignored for ${fixture.fixtureId}: incoming ${incomingGoals}g/${incomingMaxMinute}' < stored ${storedGoals}g/${storedMaxMinute}'`);
-          continue;
-        }
-      }
-
-      // Filter confirmed events only — TxLINE sends Confirmed=false first, then Confirmed=true.
-      const confirmedEvents = allEvents.filter(ev => ev.Confirmed !== false);
-
-      // Filter only significant events we haven't notified about yet
-      const sigConfirmed = confirmedEvents.filter(ev => {
-        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-        const mapped = ACTION_MAP[rawType] ?? rawType;
-        return SIGNIFICANT.has(mapped);
+      // ── 5. Filter new significant events ─────────────────────────────────
+      const significantEvents = espnEvents.filter(ev => {
+        const fantasyType = mapEspnEventType(ev.type, undefined, ev.shootout);
+        return fantasyType && SIGNIFICANT.has(fantasyType);
       });
 
-      if (sigConfirmed.length === 0) continue;
+      if (significantEvents.length === 0 && !completed) continue;
 
-      // TxLINE sends the same logical event multiple times as it gets progressively
-      // enriched (consecutive Seq numbers, same action/minute/participant) — first
-      // with an empty Data payload, then with type info, and only in the LAST
-      // message with the actual PlayerId. Deduplicate by content key but keep the
-      // LAST (richest) version of each key, not the first — otherwise we permanently
-      // store player-less events and fantasy points can never be attributed.
-      const contentMap = new Map<string, typeof sigConfirmed[number]>();
-      for (const ev of sigConfirmed) {
-        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-        const mapped = ACTION_MAP[rawType] ?? rawType;
-        const min = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
-        const d = ev.Data?.New ?? ev.Data ?? {};
-        const participant: number = (typeof d === 'object' ? (d as any).Participant : null) ?? ev.Participant ?? 0;
-        const contentKey = `${mapped}-${min}-${participant}`;
-        contentMap.set(contentKey, ev);
-      }
-      const candidateEvents = Array.from(contentMap.values());
-
-      // Event IDs use content key (not raw Seq) so that TxLINE double-sends of the
-      // same logical event always map to the same ID in notified_events.
-      const eventIds = Array.from(contentMap.keys());
+      // Build event IDs using ESPN event id for dedup
+      const eventIds = significantEvents.map(ev => `espn-${ev.id}`);
 
       const { data: alreadyNotified } = await supabase
         .from('notified_events')
         .select('event_id')
-        .eq('fixture_id', fixture.fixtureId)
+        .eq('fixture_id', fixtureId)
         .in('event_id', eventIds);
 
       const notifiedSet = new Set((alreadyNotified ?? []).map((r: { event_id: string }) => r.event_id));
-      const newEvents = candidateEvents.filter((ev, i) => !notifiedSet.has(eventIds[i]));
+      const newEspnEvents = significantEvents.filter(ev => !notifiedSet.has(`espn-${ev.id}`));
 
-      if (newEvents.length === 0) continue;
+      // ── 6. Handle match completion (ESPN confirms it) ─────────────────────
+      if (completed) {
+        const { data: hasFinalized } = await supabase
+          .from('live_match_events')
+          .select('event_id')
+          .eq('fixture_id', fixtureId)
+          .eq('event_type', 'game_finalised')
+          .limit(1);
 
-      // Build TxLINE PlayerId → internal player ID map for name resolution
-      const apiToken = process.env.TXODDS_API_TOKEN ?? process.env.NEXT_PUBLIC_TXODDS_API_TOKEN ?? '';
-      const playerIdMap: Record<string, string> = apiToken
-        ? await buildPlayerIdMap(apiToken, txlineFixtureId, fixture.homeTeam, fixture.awayTeam)
-        : {};
+        if (!hasFinalized?.length) {
+          await supabase.from('live_match_events').upsert({
+            fixture_id: fixtureId,
+            event_id: 'espn-game_finalised',
+            minute: 90,
+            event_type: 'game_finalised',
+            player_name: '',
+            team_name: '',
+            home_score: homeScore ?? 0,
+            away_score: awayScore ?? 0,
+          }, { onConflict: 'fixture_id,event_id' });
 
-      // ── Write all new events to live_match_events FIRST ───────────────────
-      // CRITICAL: this table is the server-side source of truth for all participants'
-      // fantasy scores in /api/contest/leaderboard. Must be written unconditionally —
-      // before any Telegram subscriber check — so opponent scores are never stuck at 0
-      // just because nobody subscribed to Telegram notifications for this match.
-      await supabase.from('live_match_events').upsert(
-        newEvents.map((ev, i) => {
-          const idx = candidateEvents.indexOf(newEvents[i]);
-          const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-          const eventType = ACTION_MAP[rawType] ?? rawType;
-          const minSec = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
-          // TxLINE native format: player info lives in Data.New, not top-level
-          const d = ev.Data?.New ?? ev.Data ?? {};
-          const rawPName = d.PlayerName ?? ev.Player ?? ev.player ?? '';
-          const participant: number = d.Participant ?? ev.Participant ?? 1;
-          const tName = participant === 2 ? fixture.awayTeam : fixture.homeTeam;
-          const txPId = String(d.PlayerId ?? d.Player1Id ?? '');
-          const rId = rawPName
-            ? matchPlayerName(rawPName, tName)
-            : (txPId ? playerIdMap[txPId] : null);
-          const rPlayer = rId ? WC2026_PLAYERS.find(p => p.id === rId) : null;
-          return {
-            fixture_id: fixture.fixtureId,
-            event_id: eventIds[idx],
-            minute: minSec,
-            event_type: eventType,
-            player_name: rPlayer?.name ?? rawPName,
-            team_name: tName,
-            home_score: scoreHome,
-            away_score: scoreAway,
-          };
-        }),
-        { onConflict: 'fixture_id,event_id' }
-      );
+          console.log(`[CronMatchEvents] ESPN confirmed finish: ${fixture.homeTeam} vs ${fixture.awayTeam} (${fixtureId}) ${homeScore}-${awayScore}`);
 
-      // Fetch subscribers for this match (Telegram notifications only)
+          // Compute rewards server-side
+          for (const ct of CONTEST_TYPES) {
+            fetch(`${appUrl}/api/prize/submit`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fixtureId, contestType: ct }),
+            }).catch(e => console.error('[CronMatchEvents] prize/submit failed:', e));
+          }
+        }
+      }
+
+      if (newEspnEvents.length === 0) continue;
+
+      // ── 7. Write new events to live_match_events ──────────────────────────
+      const upsertRows = newEspnEvents.map(ev => {
+        const fantasyType = mapEspnEventType(ev.type, undefined, ev.shootout) ?? ev.type;
+        const primary = ev.participants[0];
+        const espnPlayerId = primary?.athleteId ?? '';
+        const ourPlayerId = playerIdMap[espnPlayerId] ?? '';
+        const playerInfo = ourPlayerId ? WC2026_PLAYERS.find(p => p.id === ourPlayerId) : null;
+        const playerName = primary?.displayName || playerInfo?.name || '';
+
+        const isHome = ev.teamId === homeTeamId || ev.teamName === fixture.homeTeam;
+        const teamName = isHome ? fixture.homeTeam : fixture.awayTeam;
+
+        // Compute minute
+        const minute = ev.period === 1
+          ? Math.floor(ev.clockSeconds / 60)
+          : ev.period === 2
+            ? 45 + Math.floor(Math.max(0, ev.clockSeconds - 2700) / 60)
+            : Math.floor(ev.clockSeconds / 60);
+
+        return {
+          fixture_id: fixtureId,
+          event_id: `espn-${ev.id}`,
+          minute: Math.max(0, minute),
+          event_type: fantasyType,
+          player_name: playerName,
+          team_name: teamName,
+          home_score: homeScore ?? 0,
+          away_score: awayScore ?? 0,
+        };
+      });
+
+      await supabase.from('live_match_events')
+        .upsert(upsertRows, { onConflict: 'fixture_id,event_id' });
+
+      // ── 8. Telegram notifications ─────────────────────────────────────────
       const { data: subs } = await supabase
         .from('telegram_subscriptions')
         .select('chat_id')
-        .eq('contest_id', fixture.fixtureId);
+        .eq('contest_id', fixtureId);
 
       if (!subs?.length) {
-        // Still mark as notified so we don't reprocess
+        // Mark as notified even without subscribers
         await supabase.from('notified_events').upsert(
-          newEvents.map((ev, i) => {
-            const idx = candidateEvents.indexOf(newEvents[i]);
-            return { fixture_id: fixture.fixtureId, event_id: eventIds[idx] };
-          })
+          eventIds
+            .filter(id => !notifiedSet.has(id))
+            .map(id => ({ fixture_id: fixtureId, event_id: id }))
         );
         continue;
       }
 
       let sent = 0;
-      for (let i = 0; i < newEvents.length; i++) {
-        const ev = newEvents[i];
-        const rawType = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-        const eventType = ACTION_MAP[rawType] ?? rawType;
 
-        // Already written to live_match_events above (for Shots/Danger Attacks stats) —
-        // too frequent to be worth an individual Telegram message per occurrence.
-        if (SILENT_DB_ONLY.has(eventType)) continue;
+      for (const ev of newEspnEvents) {
+        const fantasyType = mapEspnEventType(ev.type, undefined, ev.shootout) ?? ev.type;
+        if (!fantasyType || !SIGNIFICANT.has(fantasyType)) continue;
+        if (SILENT_DB_ONLY.has(fantasyType)) continue;
 
-        // HT/FT stats: send rich stats block even when no browser tab is open.
-        // For knockout matches (QF/SF/Final), TxLINE sends full_time at 90 min
-        // but the match may continue to ET/pens. We skip full_time stats for
-        // knockout stages and wait for game_finalised (the definitive end signal).
-        // For group/r32/r16 there is no ET, so full_time is always the real end.
-        if (STATS_ONLY.has(eventType)) {
-          const isKnockoutStage = ['qf', 'sf', 'final'].includes(fixture.stage as string);
-          // Knockout: defer FT stats until game_finalised arrives
-          if (eventType === 'full_time' && isKnockoutStage) { continue; }
-          // Non-knockout: full_time already handled stats, skip game_finalised
-          if (eventType === 'game_finalised' && !isKnockoutStage) { continue; }
-
-          const statsLabel = eventType === 'half_time' ? 'Half Time' : 'Full Time';
-          // game_finalised (knockout) shares the same dedup key as full_time so
-          // if somehow both fire we never double-send.
-          const dedupId = eventType === 'half_time' ? 'stats-half_time' : 'stats-full_time';
+        // HT/FT stats block
+        if (STATS_ONLY.has(fantasyType)) {
+          const dedupId = fantasyType === 'half_time' ? 'stats-half_time' : 'stats-full_time';
           const { error: dedupErr } = await supabase
             .from('notified_events')
-            .insert({ fixture_id: fixture.fixtureId, event_id: dedupId });
+            .insert({ fixture_id: fixtureId, event_id: dedupId });
+
           if (!dedupErr) {
-            // Build stats from live_match_events — same approach as /api/telegram/stats
             const { data: matchEvRows } = await supabase
               .from('live_match_events')
               .select('event_type, team_name, home_score, away_score')
-              .eq('fixture_id', fixture.fixtureId);
+              .eq('fixture_id', fixtureId);
+
             const cnt = (type: string, team: string) =>
               (matchEvRows ?? []).filter(e => e.event_type === type && e.team_name === team).length;
-            const latestRow = (matchEvRows ?? []).slice(-1)[0];
-            const dbScore = { home: latestRow?.home_score ?? scoreHome, away: latestRow?.away_score ?? scoreAway };
-            const serverStats = {
-              goals:   [cnt('goal',             fixture.homeTeam), cnt('goal',             fixture.awayTeam)] as [number,number],
-              corners: [cnt('corner_kick',      fixture.homeTeam), cnt('corner_kick',      fixture.awayTeam)] as [number,number],
-              yellows: [cnt('yellow_card',      fixture.homeTeam), cnt('yellow_card',      fixture.awayTeam)] as [number,number],
-              reds:    [cnt('red_card',         fixture.homeTeam), cnt('red_card',         fixture.awayTeam)] as [number,number],
-              saves:   [cnt('goalkeeper_save',  fixture.homeTeam), cnt('goalkeeper_save',  fixture.awayTeam)] as [number,number],
-              subs:    [cnt('substitution',     fixture.homeTeam), cnt('substitution',     fixture.awayTeam)] as [number,number],
-              dangers: [cnt('danger_attack',    fixture.homeTeam), cnt('danger_attack',    fixture.awayTeam)] as [number,number],
-            };
-            const { data: tgSubs } = await supabase
-              .from('telegram_subscriptions')
-              .select('chat_id')
-              .eq('contest_id', fixture.fixtureId);
-            if (tgSubs?.length) {
-              const text = formatMatchStats({
-                label: statsLabel, score: dbScore, stats: serverStats,
-                homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
-                homeFlag: fixture.homeFlag ?? '', awayFlag: fixture.awayFlag ?? '',
-              });
-              await Promise.allSettled(tgSubs.map(s => sendMessage(s.chat_id, text, { parse_mode: 'Markdown' })));
-              console.log(`[CronMatchEvents] ${statsLabel} stats → ${tgSubs.length} subscribers (${fixture.fixtureId})`);
-            }
 
-            // Push live leaderboard + personal points to subscribers at the same HT/FT moment
+            const latestRow = (matchEvRows ?? []).slice(-1)[0];
+            const dbScore = {
+              home: latestRow?.home_score ?? (homeScore ?? 0),
+              away: latestRow?.away_score ?? (awayScore ?? 0),
+            };
+
+            const statsLabel = fantasyType === 'half_time' ? 'Half Time' : 'Full Time';
+            const serverStats = {
+              goals:   [cnt('goal', fixture.homeTeam), cnt('goal', fixture.awayTeam)] as [number, number],
+              corners: [cnt('corner_kick', fixture.homeTeam), cnt('corner_kick', fixture.awayTeam)] as [number, number],
+              yellows: [cnt('yellow_card', fixture.homeTeam), cnt('yellow_card', fixture.awayTeam)] as [number, number],
+              reds:    [cnt('red_card', fixture.homeTeam), cnt('red_card', fixture.awayTeam)] as [number, number],
+              saves:   [cnt('goalkeeper_save', fixture.homeTeam), cnt('goalkeeper_save', fixture.awayTeam)] as [number, number],
+              subs:    [cnt('substitution', fixture.homeTeam), cnt('substitution', fixture.awayTeam)] as [number, number],
+              dangers: [cnt('danger_attack', fixture.homeTeam), cnt('danger_attack', fixture.awayTeam)] as [number, number],
+            };
+
+            const homeFlag = getTeamFlag(fixture.homeTeam);
+            const awayFlag = getTeamFlag(fixture.awayTeam);
+            const text = formatMatchStats({
+              label: statsLabel, score: dbScore, stats: serverStats,
+              homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+              homeFlag, awayFlag,
+            });
+            await Promise.allSettled(subs.map(s => sendMessage(s.chat_id, text, { parse_mode: 'Markdown' })));
+
             fetch(`${appUrl}/api/telegram/leaderboard`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                contestId: fixture.fixtureId,
-                contestType: 'all',
-                label: statsLabel,
-                homeTeam: fixture.homeTeam,
-                awayTeam: fixture.awayTeam,
-                homeFlag: fixture.homeFlag ?? '',
-                awayFlag: fixture.awayFlag ?? '',
-                score: dbScore,
+                contestId: fixtureId, contestType: 'all', label: statsLabel,
+                homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
+                homeFlag, awayFlag, score: dbScore,
               }),
             }).catch(e => console.error('[CronMatchEvents] leaderboard push failed:', e));
           }
-          // else: 23505 = already sent by browser tab or earlier cron run — skip
           continue;
         }
 
-        const minute = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
-        const evData = ev.Data?.New ?? ev.Data ?? {};
-
-        // Determine team participant (1 = home, 2 = away)
-        const participant: number = evData.Participant ?? ev.Participant ?? 1;
-        const isHome = participant === 1;
+        // Individual event notification
+        const primary = ev.participants[0];
+        const espnPlayerId = primary?.athleteId ?? '';
+        const ourPlayerId = playerIdMap[espnPlayerId] ?? '';
+        const playerInfo = ourPlayerId ? WC2026_PLAYERS.find(p => p.id === ourPlayerId) : null;
+        const playerName = primary?.displayName || playerInfo?.name || '';
+        const isHome = ev.teamId === homeTeamId || ev.teamName === fixture.homeTeam;
         const teamName = isHome ? fixture.homeTeam : fixture.awayTeam;
-        const teamFlag = isHome ? (fixture.homeFlag ?? '') : (fixture.awayFlag ?? '');
+        const homeFlag = getTeamFlag(fixture.homeTeam);
+        const awayFlag = getTeamFlag(fixture.awayTeam);
+        const teamFlag = isHome ? homeFlag : awayFlag;
+        const minute = ev.period === 1
+          ? Math.floor(ev.clockSeconds / 60)
+          : 45 + Math.floor(Math.max(0, ev.clockSeconds - 2700) / 60);
 
-        // Resolve primary player name
-        const rawPlayerName = evData.PlayerName ?? ev.Player ?? ev.player ?? '';
-        const txPId2 = String(evData.PlayerId ?? evData.Player1Id ?? '');
-        const resolvedId = rawPlayerName
-          ? matchPlayerName(rawPlayerName, teamName)
-          : (txPId2 ? playerIdMap[txPId2] : null);
-        const resolvedPlayer = resolvedId ? WC2026_PLAYERS.find(p => p.id === resolvedId) : null;
-        const playerName = resolvedPlayer?.name ?? rawPlayerName;
-
-        // For substitutions: resolve both the player going IN and OUT
+        // Substitution: player in vs out
         let playerOut: string | undefined;
-        if (eventType === 'substitution') {
-          const outRaw = evData.PlayerOutName ?? evData.Player1Name ?? '';
-          const inRaw  = evData.PlayerInName  ?? evData.Player2Name ?? '';
-          const outId = outRaw ? matchPlayerName(outRaw, teamName) : null;
-          const inId  = inRaw  ? matchPlayerName(inRaw,  teamName) : null;
-          playerOut = (outId ? WC2026_PLAYERS.find(p => p.id === outId)?.name : null) ?? outRaw ?? undefined;
-          const playerIn = (inId ? WC2026_PLAYERS.find(p => p.id === inId)?.name : null) ?? inRaw ?? playerName ?? undefined;
-          const text = formatMatchEvent({
-            eventType,
-            playerName: playerIn ?? '',
-            playerOut,
-            teamName, teamFlag,
-            minute,
-            homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
-            homeFlag: fixture.homeFlag ?? '', awayFlag: fixture.awayFlag ?? '',
-            score: { home: scoreHome, away: scoreAway },
-          });
-          await Promise.allSettled(subs.map(sub => sendMessage(sub.chat_id, text, { parse_mode: 'Markdown' })));
-          sent += subs.length;
-          continue;
+        if (fantasyType === 'substitution' && ev.participants[1]) {
+          playerOut = ev.participants[1].displayName || 'Unknown';
         }
 
         const text = formatMatchEvent({
-          eventType, playerName, teamName, teamFlag,
-          minute,
+          eventType: fantasyType, playerName, playerOut, teamName, teamFlag, minute,
           homeTeam: fixture.homeTeam, awayTeam: fixture.awayTeam,
-          homeFlag: fixture.homeFlag ?? '', awayFlag: fixture.awayFlag ?? '',
-          score: { home: scoreHome, away: scoreAway },
+          homeFlag, awayFlag,
+          score: { home: homeScore ?? 0, away: awayScore ?? 0 },
         });
 
         await Promise.allSettled(subs.map(sub => sendMessage(sub.chat_id, text, { parse_mode: 'Markdown' })));
         sent += subs.length;
       }
 
-      // Mark all new events as notified
-      const newEventIds = newEvents.map(ev => eventIds[candidateEvents.indexOf(ev)]);
-      await supabase.from('notified_events').upsert(
-        newEventIds.map(id => ({ fixture_id: fixture.fixtureId, event_id: id }))
-      );
-
-      // ── Fantasy points notifications ────────────────────────────────────────
-      // For scoring events (goal, card, etc.), find subscribers whose lineup
-      // contains the scoring player and send them a personal "you earned X pts" message.
-      // penalty_won is treated as the scoring event since TxLINE doesn't send goal events for penalties
+      // ── 9. Fantasy points personal notifications ──────────────────────────
       const FANTASY_EVENTS = new Set(['goal', 'own_goal', 'red_card', 'yellow_card', 'penalty_save', 'penalty_won']);
-      const scoringEvents = newEvents.filter(ev => {
-        const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-        return FANTASY_EVENTS.has(ACTION_MAP[rt] ?? rt);
+      const scoringEspnEvents = newEspnEvents.filter(ev => {
+        const ft = mapEspnEventType(ev.type, undefined, ev.shootout);
+        return ft && FANTASY_EVENTS.has(ft);
       });
 
-      if (scoringEvents.length > 0 && subs.length > 0) {
+      if (scoringEspnEvents.length > 0 && subs.length > 0) {
         const chatIds = subs.map((s: { chat_id: number }) => s.chat_id);
-
-        // chat_id → wallet_address
         const { data: tgUsers } = await supabase
           .from('telegram_users')
           .select('chat_id, wallet_address')
@@ -505,87 +324,54 @@ export async function GET(req: NextRequest) {
           const { data: entries } = await supabase
             .from('contest_entries')
             .select('wallet_address, lineup')
-            .eq('fixture_id', fixture.fixtureId)
+            .eq('fixture_id', fixtureId)
             .in('wallet_address', wallets);
 
           if (entries?.length) {
             const walletToChat = new Map(tgUsers.map((u: any) => [u.wallet_address, u.chat_id]));
-
             for (const entry of entries) {
               const chatId = walletToChat.get(entry.wallet_address);
               if (!chatId || !entry.lineup?.players?.length) continue;
 
               const msgs: string[] = [];
-              for (const ev of scoringEvents) {
-                const rt = (ev.Action ?? ev.type ?? ev.action ?? '').toLowerCase().replace(/\s+/g, '_');
-                const eventType = ACTION_MAP[rt] ?? rt;
-                const evData3 = ev.Data?.New ?? ev.Data ?? {};
-                const rawPName = (evData3.PlayerName ?? ev.Player ?? ev.player ?? '').trim();
-                const evParticipant: number = evData3.Participant ?? ev.Participant ?? 1;
-                const evTeam = evParticipant === 2 ? fixture.awayTeam : fixture.homeTeam;
-                const txPId3 = String(evData3.PlayerId ?? evData3.Player1Id ?? '');
-                const txResolvedId = rawPName
-                  ? matchPlayerName(rawPName, evTeam)
-                  : (txPId3 ? playerIdMap[txPId3] : null);
-                if (!txResolvedId && !rawPName) continue;
-                const displayName = txResolvedId
-                  ? (WC2026_PLAYERS.find(p => p.id === txResolvedId)?.name ?? rawPName)
-                  : rawPName;
+              for (const ev of scoringEspnEvents) {
+                const fantasyType = mapEspnEventType(ev.type, undefined, ev.shootout);
+                if (!fantasyType) continue;
 
-                let matched = txResolvedId
-                  ? entry.lineup.players.find((p: any) => p.id === txResolvedId)
+                const primary = ev.participants[0];
+                const espnPlayerId = primary?.athleteId ?? '';
+                const ourId = playerIdMap[espnPlayerId] ?? matchPlayerName(primary?.displayName ?? '', fixture.homeTeam) ?? matchPlayerName(primary?.displayName ?? '', fixture.awayTeam);
+                const displayName = primary?.displayName || (ourId ? WC2026_PLAYERS.find(p => p.id === ourId)?.name ?? '' : '');
+                if (!displayName) continue;
+
+                let matched = ourId
+                  ? entry.lineup.players.find((p: any) => p.id === ourId)
                   : null;
                 if (!matched) {
-                  // Fallback: fuzzy last name match on display name
                   const nameParts = displayName.toLowerCase().split(/\s+/).filter((p: string) => p.length >= 3);
                   matched = entry.lineup.players.find((p: any) =>
                     nameParts.some((part: string) => (p.name ?? '').toLowerCase().includes(part))
                   );
                 }
                 if (!matched) continue;
-                const playerName = displayName;
 
-                const basePts = calculateEventPoints(eventType, matched.position ?? 'ATT');
+                const basePts = calculateEventPoints(fantasyType, matched.position ?? 'ATT');
                 if (basePts === 0) continue;
 
                 const isCaptain = entry.lineup.captain === matched.id;
                 const stars = (entry.lineup.confidence ?? {})[matched.id] ?? 3;
                 const pts = resolvePlayerDelta(basePts, { isCaptain, confidenceStars: stars });
-
                 const ptsStr = pts > 0 ? `+${pts}` : `${pts}`;
-                const evEmoji: Record<string, string> = { goal:'⚽', own_goal:'😰', red_card:'🟥', yellow_card:'🟨', penalty_save:'🧤', penalty_won:'🎯' };
-                const emoji = evEmoji[eventType] ?? '📊';
-                const min = ev.Clock?.Seconds ? Math.floor(ev.Clock.Seconds / 60) : parseInt(ev.minute) || 0;
+                const evEmoji: Record<string, string> = {
+                  goal: '⚽', own_goal: '😰', red_card: '🟥', yellow_card: '🟨',
+                  penalty_save: '🧤', penalty_won: '🎯',
+                };
+                const emoji = evEmoji[fantasyType] ?? '📊';
+                const minute = ev.period === 1
+                  ? Math.floor(ev.clockSeconds / 60)
+                  : 45 + Math.floor(Math.max(0, ev.clockSeconds - 2700) / 60);
                 const capNote = isCaptain ? ' *(C) ×2*' : '';
-                msgs.push(`${emoji} *${playerName}* — ${eventType.replace(/_/g, ' ').toUpperCase()} (${min}')\n*${ptsStr} pts*${capNote}`);
-              }
-
-              // Penalty conceded: deduct points for GK/DEF in the team that conceded.
-              // TxLINE doesn't send this event, so we derive it from penalty_won.
-              for (const penEv of newEvents) {
-                const rt2 = (penEv.Action ?? penEv.type ?? penEv.action ?? '').toLowerCase().replace(/\s+/g, '_');
-                if ((ACTION_MAP[rt2] ?? rt2) !== 'penalty_won') continue;
-                const d2 = penEv.Data?.New ?? penEv.Data ?? {};
-                const scoringParticipant: number = (typeof d2 === 'object' ? (d2 as any).Participant : null) ?? penEv.Participant ?? 1;
-                const concedingTeam = scoringParticipant === 1 ? fixture.awayTeam : fixture.homeTeam;
-                const penMin = penEv.Clock?.Seconds ? Math.floor(penEv.Clock.Seconds / 60) : parseInt(penEv.minute) || 0;
-
-                for (const lp of entry.lineup.players) {
-                  const playerDef = WC2026_PLAYERS.find(p => p.id === lp.id);
-                  if (!playerDef || playerDef.team !== concedingTeam) continue;
-                  if (playerDef.position !== 'GK' && playerDef.position !== 'DEF') continue;
-
-                  const basePts2 = calculateEventPoints('penalty_conceded', playerDef.position);
-                  if (basePts2 === 0) continue;
-
-                  const isCaptain2 = entry.lineup.captain === lp.id;
-                  const stars2 = (entry.lineup.confidence ?? {})[lp.id] ?? 3;
-                  const pts = resolvePlayerDelta(basePts2, { isCaptain: isCaptain2, confidenceStars: stars2 });
-
-                  const ptsStr2 = `${pts}`;
-                  const capNote2 = isCaptain2 ? ' *(C) ×2*' : '';
-                  msgs.push(`🥅 *${playerDef.name}* — PENALTY CONCEDED (${penMin}')\n*${ptsStr2} pts*${capNote2}`);
-                }
+                msgs.push(`${emoji} *${displayName}* — ${fantasyType.replace(/_/g, ' ').toUpperCase()} (${minute}')\n*${ptsStr} pts*${capNote}`);
               }
 
               if (msgs.length > 0) {
@@ -598,13 +384,22 @@ export async function GET(req: NextRequest) {
           }
         }
       }
-      // ── End fantasy points notifications ────────────────────────────────────
 
-      results[fixture.fixtureId] = sent;
+      // Mark events as notified
+      const newEventIds = newEspnEvents.map(ev => `espn-${ev.id}`);
+      await supabase.from('notified_events').upsert(
+        newEventIds.map(id => ({ fixture_id: fixtureId, event_id: id }))
+      );
+
+      results[fixtureId] = sent;
     } catch (err) {
-      console.error(`[CronMatchEvents] Error for fixture ${fixture.fixtureId}:`, err);
+      console.error(`[CronMatchEvents] Error for fixture ${fixtureId}:`, err);
     }
   }
 
-  return NextResponse.json({ ok: true, liveFixtures: liveFixtures.length, results });
+  return NextResponse.json({
+    ok: true,
+    liveFixtures: liveFixtures.length,
+    results,
+  });
 }

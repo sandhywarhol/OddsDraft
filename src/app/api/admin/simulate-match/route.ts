@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getPrizeForRank, calculateEventPoints, resolvePlayerDelta } from '@/lib/fantasy-engine';
-import { matchPlayerName } from '@/lib/txline-bridge';
+import { matchPlayerName } from '@/lib/espn-bridge';
 import { WC2026_FIXTURES } from '@/lib/wc2026-fixtures';
 
 const supabase = createClient(

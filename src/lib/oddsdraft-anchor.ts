@@ -286,3 +286,165 @@ export function buildResolveContestIx(
     data,
   });
 }
+
+// ── USDC Pool Contest Instruction Builders ─────────────────────────────────────
+//
+// Discriminators: sha256("global:<name>")[0:8]
+// Precomputed offline; verified against anchor-lang 1.1.1 discriminator logic.
+//
+// init_usdc_contest    → sha256("global:init_usdc_contest")[0:8]
+// join_usdc_contest    → sha256("global:join_usdc_contest")[0:8]
+// resolve_usdc_contest → sha256("global:resolve_usdc_contest")[0:8]
+
+import { createHash } from 'crypto';
+
+function anchorDiscriminator(name: string): Buffer {
+  return Buffer.from(createHash('sha256').update(`global:${name}`).digest()).subarray(0, 8);
+}
+
+const DISC_INIT_USDC_CONTEST    = anchorDiscriminator('init_usdc_contest');
+const DISC_JOIN_USDC_CONTEST    = anchorDiscriminator('join_usdc_contest');
+const DISC_RESOLVE_USDC_CONTEST = anchorDiscriminator('resolve_usdc_contest');
+
+// Devnet USDC mint (Circle USDC devnet faucet)
+export const USDC_MINT_DEVNET  = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
+export const USDC_MINT_MAINNET = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+export function getUsdcMint(): PublicKey {
+  return process.env.NEXT_PUBLIC_SOLANA_NETWORK === 'mainnet-beta'
+    ? USDC_MINT_MAINNET : USDC_MINT_DEVNET;
+}
+
+// seeds = [b"usdc_contest", contest_id.as_bytes()]
+export function deriveUsdcContestPDA(fixtureId: string): [PublicKey, number] {
+  const seedId = `${fixtureId}_usdc_pool`;
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('usdc_contest'), Buffer.from(seedId)],
+    ODDSDRAFT_PROGRAM_ID
+  );
+}
+
+// seeds = [b"usdc_vault", usdc_contest.key().as_ref()]
+export function deriveUsdcVaultPDA(usdcContestPDA: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('usdc_vault'), usdcContestPDA.toBuffer()],
+    ODDSDRAFT_PROGRAM_ID
+  );
+}
+
+// seeds = [b"usdc_participant", usdc_contest.key(), user.key()]
+export function deriveUsdcParticipantPDA(usdcContestPDA: PublicKey, user: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('usdc_participant'), usdcContestPDA.toBuffer(), user.toBuffer()],
+    ODDSDRAFT_PROGRAM_ID
+  );
+}
+
+/**
+ * init_usdc_contest — admin creates USDC contest + vault token account.
+ * Must be called once per fixture before any user can join.
+ */
+export function buildInitUsdcContestIx(
+  fixtureId: string,
+  admin: PublicKey,
+  tokenProgram: PublicKey,
+  systemProgram: PublicKey,
+  rentSysvar: PublicKey,
+): TransactionInstruction {
+  const seedId = `${fixtureId}_usdc_pool`;
+  const [usdcContestPDA] = deriveUsdcContestPDA(fixtureId);
+  const [vaultPDA] = deriveUsdcVaultPDA(usdcContestPDA);
+  const usdcMint = getUsdcMint();
+
+  const data = Buffer.concat([
+    DISC_INIT_USDC_CONTEST,
+    borshString(seedId),
+  ]);
+
+  return new TransactionInstruction({
+    programId: ODDSDRAFT_PROGRAM_ID,
+    keys: [
+      { pubkey: usdcContestPDA, isSigner: false, isWritable: true  },
+      { pubkey: vaultPDA,       isSigner: false, isWritable: true  },
+      { pubkey: usdcMint,       isSigner: false, isWritable: false },
+      { pubkey: admin,          isSigner: true,  isWritable: true  },
+      { pubkey: tokenProgram,   isSigner: false, isWritable: false },
+      { pubkey: systemProgram,  isSigner: false, isWritable: false },
+      { pubkey: rentSysvar,     isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
+/**
+ * join_usdc_contest — user stakes USDC into the vault.
+ * @param userTokenAccount — user's USDC Associated Token Account
+ * @param microUsdc — stake amount in micro-USDC (6 decimals), e.g. 5_000_000 = 5 USDC
+ */
+export function buildJoinUsdcContestIx(
+  fixtureId: string,
+  user: PublicKey,
+  userTokenAccount: PublicKey,
+  microUsdc: bigint,
+  tokenProgram: PublicKey,
+  systemProgram: PublicKey,
+): TransactionInstruction {
+  const [usdcContestPDA] = deriveUsdcContestPDA(fixtureId);
+  const [vaultPDA] = deriveUsdcVaultPDA(usdcContestPDA);
+  const [participantPDA] = deriveUsdcParticipantPDA(usdcContestPDA, user);
+
+  const data = Buffer.concat([
+    DISC_JOIN_USDC_CONTEST,
+    borshU64(microUsdc),
+  ]);
+
+  return new TransactionInstruction({
+    programId: ODDSDRAFT_PROGRAM_ID,
+    keys: [
+      { pubkey: usdcContestPDA,    isSigner: false, isWritable: true  },
+      { pubkey: vaultPDA,          isSigner: false, isWritable: true  },
+      { pubkey: participantPDA,    isSigner: false, isWritable: true  },
+      { pubkey: userTokenAccount,  isSigner: false, isWritable: true  },
+      { pubkey: user,              isSigner: true,  isWritable: true  },
+      { pubkey: tokenProgram,      isSigner: false, isWritable: false },
+      { pubkey: systemProgram,     isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
+/**
+ * resolve_usdc_contest — admin distributes prizes after the match.
+ * @param treasuryTokenAccount — admin's USDC ATA (receives 5% fee)
+ * @param winners — array of winner wallet PublicKeys (their ATAs)
+ * @param amounts — micro-USDC prize per winner (in same order as winners)
+ */
+export function buildResolveUsdcContestIx(
+  fixtureId: string,
+  admin: PublicKey,
+  treasuryTokenAccount: PublicKey,
+  winners: PublicKey[],
+  amounts: bigint[],
+  tokenProgram: PublicKey,
+): TransactionInstruction {
+  const [usdcContestPDA] = deriveUsdcContestPDA(fixtureId);
+  const [vaultPDA] = deriveUsdcVaultPDA(usdcContestPDA);
+
+  const data = Buffer.concat([
+    DISC_RESOLVE_USDC_CONTEST,
+    borshVecU64(amounts),
+  ]);
+
+  return new TransactionInstruction({
+    programId: ODDSDRAFT_PROGRAM_ID,
+    keys: [
+      { pubkey: usdcContestPDA,          isSigner: false, isWritable: true  },
+      { pubkey: vaultPDA,                isSigner: false, isWritable: true  },
+      { pubkey: treasuryTokenAccount,    isSigner: false, isWritable: true  },
+      { pubkey: admin,                   isSigner: true,  isWritable: true  },
+      { pubkey: tokenProgram,            isSigner: false, isWritable: false },
+      ...winners.map(w => ({ pubkey: w, isSigner: false, isWritable: true })),
+    ],
+    data,
+  });
+}

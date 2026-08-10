@@ -45,37 +45,37 @@ export const POSITION_SCORING: Record<string, PositionRow> = {
   // Indirect contribution (scorer not in lineup — MID/SWG from scoring team)
   team_contribution:         { GK:  0, DEF:  0, MID:  1, SWG:  1, ATT:  0 },
 
-  // ── Stats-based bonuses (awarded at half-time and full-time) ─────────────
-  // Possession dominance — team held ≥55% possession in the half
+  // ── Stats-based bonuses (awarded at full-time) ─────────────
+  // Possession dominance — team held ≥55% possession in the match
   possession_dominant:       { GK:  1, DEF:  1, MID:  2, SWG:  1, ATT:  1 },
   // Slight possession edge — team held 50–54% possession
   possession_slight:         { GK:  0, DEF:  0, MID:  1, SWG:  0, ATT:  0 },
   // Existing per-player possession_bonus (backward-compat with individual events)
   possession_bonus:          { GK:  0, DEF:  0, MID:  1, SWG:  0, ATT:  0 },
 
-  // Attack activity — team generated ≥5 danger attacks in the half
-  danger_attack_bonus:       { GK:  0, DEF:  0, MID:  1, SWG:  1, ATT:  1 },
+  // Attack activity — team generated ≥5 shots on target in the match
+  attack_pressure:           { GK:  0, DEF:  0, MID:  1, SWG:  1, ATT:  1 },
 
-  // Defensive solidity — opponent generated ≤2 danger attacks in the half
+  // Defensive solidity — opponent generated ≤2 shots on target in the match
   defensive_solid:           { GK:  2, DEF:  1, MID:  0, SWG:  0, ATT:  0 },
 
-  // Corner activity — team earned ≥4 corners in the half (threat created)
+  // Corner activity — team earned ≥6 corners in the match (threat created)
   corner_active:             { GK:  0, DEF:  0, MID:  0, SWG:  1, ATT:  0 },
 
-  // Scored this half — flat bonus for forward line if team netted ≥1 goal
-  half_scored:               { GK:  0, DEF:  0, MID:  0, SWG:  1, ATT:  1 },
+  // Scored in match — flat bonus for forward line if team netted ≥1 goal
+  match_scored:              { GK:  0, DEF:  0, MID:  0, SWG:  1, ATT:  1 },
 
-  // Clean half — no goals conceded in this half
-  half_clean:                { GK:  1, DEF:  1, MID:  0, SWG:  0, ATT:  0 },
+  // Clean match — no goals conceded in the match
+  match_clean:               { GK:  1, DEF:  1, MID:  0, SWG:  0, ATT:  0 },
 };
 
 // ── Thresholds for stats-based bonuses ──────────────────────────────────────
 export const STATS_THRESHOLDS = {
   possessionDominant: 55,  // team possession % for dominant bonus
   possessionSlight:   50,  // team possession % for slight bonus
-  dangerAttackBonus:   5,  // minimum team danger attacks per half
-  defensiveSolid:      2,  // maximum opponent danger attacks per half
-  cornerActive:        4,  // minimum team corners per half
+  attackPressure:      5,  // minimum team shots on target per match
+  defensiveSolid:      2,  // maximum opponent shots on target per match
+  cornerActive:        6,  // minimum team corners per match
 };
 
 // ── Core lookup ──────────────────────────────────────────────────────────────
@@ -88,12 +88,12 @@ export function getPositionScore(
   return (row as any)[position] ?? 0;
 }
 
-// ── Half-time / full-time stats input ────────────────────────────────────────
-export interface HalfStats {
+// ── Full-time stats input ────────────────────────────────────────
+export interface FullTimeStats {
   homeGoals:    number;
   awayGoals:    number;
-  homeDangers:  number;
-  awayDangers:  number;
+  homeShotsOnTarget: number;
+  awayShotsOnTarget: number;
   homeCorners:  number;
   awayCorners:  number;
   homePossessionPct: number; // 0–100
@@ -105,8 +105,8 @@ export interface StatBonus {
   forTeam: 'home' | 'away';
 }
 
-// Returns the list of team-wide stat bonuses that should fire for this half.
-export function evaluateHalfStats(stats: HalfStats): StatBonus[] {
+// Returns the list of team-wide stat bonuses that should fire for this match.
+export function evaluateFullTimeStats(stats: FullTimeStats): StatBonus[] {
   const bonuses: StatBonus[] = [];
   const { homePossessionPct: hp, awayPossessionPct: ap } = stats;
 
@@ -122,19 +122,19 @@ export function evaluateHalfStats(stats: HalfStats): StatBonus[] {
     bonuses.push({ eventType: 'possession_slight',   forTeam: 'away' });
   }
 
-  // Danger attacks
-  if (stats.homeDangers >= STATS_THRESHOLDS.dangerAttackBonus) {
-    bonuses.push({ eventType: 'danger_attack_bonus', forTeam: 'home' });
+  // Attack Pressure
+  if (stats.homeShotsOnTarget >= STATS_THRESHOLDS.attackPressure) {
+    bonuses.push({ eventType: 'attack_pressure', forTeam: 'home' });
   }
-  if (stats.awayDangers >= STATS_THRESHOLDS.dangerAttackBonus) {
-    bonuses.push({ eventType: 'danger_attack_bonus', forTeam: 'away' });
+  if (stats.awayShotsOnTarget >= STATS_THRESHOLDS.attackPressure) {
+    bonuses.push({ eventType: 'attack_pressure', forTeam: 'away' });
   }
 
-  // Defensive solidity (opponent had few danger attacks)
-  if (stats.awayDangers <= STATS_THRESHOLDS.defensiveSolid) {
+  // Defensive solidity (opponent had few shots on target)
+  if (stats.awayShotsOnTarget <= STATS_THRESHOLDS.defensiveSolid) {
     bonuses.push({ eventType: 'defensive_solid', forTeam: 'home' });
   }
-  if (stats.homeDangers <= STATS_THRESHOLDS.defensiveSolid) {
+  if (stats.homeShotsOnTarget <= STATS_THRESHOLDS.defensiveSolid) {
     bonuses.push({ eventType: 'defensive_solid', forTeam: 'away' });
   }
 
@@ -146,13 +146,13 @@ export function evaluateHalfStats(stats: HalfStats): StatBonus[] {
     bonuses.push({ eventType: 'corner_active', forTeam: 'away' });
   }
 
-  // Scored in this half
-  if (stats.homeGoals > 0) bonuses.push({ eventType: 'half_scored', forTeam: 'home' });
-  if (stats.awayGoals > 0) bonuses.push({ eventType: 'half_scored', forTeam: 'away' });
+  // Scored in this match
+  if (stats.homeGoals > 0) bonuses.push({ eventType: 'match_scored', forTeam: 'home' });
+  if (stats.awayGoals > 0) bonuses.push({ eventType: 'match_scored', forTeam: 'away' });
 
-  // Clean half
-  if (stats.awayGoals === 0) bonuses.push({ eventType: 'half_clean', forTeam: 'home' });
-  if (stats.homeGoals === 0) bonuses.push({ eventType: 'half_clean', forTeam: 'away' });
+  // Clean match
+  if (stats.awayGoals === 0) bonuses.push({ eventType: 'match_clean', forTeam: 'home' });
+  if (stats.homeGoals === 0) bonuses.push({ eventType: 'match_clean', forTeam: 'away' });
 
   return bonuses;
 }
@@ -161,9 +161,9 @@ export function evaluateHalfStats(stats: HalfStats): StatBonus[] {
 export const STAT_BONUS_LABELS: Record<string, string> = {
   possession_dominant:  'Possession Dominant',
   possession_slight:    'Possession Edge',
-  danger_attack_bonus:  'Attack Pressure',
+  attack_pressure:      'Attack Pressure',
   defensive_solid:      'Defensive Solid',
   corner_active:        'Corner Threat',
-  half_scored:          'Team Goal Bonus',
-  half_clean:           'Clean Half',
+  match_scored:         'Team Goal Bonus',
+  match_clean:          'Clean Match',
 };

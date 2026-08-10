@@ -16,7 +16,6 @@ export const POINT_MAP: Record<string, number> = {
   penalty_missed_shootout: -3,
   assist:                   6,
   goalkeeper_save:          1,
-  possession_bonus:         1,
   sub_appearance:           1,
   penalty_scored:           5,
   extra_time:               2,
@@ -94,8 +93,8 @@ export interface FantasyResult {
 
 export function calculateEventPoints(eventType: string, position: string = 'ATT'): number {
   // Display-only events — skip bank lookup for performance
-  if (eventType === 'danger_attack' || eventType === 'corner_kick' ||
-      eventType === 'var_review'    || eventType === 'substitution') return 0;
+  if (eventType === 'corner_kick' || eventType === 'var_review' ||
+      eventType === 'substitution') return 0;
 
   // Delegate to the scoring bank (covers all known event types)
   const banked = getPositionScore(eventType, position as any);
